@@ -435,6 +435,21 @@ Application copy for both: `milestones.md`.
     public-URL, or authed-git jobs; de-escalate when done. Never two writers on
     the same file at once; pull before starting, push when done.
 
+## Where each step runs
+
+| Step | Primary track | Codespace job (if any) |
+|---|---|---|
+| 1 — Scaffold + auth | Local (done) | None |
+| 2 — Creator editor | Local (done) | None |
+| 3 — Text AI + level check | Local: agent backend, Mac container QA | None |
+| 4 — Art + publish + reader | Local | Phone preview of the reader (short session) |
+| 5 — PWA + share | Local | Share-link check via preview URL (optional) |
+| 6 — UAT + dual reading | Local + humans | Dual-device sync test (the reason it exists) |
+| 7 — Walkthrough + polish | Local | None |
+| 8 — Demo + submit | Local | None |
+
+If a step lists no Codespace job, it never touches Codespace.
+
 ## Definition of done (the demo)
 
 1. Sign in as a creator → start a comic → pick a CEFR level.
