@@ -319,15 +319,15 @@ Application copy for both: `milestones.md`.
 
 ### Step 1 — Scaffold + auth (Day 1)
 
-- [ ] Create a new empty repo (GitHub), do not copy any reference source.
-- [ ] Init `package.json` (React 18, Vite, TypeScript, Hono, react-router-dom).
-- [ ] Write `api/wrangler.toml` with `assets`, the AI binding, `[[d1_databases]]`, and a migrations dir.
-- [ ] Create the D1 database and apply `0001_init.sql` (schema above).
-- [ ] Build `users` + `sessions` auth: passwordless magic link (store only hashes); gate **all** routes
+- [x] Create a new empty repo (GitHub), do not copy any reference source.
+- [x] Init `package.json` (React 18, Vite, TypeScript, Hono, react-router-dom).
+- [x] Write `api/wrangler.toml` with `assets`, the AI binding, `[[d1_databases]]`, and a migrations dir.
+- [x] Create the D1 database and apply `0001_init.sql` (schema above).
+- [x] Build `users` + `sessions` auth: passwordless magic link (store only hashes); gate **all** routes
       behind it (no anonymous access).
-- [ ] Store `MODEL_API_KEY` as a Worker secret (`wrangler secret put`), never in code.
-- [ ] Add `GET /api/health` → `{ ok: true }`.
-- [ ] Create shell pages: `/` (library), `/studio` (creator), `/read/:id` (reader).
+- [x] Store `MODEL_API_KEY` as a Worker secret (`wrangler secret put`), never in code.
+- [x] Add `GET /api/health` → `{ ok: true }`.
+- [x] Create shell pages: `/` (library), `/studio` (creator), `/read/:id` (reader).
 
 ✅ **Done when:** `npm run dev` works, you can sign in, `/api/health` returns ok.
 
