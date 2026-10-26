@@ -25,7 +25,7 @@ Local workerd cannot run on macOS 12, so dev runs inside one lean Linux
 container where it can. One command starts everything:
 
 ```bash
-./run.sh
+./run.sh dev
 ```
 
 Frontend on `:5173`, API on `:8787`, local D1 migrated automatically. First
