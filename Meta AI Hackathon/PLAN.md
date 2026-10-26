@@ -422,10 +422,11 @@ Application copy for both: `milestones.md`.
     prompting the agent, manual QA in the Mac browser, UAT, content, pricing
     research, submission materials. Backend files (`api/`, `src/lib/api.ts`,
     wrangler, migrations, CI) are agent-built; pages/components are human-built.
-  - **Codespace (metered — deliberate use only):** jobs the Mac cannot do well:
-    long/heavy builds, public preview URLs (e.g. phone testing),
-    pre-authenticated push and `gh` runs. Dev servers NEVER run here — local
-    dev is the Mac container (`./run.sh dev`) only.
+  - **Codespace (metered — deliberate use only):** editing welcome, plus jobs
+    the Mac cannot do well: long/heavy builds, public preview URLs (e.g. phone
+    testing), pre-authenticated push and `gh` runs. The dev stack starts here
+    only when needed (e.g. phone preview) — day-to-day servers stay in the Mac
+    container (`./run.sh dev`).
     Spin up, run the job, capture output, stop/delete. Never idle; smallest
     machine type that works; watch github.com/settings/billing.
   - **Agent (this session):** implements steps (code + CI-written tests), commits
