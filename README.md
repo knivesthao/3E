@@ -22,7 +22,7 @@ npx wrangler secret put MODEL_API_KEY          # needed from Step 3 (AI calls)
 ## Daily dev (two terminals)
 
 ```bash
-npm run dev:api   # worker + API on :8787 (add --remote to emulate in the cloud)
+npm run dev:api   # worker runs in Cloudflare (--remote); API on :8787. Local workerd needs macOS 13.5+, so this Mac always uses --remote.
 npm run dev       # frontend on :5173, /api proxied to :8787
 ```
 
