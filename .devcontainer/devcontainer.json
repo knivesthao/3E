@@ -6,6 +6,6 @@
     "5173": { "label": "Frontend", "onAutoForward": "openPreview" },
     "8787": { "label": "API", "onAutoForward": "silent" }
   },
-  "postCreateCommand": "npm install --no-audit --no-fund && npx wrangler --config api/wrangler.toml d1 migrations apply DB --local",
+  "postCreateCommand": "npm install --no-audit --no-fund && echo Y | npx wrangler --config api/wrangler.toml d1 migrations apply DB --local",
   "remoteUser": "node"
 }
