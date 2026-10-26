@@ -97,3 +97,15 @@ export const aiSimplify = (text: string, level: string) =>
     '/api/ai/simplify',
     { method: 'POST', body: JSON.stringify({ text, level }) },
   );
+
+export interface Panel {
+  scene_number: number;
+  image_url: string;
+  mask_url: string;
+}
+
+export const aiArt = (projectId: string, sceneNumber: number) =>
+  api<{ job: { id: string; status: string }; panels: Panel[] }>('/api/ai/art', {
+    method: 'POST',
+    body: JSON.stringify({ projectId, sceneNumber }),
+  });

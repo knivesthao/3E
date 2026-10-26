@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
-import type { Context } from 'hono';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Bindings, Variables } from '../types';
-import { DAILY_AI_LIMIT } from './config';
 import { AiError } from './meta';
+import { FAILED, INVALID, finishJob, modelKey, overLimit, readJson } from './http';
 import { generate, parseJson } from './client';
-import { checkPrompt, draftPrompt, ideaPrompt, meaningsPrompt, simplifyPrompt } from './prompts';
+import { checkPrompt, draftPrompt, ideaPrompt, meaningsPrompt, sceneActionText, simplifyPrompt } from './prompts';
+import { art } from './art';
 import { checkLevel } from '../levels';
 import type { Level } from '../levels';
 import { ownProject } from '../projects';
@@ -16,28 +16,8 @@ import { isRecord, validateSceneData } from '../validate';
 // rate limit -> generate. Model failures surface as generic 502s.
 export const ai = new Hono<{ Bindings: Bindings; Variables: Variables }>({ strict: false });
 
-const INVALID = { error: 'invalid request' } as const;
-const FAILED = { error: 'ai failed' } as const;
-
-async function readJson(c: Context): Promise<unknown> {
-  try {
-    return (await c.req.json()) as unknown;
-  } catch {
-    return null;
-  }
-}
-
-function key(c: { env: Bindings }): string | null {
-  return c.env.MODEL_API_KEY ?? null;
-}
-
-async function overLimit(db: D1Database, userId: string): Promise<boolean> {
-  const row = await db
-    .prepare("SELECT COUNT(*) AS n FROM ai_usage WHERE user_id = ? AND date(created_at) = date('now')")
-    .bind(userId)
-    .first<{ n: number }>();
-  return (row?.n ?? 0) >= DAILY_AI_LIMIT;
-}
+// Scene art (4a): POST /api/ai/art + GET /api/ai/art/:key, same session gate.
+ai.route('/art', art);
 
 function castNames(castJson: string): string[] {
   try {
@@ -66,7 +46,7 @@ ai.post('/idea', async (c) => {
   if (!isRecord(body) || typeof body.idea !== 'string' || body.idea.trim() === '' || body.idea.length > 500) {
     return c.json(INVALID, 400);
   }
-  const apiKey = key(c);
+  const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
   if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
   try {
@@ -103,7 +83,7 @@ ai.post('/meanings', async (c) => {
   const level = body.level === undefined ? 'A1' : body.level;
   if (!isLevel(level)) return c.json(INVALID, 400);
   const words = body.words as string[];
-  const apiKey = key(c);
+  const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
   if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
   const wordsList = words.map((w, i) => `${i + 1}. ${w}`).join('\n');
@@ -139,7 +119,7 @@ ai.post('/simplify', async (c) => {
     return c.json(INVALID, 400);
   }
   if (!isLevel(body.level)) return c.json(INVALID, 400);
-  const apiKey = key(c);
+  const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
   if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
   try {
@@ -220,7 +200,7 @@ ai.post('/finish', async (c) => {
   const project = await ownProject(c.env.DB, body.projectId, c.get('userId'));
   if (!project) return c.json({ error: 'not found' }, 404);
   if (!isLevel(project.level)) return c.json(INVALID, 400);
-  const apiKey = key(c);
+  const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
   if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
 
@@ -237,14 +217,6 @@ ai.post('/finish', async (c) => {
     .bind(jobId, userId, project.id, JSON.stringify({ projectId: project.id }), now, now)
     .run();
 
-  const finishJob = async (status: string, result: unknown, error: string | null) => {
-    const stamp = new Date().toISOString();
-    await db
-      .prepare('UPDATE jobs SET status = ?, result = ?, error = ?, updated_at = ? WHERE id = ?')
-      .bind(status, result === null ? null : JSON.stringify(result), error, stamp, jobId)
-      .run();
-  };
-
   try {
     const { results: existing } = await db
       .prepare('SELECT * FROM scenes WHERE project_id = ? ORDER BY scene_number ASC')
@@ -255,7 +227,7 @@ ai.post('/finish', async (c) => {
     const missing = Array.from({ length: targetCount }, (_, i) => i + 1).filter((n) => !have.has(n));
     if (missing.length === 0) {
       const result = { saved: [], failed: [] };
-      await finishJob('complete', result, null);
+      await finishJob(db, jobId, 'complete', result, null);
       return c.json({ job: { id: jobId, status: 'complete' }, ...result });
     }
 
@@ -285,7 +257,7 @@ ai.post('/finish', async (c) => {
           continue;
         }
       }
-      const story = `${scene.narration}\n${scene.bubbles.map((b) => `${b.speaker}: ${b.text}`).join('\n')}`;
+      const story = sceneActionText(scene.narration, scene.bubbles);
       let check: { passed: boolean; reason: string };
       try {
         const out = await generate(db, {
@@ -327,11 +299,11 @@ ai.post('/finish', async (c) => {
     }
 
     const result = { saved, failed };
-    await finishJob('complete', result, null);
+    await finishJob(db, jobId, 'complete', result, null);
     return c.json({ job: { id: jobId, status: 'complete' }, ...result });
   } catch (e) {
     if (e instanceof AiError) {
-      await finishJob('failed', null, 'ai failed');
+      await finishJob(db, jobId, 'failed', null, 'ai failed');
       return c.json(FAILED, 502);
     }
     throw e;

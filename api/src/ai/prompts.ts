@@ -86,3 +86,42 @@ export function safetyPrompt(text: string): string {
 Text:
 ${text}`;
 }
+
+// Shared scene→prose join (finish QA text and art Action line). One copy.
+export function sceneActionText(
+  narration: string,
+  bubbles: { speaker: string; text: string }[],
+): string {
+  return `${narration}\n${bubbles.map((b) => `${b.speaker}: ${b.text}`).join('\n')}`;
+}
+
+// Scene art (image model). Template from prompts.md §Image generation —
+// filled from cast + scene only, never model or user free-text.
+export function sceneArtPrompt(input: {
+  place: string;
+  character: string;
+  narration: string;
+  bubbles: { speaker: string; text: string }[];
+  aspect?: string;
+  bubbleCorner?: string;
+}): string {
+  const aspect = input.aspect ?? '4:5';
+  const corner = input.bubbleCorner ?? 'top-left';
+  return `[STYLE GUIDE]
+2D children's comic-book illustration for early readers. Clean bold outlines, cel shading with two
+or three flat tones, simple shapes, warm friendly palette (cream, terracotta, leaf green, sky blue).
+Expressive faces, big readable eyes, minimal detail. One clear subject, uncluttered background.
+Bright, even lighting. No text, no letters, no speech bubbles, no watermark, no logos.
+Not photorealistic, not 3D, not a photograph.
+
+Place: ${input.place}
+Character: ${input.character}
+Action: ${sceneActionText(input.narration, input.bubbles)}
+Layout: ${aspect} panel, one clear scene, the character on the right with empty space in the
+${corner} corner for a speech bubble.`;
+}
+
+// SAM 3.1 cutout prompt (prompts.md §Character consistency).
+export function isolateText(character: string): string {
+  return `Extract the main character: ${character}`;
+}

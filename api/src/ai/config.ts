@@ -7,12 +7,16 @@
 export const PRICES: Record<string, { in: number; out: number }> = {
   'muse-spark-1.3': { in: 0, out: 0 },
   'muse-wonder-1.0': { in: 0, out: 0 },
+  'muse-image-1.0': { in: 0, out: 0 },
+  'sam-3.1': { in: 0, out: 0 },
 };
 
 export const TEXT_MODEL = 'muse-spark-1.3';
 export const HARD_MODEL = 'muse-wonder-1.0';
+export const IMAGE_MODEL = 'muse-image-1.0';
+export const SEGMENT_MODEL = 'sam-3.1';
 
-export type AiTask = 'draft' | 'check' | 'idea' | 'meanings' | 'simplify' | 'safety';
+export type AiTask = 'draft' | 'check' | 'idea' | 'meanings' | 'simplify' | 'safety' | 'art' | 'isolate';
 
 export const TASK_MODEL: Record<AiTask, string> = {
   draft: TEXT_MODEL,
@@ -21,6 +25,8 @@ export const TASK_MODEL: Record<AiTask, string> = {
   meanings: TEXT_MODEL,
   simplify: TEXT_MODEL,
   safety: TEXT_MODEL,
+  art: IMAGE_MODEL,
+  isolate: SEGMENT_MODEL,
 };
 
 // Per-user daily cap across AI endpoints (Step 3 + secure-coding rules).
