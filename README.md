@@ -19,10 +19,26 @@ npx wrangler d1 migrations apply DB --remote   # Cloudflare D1
 npx wrangler secret put MODEL_API_KEY          # needed from Step 3 (AI calls)
 ```
 
-## Daily dev (two terminals)
+## Daily dev — container (this Mac)
+
+Local workerd cannot run on macOS 12, so dev runs inside one lean Linux
+container where it can. One command starts everything:
 
 ```bash
-npm run dev:api   # worker runs in Cloudflare (--remote); API on :8787. Local workerd needs macOS 13.5+, so this Mac always uses --remote.
+./run.sh
+```
+
+Frontend on `:5173`, API on `:8787`, local D1 migrated automatically. First
+run needs network (image + npm + workerd download); restarts are fast and
+offline. After changing dependencies, reset with
+`docker volume rm 3e-node-modules` and re-run.
+
+Requires Docker Desktop 4.x for macOS 12 (do not upgrade past Monterey support).
+
+## Daily dev — native (macOS 13.5+ only, two terminals)
+
+```bash
+npm run dev:api   # --remote: worker runs in Cloudflare; API on :8787
 npm run dev       # frontend on :5173, /api proxied to :8787
 ```
 

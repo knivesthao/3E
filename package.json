@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:api": "wrangler dev --config api/wrangler.toml --port 8787 --remote",
+    "dev:api:local": "wrangler dev --config api/wrangler.toml --port 8787",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
