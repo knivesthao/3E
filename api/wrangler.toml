@@ -11,7 +11,7 @@ not_found_handling = "single-page-application"
 binding = "DB"
 database_name = "3e-db"
 # Fill in after `wrangler d1 create 3e-db` (see README).
-database_id = "REPLACE_AFTER_WRANGLER_D1_CREATE"
+database_id = "848c861b-e7a4-4fa8-a6ad-a09fab9c343f"
 migrations_dir = "migrations"
 
 [vars]
