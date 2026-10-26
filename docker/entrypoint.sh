@@ -5,7 +5,10 @@
 set -euo pipefail
 cd /app
 
-if [ ! -d node_modules ]; then
+# Check binaries, not the directory: an interrupted first install can leave
+# node_modules present but empty, which skips the install forever and then
+# fails with "vite: not found" (and npx fetching the wrong wrangler major).
+if [ ! -x node_modules/.bin/vite ] || [ ! -x node_modules/.bin/wrangler ]; then
   npm install --no-audit --no-fund
 fi
 
