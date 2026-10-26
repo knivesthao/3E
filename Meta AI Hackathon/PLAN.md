@@ -367,9 +367,9 @@ Application copy for both: `milestones.md`.
 - [ ] **4d (local, UI):** reader — swipe scenes, tap a word for its meaning
       (`/meanings`), show `reading_level`. Needs 4b output shape (mock with a
       fixture until then). Done when a published book reads swipeably.
-- [ ] **4e (codespace/content):** prompt-template review, character-sheet
-      authoring, phone preview of the reader. Needs 4d. Done when the character
-      looks identical across all scenes on a phone.
+- [ ] **4e (codespace/content):** prompt-template review + character-sheet
+      authoring — **anytime, needs nothing**. Phone preview of the reader needs
+      4d. Done when the character looks identical across all scenes on a phone.
 - [ ] (Optional, local) Muse Spark multimodal validation loop before showing a panel.
 - [ ] **SAM 3.1 character consistency (required)** is covered by 4a + 4e together.
 
@@ -475,6 +475,17 @@ Local implements on `local`; codespace takes parallel slices on `codespace`
 | 8 — Demo + submit | Tech support | Video, form, submit | — |
 
 If a step lists no job for a track, that track sits the step out.
+
+## Parallel rules
+
+- A sub-step with no "Needs" runs **anytime**, on any track, in any order —
+  including before earlier steps finish. "Needs X" is the only gate.
+- Anytime work (start today): 4e content (prompt review, character sheet),
+  6b (line up testers — needs only the Step 2 editor), 7c prep (find a
+  first-run user), 8a prep (script from the shot list), Step 3 pricing research.
+- Gated work waits: 4e preview needs 4d; 5c needs the 4a–4d chain; 6d needs 6b
+  reports; 7b feeds off 7c findings; 4c needs the 4a/4b contract.
+- Critical path to MVP: 4a → 4b → 4c/4d → 5a → 5b. Everything else floats.
 
 ## Definition of done (the demo)
 
