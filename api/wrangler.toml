@@ -1,0 +1,21 @@
+# 3E worker: Hono API + static frontend assets (single deploy).
+name = "3e"
+main = "src/index.ts"
+compatibility_date = "2024-10-01"
+
+[assets]
+directory = "../dist"
+not_found_handling = "single-page-application"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "3e-db"
+# Fill in after `wrangler d1 create 3e-db` (see README).
+database_id = "REPLACE_AFTER_WRANGLER_D1_CREATE"
+migrations_dir = "migrations"
+
+[vars]
+# DEV ONLY: request-link responses include the clickable magic link so you can
+# sign in without an email sender. Set to "false" (or delete) before any
+# production deploy — see README pre-prod checklist.
+DEV_LINKS = "true"
