@@ -19,7 +19,9 @@ write in this session.
    Reference the skill or rule that drove the change when useful.
 3. **Commit:** one task = one commit. Commit every ~2 hours of active work so the timeline
    proves progress (see `Meta AI Hackathon/PLAN.md` conventions).
-4. **Report (always, after the commit):** reply with a summary containing:
+4. **After a push:** recommend invoking the `post-commit-check` skill to watch the CI run
+   for that commit and confirm nothing broke.
+5. **Report (always, after the commit):** reply with a summary containing:
    - commit hash + message;
    - files changed (added / modified / deleted);
    - work done (what the change implements, in 1–3 lines);

@@ -1,0 +1,47 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect Node project
+        id: node
+        run: |
+          if [ -f package.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Node
+        if: steps.node.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        if: steps.node.outputs.present == 'true'
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Run tests
+        if: steps.node.outputs.present == 'true'
+        run: npm test --if-present
+
+      - name: Typecheck
+        if: steps.node.outputs.present == 'true'
+        run: npm run typecheck --if-present
+
+      - name: No Node project yet
+        if: steps.node.outputs.present != 'true'
+        run: echo "No package.json — app scaffold (Step 1) not yet committed. Nothing to test."

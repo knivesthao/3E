@@ -22,6 +22,8 @@ creator + reader for English-language learners (CEFR A1–B2).
 10. `.agents/skills/component-reuse/SKILL.md` — reuse guardrails (priority #4, no duplicates).
 11. `.agents/skills/service-decoupling/SKILL.md` — decoupling guardrails (priority #5, swappable models).
 12. `.agents/skills/commit-summary/SKILL.md` — commit workflow (summary with every commit).
+13. `.agents/skills/test-and-review/SKILL.md` — write tests (no local runs) + review.
+14. `.agents/skills/post-commit-check/SKILL.md` — watch CI after a push, report breakage.
 
 If any file is missing, tell the user to copy it from the planning repo first.
 
