@@ -355,25 +355,25 @@ Application copy for both: `milestones.md`.
 
 ### Step 4 — Art + publish + reader (Day 4)
 
-- [ ] **4a (agent, backend):** `ImageModel` (`muse-image-1.0`) + `SegmentModel`
+- [ ] **4a (local, backend):** `ImageModel` (`muse-image-1.0`) + `SegmentModel`
       (`sam-3.1`) adapters, config routing + prices, `kind='scene'` art-job pipeline,
       R2 upload/storage. Done when a scene job returns stored panel URLs.
-- [ ] **4b (agent, backend):** publish endpoint (owner-only) + Muse Spark
+- [ ] **4b (local, backend):** publish endpoint (owner-only) + Muse Spark
       safe/unsafe screen + **manifest v2** packaging → `books.manifest_json` +
       cover. Done when a draft becomes a `books` row via one call.
-- [ ] **4c (agent, UI):** per-scene "Generate" button with job progress +
+- [ ] **4c (local, UI):** per-scene "Generate" button with job progress +
       publish button wiring in the Editor. Needs 4a/4b contract. Done when art
       and publish run from clicks.
-- [ ] **4d (agent, UI):** reader — swipe scenes, tap a word for its meaning
+- [ ] **4d (local, UI):** reader — swipe scenes, tap a word for its meaning
       (`/meanings`), show `reading_level`. Needs 4b output shape (mock with a
       fixture until then). Done when a published book reads swipeably.
 - [ ] **4e (codespace/content):** prompt-template review, character-sheet
       authoring, phone preview of the reader. Needs 4d. Done when the character
       looks identical across all scenes on a phone.
-- [ ] (Optional, agent) Muse Spark multimodal validation loop before showing a panel.
+- [ ] (Optional, local) Muse Spark multimodal validation loop before showing a panel.
 - [ ] **SAM 3.1 character consistency (required)** is covered by 4a + 4e together.
 
-Sub-steps run in parallel (agent–Mac = `develop`, agent–Codespace slices =
+Sub-steps run in parallel (local = `local`, codespace slices =
 `codespace`, human QA). UI builds against the API contract in
 `src/lib/api.ts` — 4a/4b land it first.
 
@@ -430,28 +430,29 @@ Sub-steps run in parallel (agent–Mac = `develop`, agent–Codespace slices =
 - **Small commits:** commit every ~2 hours with descriptive messages, so the git timeline proves the work.
 - **Tests run on CI only:** never `npm test`, `npm run typecheck`, or `npm run build` locally.
   That is reserved for GitHub Actions on `develop` pushes. Write the tests, commit, push, read CI.
-- **Who does what (explicit):**
-  - **Agent–Mac (this session):** all implementation — backend AND frontend —
-    on `develop`, plus commits, plan checkoffs, reviews. Cannot push, run
-    authed CLIs, reach your localhost, or run Docker.
-  - **Agent–Codespace (when linked):** parallel implementation slices on the
+- **Who does what (explicit):** tracks are named by branch.
+  - **Local (this session, Mac checkout):** all implementation — backend AND
+    frontend — on the `local` branch, plus commits, plan checkoffs, reviews.
+    Cannot push, run authed CLIs, reach your localhost, or run Docker.
+  - **Codespace (when linked):** parallel implementation slices on the
     `codespace` branch merged via PR; plus heavy/Linux-only jobs, public
     preview URLs, and pre-authenticated git. Metered — deliberate use only:
     spin up, run, capture, stop/delete. Smallest machine that works.
   - **Human (you):** Zed as reference, QA/UAT in the browser, content and
     pricing research, decisions, `git push`, billing, submissions. No routine
-    editing — no branch needed (`local` is retired; delete it at leisure).
-  - Routing: agent–Mac by default; Codespace only for parallel slices,
+    editing — no branch needed.
+  - Routing: local by default; codespace only for parallel slices,
     Linux-only, heavy, public-URL, or authed-git jobs. Never two writers on
-    the same file at once; pull before starting, push when done. CI gates
-    every push to `develop`/`codespace` and every PR targeting `develop`.
+    the same file at once; pull before starting, push when done. `develop` is
+    integration: work merges in via PR. CI gates every push to
+    `develop`/`local`/`codespace` and every PR targeting `develop`.
 
 ## Where each step runs (parallel by default)
 
-Agent–Mac implements on `develop`; agent–Codespace takes parallel slices on
-`codespace` (PR to `develop`); human QA/decides/pushes. Merge via PR.
+Local implements on `local`; codespace takes parallel slices on `codespace`
+(PR to `develop`); human QA/decides/pushes. Merge via PR.
 
-| Step | Agent–Mac (`develop`) | Human | Agent–Codespace (`codespace`) |
+| Step | Local (`local`) | Human | Codespace (`codespace`) |
 |---|---|---|---|
 | 1 — Scaffold + auth | Done | Done (verified) | — |
 | 2 — Creator editor | Done | Done (verified reload) | — |
