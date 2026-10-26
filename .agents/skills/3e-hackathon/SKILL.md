@@ -21,6 +21,7 @@ creator + reader for English-language learners (CEFR A1–B2).
 9. `.agents/skills/secure-coding/SKILL.md` — OWASP guardrails (priority #3).
 10. `.agents/skills/component-reuse/SKILL.md` — reuse guardrails (priority #4, no duplicates).
 11. `.agents/skills/service-decoupling/SKILL.md` — decoupling guardrails (priority #5, swappable models).
+12. `.agents/skills/commit-summary/SKILL.md` — commit workflow (summary with every commit).
 
 If any file is missing, tell the user to copy it from the planning repo first.
 
