@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: [develop, local, codespace]
+    branches: [develop, codespace]
   pull_request:
     branches: [develop]
 

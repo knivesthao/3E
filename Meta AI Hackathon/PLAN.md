@@ -361,10 +361,10 @@ Application copy for both: `milestones.md`.
 - [ ] **4b (agent, backend):** publish endpoint (owner-only) + Muse Spark
       safe/unsafe screen + **manifest v2** packaging → `books.manifest_json` +
       cover. Done when a draft becomes a `books` row via one call.
-- [ ] **4c (local, UI):** per-scene "Generate" button with job progress +
+- [ ] **4c (agent, UI):** per-scene "Generate" button with job progress +
       publish button wiring in the Editor. Needs 4a/4b contract. Done when art
       and publish run from clicks.
-- [ ] **4d (local, UI):** reader — swipe scenes, tap a word for its meaning
+- [ ] **4d (agent, UI):** reader — swipe scenes, tap a word for its meaning
       (`/meanings`), show `reading_level`. Needs 4b output shape (mock with a
       fixture until then). Done when a published book reads swipeably.
 - [ ] **4e (codespace/content):** prompt-template review, character-sheet
@@ -373,8 +373,8 @@ Application copy for both: `milestones.md`.
 - [ ] (Optional, agent) Muse Spark multimodal validation loop before showing a panel.
 - [ ] **SAM 3.1 character consistency (required)** is covered by 4a + 4e together.
 
-Sub-steps run in parallel across tracks (agent = `develop`, human = `local`,
-content/preview = `codespace`). UI builds against the API contract in
+Sub-steps run in parallel (agent–Mac = `develop`, agent–Codespace slices =
+`codespace`, human QA). UI builds against the API contract in
 `src/lib/api.ts` — 4a/4b land it first.
 
 ✅ **Done when:** a comic with art publishes and reads end-to-end, with one consistent character across
@@ -430,45 +430,37 @@ content/preview = `codespace`). UI builds against the API contract in
 - **Small commits:** commit every ~2 hours with descriptive messages, so the git timeline proves the work.
 - **Tests run on CI only:** never `npm test`, `npm run typecheck`, or `npm run build` locally.
   That is reserved for GitHub Actions on `develop` pushes. Write the tests, commit, push, read CI.
-- **Parallel tracks (explicit):**
-  - **Local Mac (free, default):** all editing, git, Cloudflare dashboard/billing,
-    prompting the agent, manual QA in the Mac browser, UAT, content, pricing
-    research, submission materials. Backend files (`api/`, `src/lib/api.ts`,
-    wrangler, migrations, CI) are agent-built; pages/components are human-built.
-  - **Codespace (metered — deliberate use only):** editing welcome, plus jobs
-    the Mac cannot do well: long/heavy builds, public preview URLs (e.g. phone
-    testing), pre-authenticated push and `gh` runs. The dev stack starts here
-    only when needed (e.g. phone preview) — day-to-day servers stay in the Mac
-    container (`./run.sh dev`).
-    Spin up, run the job, capture output, stop/delete. Never idle; smallest
-    machine type that works; watch github.com/settings/billing.
-  - **Agent (this session):** implements steps (code + CI-written tests), commits
-    on `develop`, plan checkoffs, reviews. Cannot push, run authed CLIs, reach
-    your localhost, or run Docker.
-  - Routing: default local; escalate to Codespace only for Linux-only, heavy,
-    public-URL, or authed-git jobs; de-escalate when done. Never two writers on
-    the same file at once; pull before starting, push when done.
-  - Branches: local Mac works on `local`, Codespace works on `codespace`,
-    agent works on `develop`. Merge to `develop` via PR — CI gates every push
-    to all three branches and every PR targeting develop, so merges are
-    verified twice (on the branch, then on develop after merge).
+- **Who does what (explicit):**
+  - **Agent–Mac (this session):** all implementation — backend AND frontend —
+    on `develop`, plus commits, plan checkoffs, reviews. Cannot push, run
+    authed CLIs, reach your localhost, or run Docker.
+  - **Agent–Codespace (when linked):** parallel implementation slices on the
+    `codespace` branch merged via PR; plus heavy/Linux-only jobs, public
+    preview URLs, and pre-authenticated git. Metered — deliberate use only:
+    spin up, run, capture, stop/delete. Smallest machine that works.
+  - **Human (you):** Zed as reference, QA/UAT in the browser, content and
+    pricing research, decisions, `git push`, billing, submissions. No routine
+    editing — no branch needed (`local` is retired; delete it at leisure).
+  - Routing: agent–Mac by default; Codespace only for parallel slices,
+    Linux-only, heavy, public-URL, or authed-git jobs. Never two writers on
+    the same file at once; pull before starting, push when done. CI gates
+    every push to `develop`/`codespace` and every PR targeting `develop`.
 
 ## Where each step runs (parallel by default)
 
-Agent works on `develop`, local Mac on `local`, Codespace on `codespace`.
-UI builds against the API contract in `src/lib/api.ts` — agent lands the
-endpoints first, humans build UI against them. Merge via PR.
+Agent–Mac implements on `develop`; agent–Codespace takes parallel slices on
+`codespace` (PR to `develop`); human QA/decides/pushes. Merge via PR.
 
-| Step | Agent (`develop`) | Local (`local`) | Codespace (`codespace`) |
+| Step | Agent–Mac (`develop`) | Human | Agent–Codespace (`codespace`) |
 |---|---|---|---|
-| 1 — Scaffold + auth | Done | Done | — |
-| 2 — Creator editor | Done | Done | — |
+| 1 — Scaffold + auth | Done | Done (verified) | — |
+| 2 — Creator editor | Done | Done (verified reload) | — |
 | 3 — Text AI + level check | Provider, gate, endpoints, ledger | Container QA, pricing research | — |
-| 4 — Art + publish + reader | 4a adapters + pipeline, 4b publish + manifest | 4c buttons, 4d reader | 4e preview + content |
-| 5 — PWA + share | Share backend (if needed), `/admin/costs` endpoints | PWA shell, offline IndexedDB, share UI, costs page, demo seed run | Share-link check via public URL |
-| 6 — UAT + dual reading | Sync backend, bug fixes | Human testers + bug reports | Dual-device sync test |
-| 7 — Walkthrough + polish | Backend nits | UX polish, walkthrough content | Phone check (optional) |
-| 8 — Demo + submit | Tech README support, last fixes | Video, form, submission | — |
+| 4 — Art + publish + reader | 4a, 4b, 4c, 4d | QA flows, prompt review | 4e preview, authed git |
+| 5 — PWA + share | Endpoints, PWA shell, offline store, share + costs UI | Demo seed run, QA | Share-link public check |
+| 6 — UAT + dual reading | Sync backend, fixes | Testers, reports, dual-device pass | Sync-test session |
+| 7 — Walkthrough + polish | Fixes | UX review, walkthrough | Phone check (optional) |
+| 8 — Demo + submit | Tech support | Video, form, submit | — |
 
 If a step lists no job for a track, that track sits the step out.
 
