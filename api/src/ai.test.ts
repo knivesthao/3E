@@ -173,7 +173,9 @@ function draftReply(missing: number[]) {
 function modelReply(prompt: string): unknown {
   if (prompt.includes('comics writer')) {
     const target = Number(/Target scene count: (\d+)/.exec(prompt)?.[1] ?? 6);
-    const soFar = JSON.parse(/Scenes so far: (\[.*\])/s.exec(prompt)?.[1] ?? '[]') as { scene_number: number }[];
+    // scenesJson is single-line: stay on the line so greedy matching never
+    // swallows the trailing "New words so far: [...]" line.
+    const soFar = JSON.parse(/Scenes so far: (\[[^\n]*\])/.exec(prompt)?.[1] ?? '[]') as { scene_number: number }[];
     const have = new Set(soFar.map((s) => s.scene_number));
     return draftReply(Array.from({ length: target }, (_, i) => i + 1).filter((n) => !have.has(n)));
   }
@@ -184,7 +186,9 @@ function modelReply(prompt: string): unknown {
     return { description: 'A comic about a boy and a bird.', level: 'A2' };
   }
   if (prompt.includes('young English learners')) {
-    const words = [...prompt.matchAll(/^\d+\. (.+)$/gm)].map((m) => m[1]);
+    // The first item shares its line with a "Words: " prefix
+    // ("Words: 1. field"), so accept a leading space as well as ^.
+    const words = [...prompt.matchAll(/(?:^| )(\d+)\. (.+)$/gm)].map((m) => m[2]);
     return { meanings: words.map((w) => ({ word: w, meaning: `simple ${w}` })) };
   }
   if (prompt.includes('makes English easier')) {

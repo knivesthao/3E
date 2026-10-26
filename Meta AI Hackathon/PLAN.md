@@ -343,12 +343,12 @@ Application copy for both: `milestones.md`.
 
 ### Step 3 — Text AI + level check (Day 3)
 
-- [ ] Implement the `TextModel` interface (`models.md`) against the Meta Model API.
-- [ ] Wire the story pipeline: `muse-spark-1.3` drafts → `muse-spark-1.3` QA-validates (`prompts.md` §2).
-- [ ] Wire `POST /suggest/idea`, `/finish` ("3E Finish", a `kind='finish'` job), `/meanings`, `/simplify`.
-- [ ] Build the **level check** (`levels.ts` hard gate + `muse-spark-1.3` score) and **length check**.
-- [ ] Require a valid session on every AI endpoint; add a per-user daily generation counter (rate limit).
-- [ ] Log every attempt to `ai_usage` (provider, model, task, kind, op_id, attempt, tokens, cost_usd).
+- [x] Implement the `TextModel` interface (`models.md`) against the Meta Model API.
+- [x] Wire the story pipeline: `muse-spark-1.3` drafts → `muse-spark-1.3` QA-validates (`prompts.md` §2).
+- [x] Wire `POST /suggest/idea`, `/finish` ("3E Finish", a `kind='finish'` job), `/meanings`, `/simplify`.
+- [x] Build the **level check** (`levels.ts` hard gate + `muse-spark-1.3` score) and **length check**.
+- [x] Require a valid session on every AI endpoint; add a per-user daily generation counter (rate limit).
+- [x] Log every attempt to `ai_usage` (provider, model, task, kind, op_id, attempt, tokens, cost_usd).
       A retry reuses the `op_id` with `attempt + 1`.
 
 ✅ **Done when:** "3E Finish" writes valid, leveled scenes that pass the level + length check.

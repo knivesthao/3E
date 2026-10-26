@@ -1374,13 +1374,16 @@ export function tokenize(text: string): string[] {
   return (text.toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g) ?? []).filter((t) => t.length > 0);
 }
 
-// Naive stemmer for inflected forms (runs→run, walked→walk, flies→fly).
-// Keeps the gate from failing everyday conjugations; doubling forms
-// (running→runn) stay unknown and get reported.
+// Naive stemmer for inflected forms (runs→run, walked→walk, flies→fly,
+// going→go). Keeps the gate from failing everyday conjugations; doubling
+// forms (running→runn) stay unknown and get reported.
 export function stem(token: string): string {
   if (token.endsWith('ies') && token.length > 4) return `${token.slice(0, -3)}y`;
   for (const suffix of ['ing', 'ed', 'es', 's', 'd']) {
-    if (token.endsWith(suffix) && token.length - suffix.length >= 3) {
+    // 'ing' may leave a 2-letter stem (going→go, doing→do, being→be);
+    // shorter suffixes need >= 3 so short words (was, red, as) survive.
+    const minStem = suffix === 'ing' ? 2 : 3;
+    if (token.endsWith(suffix) && token.length - suffix.length >= minStem) {
       return token.slice(0, -suffix.length);
     }
   }
