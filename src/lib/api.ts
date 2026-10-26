@@ -109,3 +109,40 @@ export const aiArt = (projectId: string, sceneNumber: number) =>
     method: 'POST',
     body: JSON.stringify({ projectId, sceneNumber }),
   });
+
+export interface ManifestScene {
+  scene_number: number;
+  narration: string;
+  bubbles: { speaker: string; text: string }[];
+  image_url: string | null;
+  mask_url: string | null;
+}
+
+export interface Manifest {
+  version: 2;
+  project_id: string;
+  title: string;
+  description: string;
+  level: string;
+  reading_level: string;
+  cover: string | null;
+  scenes: ManifestScene[];
+}
+
+export interface Book {
+  id: string;
+  project_id: string;
+  creator_id: string;
+  title: string;
+  description: string;
+  level: string;
+  reading_level: string;
+  cover_url: string | null;
+  manifest_json: string;
+  published_at: string;
+  updated_at: string;
+  manifest: Manifest;
+}
+
+export const publishProject = (id: string) =>
+  api<{ job: { id: string; status: string }; book: Book }>(`/api/projects/${id}/publish`, { method: 'POST' });

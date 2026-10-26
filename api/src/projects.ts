@@ -7,6 +7,10 @@ import {
   validateSceneData,
   validateSceneOrder,
 } from './validate';
+import { generate } from './ai/client';
+import { finishJob, modelKey, overLimit } from './ai/http';
+import { AiError } from './ai/meta';
+import { safetyPrompt, sceneActionText } from './ai/prompts';
 
 // All routes inherit the session gate from index.ts (owner = session user).
 // Missing-or-foreign resources all return 404 so ids can't be probed.
@@ -148,6 +152,171 @@ projects.delete('/:id', async (c) => {
     c.env.DB.prepare('DELETE FROM projects WHERE id = ?').bind(project.id),
   ]);
   return c.json({ ok: true });
+});
+
+const readingLevel = (level: string): 'beginner' | 'intermediate' | 'advanced' =>
+  level === 'B2' ? 'advanced' : level === 'B1' ? 'intermediate' : 'beginner';
+
+// Publish (Step 4b): owner-only safety screen (Muse Spark safe/unsafe) +
+// manifest v2 packaging into books + cover. One call turns a draft into a
+// books row (republish updates the same row, keeping published_at).
+projects.post('/:id/publish', async (c) => {
+  const project = await ownProject(c.env.DB, c.req.param('id'), c.get('userId'));
+  if (!project) return c.json(NOT_FOUND, 404);
+  const apiKey = modelKey(c.env);
+  if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
+  if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+
+  const db = c.env.DB;
+  const userId = c.get('userId');
+  const { results: sceneRows } = await db
+    .prepare('SELECT * FROM scenes WHERE project_id = ? ORDER BY scene_number ASC')
+    .bind(project.id)
+    .all<SceneRow>();
+  if (sceneRows.length === 0) return c.json(INVALID, 400);
+  const scenes: { scene_number: number; narration: string; bubbles: { speaker: string; text: string }[] }[] = [];
+  for (const s of sceneRows) {
+    let data: unknown;
+    try {
+      data = JSON.parse(s.data_json) as unknown;
+    } catch {
+      return c.json(INVALID, 400);
+    }
+    const parsed = validateSceneData(data);
+    if (!parsed.ok) return c.json(INVALID, 400);
+    scenes.push({ scene_number: s.scene_number, narration: parsed.value.narration, bubbles: parsed.value.bubbles });
+  }
+
+  const jobId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await db
+    .prepare(
+      "INSERT INTO jobs (id, user_id, project_id, kind, payload, status, created_at, updated_at) VALUES (?, ?, ?, 'package', ?, 'running', ?, ?)",
+    )
+    .bind(jobId, userId, project.id, JSON.stringify({ projectId: project.id }), now, now)
+    .run();
+
+  try {
+    const fullText = scenes.map((s) => sceneActionText(s.narration, s.bubbles)).join('\n\n');
+    const { text } = await generate(db, {
+      apiKey,
+      userId,
+      projectId: project.id,
+      opId: crypto.randomUUID(),
+      task: 'safety',
+      prompt: safetyPrompt(fullText),
+      json: false,
+      apiUrl: c.env.AI_API_URL,
+      validate: (t) => {
+        const v = t.trim().toLowerCase();
+        return v === 'safe' || v === 'unsafe';
+      },
+    });
+    if (text.trim().toLowerCase() !== 'safe') {
+      await finishJob(db, jobId, 'failed', null, 'unsafe content');
+      return c.json({ error: 'unsafe content' }, 422);
+    }
+
+    const { results: panelRows } = await db
+      .prepare('SELECT scene_number, image_key, mask_key FROM panels WHERE project_id = ?')
+      .bind(project.id)
+      .all<{ scene_number: number; image_key: string; mask_key: string | null }>();
+    const art = new Map(panelRows.map((p) => [p.scene_number, p]));
+    const manifestScenes = scenes.map((s) => {
+      const p = art.get(s.scene_number);
+      return {
+        scene_number: s.scene_number,
+        narration: s.narration,
+        bubbles: s.bubbles,
+        image_url: p ? `/api/ai/art/${p.image_key}` : null,
+        mask_url: p && p.mask_key ? `/api/ai/art/${p.mask_key}` : null,
+      };
+    });
+    const cover = manifestScenes.length > 0 ? manifestScenes[0].image_url : null;
+    const manifest = {
+      version: 2,
+      project_id: project.id,
+      title: project.title,
+      description: project.description,
+      level: project.level,
+      reading_level: readingLevel(project.level),
+      cover,
+      scenes: manifestScenes,
+    };
+    const stamp = new Date().toISOString();
+    const existing = await db
+      .prepare('SELECT id, published_at FROM books WHERE project_id = ?')
+      .bind(project.id)
+      .first<{ id: string; published_at: string }>();
+    let bookId: string;
+    let publishedAt: string;
+    if (existing) {
+      bookId = existing.id;
+      publishedAt = existing.published_at;
+      await db
+        .prepare(
+          'UPDATE books SET title = ?, description = ?, level = ?, reading_level = ?, cover_url = ?, manifest_json = ?, updated_at = ? WHERE id = ?',
+        )
+        .bind(
+          project.title,
+          project.description,
+          project.level,
+          manifest.reading_level,
+          cover,
+          JSON.stringify(manifest),
+          stamp,
+          bookId,
+        )
+        .run();
+    } else {
+      bookId = crypto.randomUUID();
+      publishedAt = stamp;
+      await db
+        .prepare(
+          'INSERT INTO books (id, project_id, creator_id, title, description, level, reading_level, cover_url, manifest_json, published_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .bind(
+          bookId,
+          project.id,
+          userId,
+          project.title,
+          project.description,
+          project.level,
+          manifest.reading_level,
+          cover,
+          JSON.stringify(manifest),
+          stamp,
+          stamp,
+        )
+        .run();
+    }
+    await db
+      .prepare("UPDATE projects SET status = 'published', updated_at = ? WHERE id = ?")
+      .bind(stamp, project.id)
+      .run();
+    const book = {
+      id: bookId,
+      project_id: project.id,
+      creator_id: userId,
+      title: project.title,
+      description: project.description,
+      level: project.level,
+      reading_level: manifest.reading_level,
+      cover_url: cover,
+      manifest_json: JSON.stringify(manifest),
+      published_at: publishedAt,
+      updated_at: stamp,
+      manifest,
+    };
+    await finishJob(db, jobId, 'complete', { book: { id: bookId } }, null);
+    return c.json({ job: { id: jobId, status: 'complete' }, book });
+  } catch (e) {
+    if (e instanceof AiError) {
+      await finishJob(db, jobId, 'failed', null, 'ai failed');
+      return c.json({ error: 'ai failed' }, 502);
+    }
+    throw e;
+  }
 });
 
 projects.post('/:id/scenes', async (c) => {

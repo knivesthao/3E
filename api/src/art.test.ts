@@ -126,7 +126,12 @@ function makeBucket() {
     async get(key: string) {
       const row = store.get(key);
       if (!row) return null;
-      return { body: new Blob([row.bytes]), httpMetadata: { contentType: row.contentType } };
+      // Mirrors R2ObjectBody: the route reads via arrayBuffer(), not .body.
+      return {
+        body: new Blob([row.bytes]),
+        httpMetadata: { contentType: row.contentType },
+        arrayBuffer: async () => row.bytes,
+      };
     },
   };
 }

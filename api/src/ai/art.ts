@@ -153,7 +153,7 @@ art.get('/:key', async (c) => {
   if (!store) return c.json({ error: 'not found' }, 404);
   const obj = await store.get(k);
   if (!obj) return c.json({ error: 'not found' }, 404);
-  return new Response(obj.body, {
+  return new Response(await obj.arrayBuffer(), {
     headers: {
       'Content-Type': obj.httpMetadata?.contentType ?? 'image/png',
       'Cache-Control': 'public, max-age=31536000, immutable',
