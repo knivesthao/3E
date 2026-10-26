@@ -355,14 +355,27 @@ Application copy for both: `milestones.md`.
 
 ### Step 4 — Art + publish + reader (Day 4)
 
-- [ ] Implement `ImageModel` (Muse Image, `muse-image-1.0`) and `SegmentModel` (SAM 3.1, `sam-3.1`).
-- [ ] Art generation as a `kind='scene'` job with a per-scene "Generate" button.
-- [ ] **SAM 3.1 character consistency (required):** generate the character once, isolate it, and reuse
-      the cutout in every later scene so the character looks the same across the whole book.
-- [ ] (Optional) Muse Spark multimodal validation loop before showing a panel.
-- [ ] Build **manifest v2** packaging on publish → `books.manifest_json` + cover. Publish is explicit
-      (owner-only) and runs a Muse Spark safe/unsafe check on the text first.
-- [ ] Build the reader: swipe scenes, tap a word for its meaning, show `reading_level`.
+- [ ] **4a (agent, backend):** `ImageModel` (`muse-image-1.0`) + `SegmentModel`
+      (`sam-3.1`) adapters, config routing + prices, `kind='scene'` art-job pipeline,
+      R2 upload/storage. Done when a scene job returns stored panel URLs.
+- [ ] **4b (agent, backend):** publish endpoint (owner-only) + Muse Spark
+      safe/unsafe screen + **manifest v2** packaging → `books.manifest_json` +
+      cover. Done when a draft becomes a `books` row via one call.
+- [ ] **4c (local, UI):** per-scene "Generate" button with job progress +
+      publish button wiring in the Editor. Needs 4a/4b contract. Done when art
+      and publish run from clicks.
+- [ ] **4d (local, UI):** reader — swipe scenes, tap a word for its meaning
+      (`/meanings`), show `reading_level`. Needs 4b output shape (mock with a
+      fixture until then). Done when a published book reads swipeably.
+- [ ] **4e (codespace/content):** prompt-template review, character-sheet
+      authoring, phone preview of the reader. Needs 4d. Done when the character
+      looks identical across all scenes on a phone.
+- [ ] (Optional, agent) Muse Spark multimodal validation loop before showing a panel.
+- [ ] **SAM 3.1 character consistency (required)** is covered by 4a + 4e together.
+
+Sub-steps run in parallel across tracks (agent = `develop`, human = `local`,
+content/preview = `codespace`). UI builds against the API contract in
+`src/lib/api.ts` — 4a/4b land it first.
 
 ✅ **Done when:** a comic with art publishes and reads end-to-end, with one consistent character across
    all scenes.
@@ -451,7 +464,7 @@ endpoints first, humans build UI against them. Merge via PR.
 | 1 — Scaffold + auth | Done | Done | — |
 | 2 — Creator editor | Done | Done | — |
 | 3 — Text AI + level check | Provider, gate, endpoints, ledger | Container QA, pricing research | — |
-| 4 — Art + publish + reader | Image/Segment adapters, art-job pipeline, R2, publish + manifest + safety, reader API | Reader UI, publish + Generate buttons | Phone preview of reader; prompt-template + character-sheet review |
+| 4 — Art + publish + reader | 4a adapters + pipeline, 4b publish + manifest | 4c buttons, 4d reader | 4e preview + content |
 | 5 — PWA + share | Share backend (if needed), `/admin/costs` endpoints | PWA shell, offline IndexedDB, share UI, costs page, demo seed run | Share-link check via public URL |
 | 6 — UAT + dual reading | Sync backend, bug fixes | Human testers + bug reports | Dual-device sync test |
 | 7 — Walkthrough + polish | Backend nits | UX polish, walkthrough content | Phone check (optional) |
