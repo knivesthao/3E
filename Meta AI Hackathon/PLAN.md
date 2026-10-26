@@ -333,11 +333,11 @@ Application copy for both: `milestones.md`.
 
 ### Step 2 — Creator editor (Day 2)
 
-- [ ] `projects` + `scenes` CRUD API (list, create, update, delete, reorder).
-- [ ] Studio dashboard: list projects + "New comic".
-- [ ] Comic editor: add/reorder scenes, type narration, add per-scene speech bubbles.
-- [ ] Cast tab: define characters + places (`cast_json`).
-- [ ] Save/load drafts to D1.
+- [x] `projects` + `scenes` CRUD API (list, create, update, delete, reorder).
+- [x] Studio dashboard: list projects + "New comic".
+- [x] Comic editor: add/reorder scenes, type narration, add per-scene speech bubbles.
+- [x] Cast tab: define characters + places (`cast_json`).
+- [x] Save/load drafts to D1.
 
 ✅ **Done when:** you can write a full 6-scene story with bubbles, no AI, and reload it from the DB.
 
