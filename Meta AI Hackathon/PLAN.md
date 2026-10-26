@@ -435,6 +435,10 @@ Application copy for both: `milestones.md`.
   - Routing: default local; escalate to Codespace only for Linux-only, heavy,
     public-URL, or authed-git jobs; de-escalate when done. Never two writers on
     the same file at once; pull before starting, push when done.
+  - Branches: local Mac works on `local`, Codespace works on `codespace`,
+    agent works on `develop`. Merge to `develop` via PR — CI gates every push
+    to all three branches and every PR targeting develop, so merges are
+    verified twice (on the branch, then on develop after merge).
 
 ## Where each step runs
 
