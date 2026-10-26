@@ -361,10 +361,10 @@ Application copy for both: `milestones.md`.
 - [ ] **4b (local, backend):** publish endpoint (owner-only) + Muse Spark
       safe/unsafe screen + **manifest v2** packaging → `books.manifest_json` +
       cover. Done when a draft becomes a `books` row via one call.
-- [ ] **4c (local, UI):** per-scene "Generate" button with job progress +
+- [ ] **4c (codespace, UI):** per-scene "Generate" button with job progress +
       publish button wiring in the Editor. Needs 4a/4b contract. Done when art
       and publish run from clicks.
-- [ ] **4d (local, UI):** reader — swipe scenes, tap a word for its meaning
+- [ ] **4d (codespace, UI):** reader — swipe scenes, tap a word for its meaning
       (`/meanings`), show `reading_level`. Needs 4b output shape (mock with a
       fixture until then). Done when a published book reads swipeably.
 - [ ] **4e (codespace/content):** prompt-template review + character-sheet
@@ -373,7 +373,7 @@ Application copy for both: `milestones.md`.
 - [ ] (Optional, local) Muse Spark multimodal validation loop before showing a panel.
 - [ ] **SAM 3.1 character consistency (required)** is covered by 4a + 4e together.
 
-Sub-steps run in parallel (local = `local`, codespace slices =
+Sub-steps run in parallel (local = backend on `local`, codespace = UI on
 `codespace`, human QA). UI builds against the API contract in
 `src/lib/api.ts` — 4a/4b land it first.
 
@@ -385,7 +385,7 @@ Sub-steps run in parallel (local = `local`, codespace slices =
 - [ ] **5a (local, backend):** share backend — public read route for published
       books; `/admin/costs` endpoints serving the §Cost & usage tracking queries.
       Done when share URLs resolve and costs endpoints return ledger numbers.
-- [ ] **5b (local, UI):** PWA shell (manifest + service worker, book saved to
+- [ ] **5b (codespace, UI):** PWA shell (manifest + service worker, book saved to
       IndexedDB for offline reading), chunked per-scene loading, share UI,
       `/admin/costs` page (read-only). Needs 5a shapes. Done when the app
       installs offline and a book reads from cache.
@@ -407,9 +407,9 @@ Sub-steps run in parallel (local = `local`, codespace slices =
 
 ### Step 7 — Spotlight walkthrough + polish (Day 8)
 
-- [ ] **7a (local, UI):** onboarding/spotlight walkthrough so a judge
+- [ ] **7a (codespace, UI):** onboarding/spotlight walkthrough so a judge
       understands the app in 30 seconds.
-- [ ] **7b (local, UI):** visual/UX rough-edge fix pass.
+- [ ] **7b (codespace, UI):** visual/UX rough-edge fix pass.
 - [ ] **7c (human):** first-run test with a real user (they explain the app
       back with no help) + UX issue list feeding 7b.
 
@@ -441,14 +441,16 @@ Sub-steps run in parallel (local = `local`, codespace slices =
 - **Small commits:** commit every ~2 hours with descriptive messages, so the git timeline proves the work.
 - **Tests run on CI only:** never `npm test`, `npm run typecheck`, or `npm run build` locally.
   That is reserved for GitHub Actions on `develop`/`local`/`codespace` pushes. Write the tests, commit, push, read CI.
-- **Who does what (explicit):** tracks are named by branch.
-  - **Local (this session, Mac checkout):** all implementation — backend AND
-    frontend — on the `local` branch, plus commits, plan checkoffs, reviews.
-    Cannot push, run authed CLIs, reach your localhost, or run Docker.
-  - **Codespace (when linked):** parallel implementation slices on the
-    `codespace` branch merged via PR; plus heavy/Linux-only jobs, public
-    preview URLs, and pre-authenticated git. Metered — deliberate use only:
-    spin up, run, capture, stop/delete. Smallest machine that works.
+- **Who does what (explicit):** tracks are named by branch, split backend/UI.
+  - **Local (this session, Mac checkout):** backend (`api/`, wrangler,
+    migrations, CI, gates) on the `local` branch, plus the API contract
+    (`src/lib/api.ts`), commits, plan checkoffs, reviews. Cannot push, run
+    authed CLIs, reach your localhost, or run Docker.
+  - **Codespace (when linked):** UI (`src/pages`, `src/components`, PWA shell,
+    styles) on the `codespace` branch, built against the API contract — plus
+    heavy/Linux-only jobs, public preview URLs, and pre-authenticated git.
+    Metered — deliberate use only: spin up, run, capture, stop/delete.
+    Smallest machine that works.
   - **Human (you):** Zed as reference, QA/UAT in the browser, content and
     pricing research, decisions, `git push`, billing, submissions. No routine
     editing — no branch needed.
@@ -460,19 +462,20 @@ Sub-steps run in parallel (local = `local`, codespace slices =
 
 ## Where each step runs (parallel by default)
 
-Local implements on `local`; codespace takes parallel slices on `codespace`
-(PR to `develop`); human QA/decides/pushes. Merge via PR.
+Local owns backend, codespace owns UI — split on the `src/lib/api.ts`
+contract (local lands endpoints first, codespace builds UI against them).
+Merge via PR.
 
 | Step | Local (`local`) | Human | Codespace (`codespace`) |
 |---|---|---|---|
 | 1 — Scaffold + auth | Done | Done (verified) | — |
 | 2 — Creator editor | Done | Done (verified reload) | — |
-| 3 — Text AI + level check | Provider, gate, endpoints, ledger | Container QA, pricing research | — |
-| 4 — Art + publish + reader | 4a, 4b, 4c, 4d | QA flows, prompt review | 4e preview, authed git |
-| 5 — PWA + share | Endpoints, PWA shell, offline store, share + costs UI | Demo seed run, QA | Share-link public check |
-| 6 — UAT + dual reading | Sync backend, fixes | Testers, reports, dual-device pass | Sync-test session |
-| 7 — Walkthrough + polish | Fixes | UX review, walkthrough | Phone check (optional) |
-| 8 — Demo + submit | Tech support | Video, form, submit | — |
+| 3 — Text AI + level check | Provider, gate, endpoints, ledger (+ Step 3 UI, done) | Container QA, pricing research | — |
+| 4 — Art + publish + reader | 4a, 4b | QA flows, prompt review | 4c, 4d, 4e preview |
+| 5 — PWA + share | 5a endpoints | Demo seed run, QA | 5b UI, 5d check |
+| 6 — UAT + dual reading | 6a, 6d | Testers, reports, dual-device pass | 6c session |
+| 7 — Walkthrough + polish | Support fixes | UX review, walkthrough, first-run test | 7a, 7b, phone check |
+| 8 — Demo + submit | 8c tech support | Video, form, submit | — |
 
 If a step lists no job for a track, that track sits the step out.
 
