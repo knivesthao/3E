@@ -440,20 +440,24 @@ Application copy for both: `milestones.md`.
     to all three branches and every PR targeting develop, so merges are
     verified twice (on the branch, then on develop after merge).
 
-## Where each step runs
+## Where each step runs (parallel by default)
 
-| Step | Primary track | Codespace job (if any) |
-|---|---|---|
-| 1 — Scaffold + auth | Local (done) | None |
-| 2 — Creator editor | Local (done) | None |
-| 3 — Text AI + level check | Local: agent backend, Mac container QA | None |
-| 4 — Art + publish + reader | Local | Phone preview of the reader (short session) |
-| 5 — PWA + share | Local | Share-link check via preview URL (optional) |
-| 6 — UAT + dual reading | Local + humans | Dual-device sync test (the reason it exists) |
-| 7 — Walkthrough + polish | Local | None |
-| 8 — Demo + submit | Local | None |
+Agent works on `develop`, local Mac on `local`, Codespace on `codespace`.
+UI builds against the API contract in `src/lib/api.ts` — agent lands the
+endpoints first, humans build UI against them. Merge via PR.
 
-If a step lists no Codespace job, it never touches Codespace.
+| Step | Agent (`develop`) | Local (`local`) | Codespace (`codespace`) |
+|---|---|---|---|
+| 1 — Scaffold + auth | Done | Done | — |
+| 2 — Creator editor | Done | Done | — |
+| 3 — Text AI + level check | Provider, gate, endpoints, ledger | Container QA, pricing research | — |
+| 4 — Art + publish + reader | Image/Segment adapters, art-job pipeline, R2, publish + manifest + safety, reader API | Reader UI, publish + Generate buttons | Phone preview of reader; prompt-template + character-sheet review |
+| 5 — PWA + share | Share backend (if needed), `/admin/costs` endpoints | PWA shell, offline IndexedDB, share UI, costs page, demo seed run | Share-link check via public URL |
+| 6 — UAT + dual reading | Sync backend, bug fixes | Human testers + bug reports | Dual-device sync test |
+| 7 — Walkthrough + polish | Backend nits | UX polish, walkthrough content | Phone check (optional) |
+| 8 — Demo + submit | Tech README support, last fixes | Video, form, submission | — |
+
+If a step lists no job for a track, that track sits the step out.
 
 ## Definition of done (the demo)
 
