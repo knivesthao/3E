@@ -415,6 +415,8 @@ Application copy for both: `milestones.md`.
 - **JSON validation:** every structured AI reply is validated against its schema; retry once, then surface the error.
 - **Cost is visible:** every AI call lands in `ai_usage`; the admin view reads that table, never a guess.
 - **Small commits:** commit every ~2 hours with descriptive messages, so the git timeline proves the work.
+- **Tests run on CI only:** never `npm test`, `npm run typecheck`, or `npm run build` locally.
+  That is reserved for GitHub Actions on `develop` pushes. Write the tests, commit, push, read CI.
 
 ## Definition of done (the demo)
 
