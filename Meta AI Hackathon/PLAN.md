@@ -382,27 +382,36 @@ Sub-steps run in parallel (local = `local`, codespace slices =
 
 ### Step 5 — PWA + share → MVP DONE (Day 5)
 
-- [ ] PWA: manifest + service worker; save a book to IndexedDB for offline reading.
-- [ ] Chunked per-scene loading so the first scene shows fast.
-- [ ] Share link for a published book.
-- [ ] Admin cost view `/admin/costs`: grand total, first-try cost, retry overhead, cost by task, cost
-      by model, most-retried model/task, and cost per user/month — the queries in §Cost & usage tracking.
-      Read-only.
-- [ ] Record the first test book end-to-end (the demo seed).
+- [ ] **5a (local, backend):** share backend — public read route for published
+      books; `/admin/costs` endpoints serving the §Cost & usage tracking queries.
+      Done when share URLs resolve and costs endpoints return ledger numbers.
+- [ ] **5b (local, UI):** PWA shell (manifest + service worker, book saved to
+      IndexedDB for offline reading), chunked per-scene loading, share UI,
+      `/admin/costs` page (read-only). Needs 5a shapes. Done when the app
+      installs offline and a book reads from cache.
+- [ ] **5c (human):** record the first test book end-to-end (the demo seed) + QA.
+- [ ] **5d (codespace):** share-link check via public URL.
 
 ✅ **Done when:** **MVP DONE** — creator → leveled comic → publish → read → share, all working.
 
 ### Step 6 — UAT + dual reading (Days 6–7)
 
-- [ ] Get 2–3 real people to make test books; fix the bugs they hit.
-- [ ] Milestone — **dual reading**: a shared link where two readers stay in sync (Durable Objects or polling).
+- [ ] **6a (local, backend):** dual-reading sync — shared link where two
+      readers stay in sync (polling first; Durable Objects only if polling
+      proves inadequate). Done when two sessions track one position.
+- [ ] **6b (human):** get 2–3 real people to make test books; file the bugs.
+- [ ] **6c (codespace):** dual-device sync test over public URLs.
+- [ ] **6d (local):** fix the bugs from 6b. Runs after 6b reports land.
 
 ✅ **Done when:** test books are live and two devices can read one book together.
 
 ### Step 7 — Spotlight walkthrough + polish (Day 8)
 
-- [ ] Milestone — onboarding/spotlight walkthrough so a judge understands the app in 30 seconds.
-- [ ] Fix visual/UX rough edges.
+- [ ] **7a (local, UI):** onboarding/spotlight walkthrough so a judge
+      understands the app in 30 seconds.
+- [ ] **7b (local, UI):** visual/UX rough-edge fix pass.
+- [ ] **7c (human):** first-run test with a real user (they explain the app
+      back with no help) + UX issue list feeding 7b.
 
 ✅ **Done when:** a first-run user can explain the app back to you without help.
 
@@ -415,8 +424,10 @@ Sub-steps run in parallel (local = `local`, codespace slices =
       4. Art + consistency (30s): Muse Image draws each scene, SAM 3.1 keeps the character identical.
       5. Cost (15s): `/admin/costs` — "this book cost $0.0X."
       6. Read (20s): publish → read on a phone → tap a word → (milestone) second device.
-- [ ] Write README + submission form.
-- [ ] Submit on the Cerebral Valley portal before the deadline.
+- [ ] **8a (human):** record the 2–3 min demo video (shot list above).
+- [ ] **8b (human):** write README + submission form, submit on the Cerebral
+      Valley portal before the deadline.
+- [ ] **8c (local):** tech support on demand — last fixes only, no features.
 
 ✅ **Done when:** submission is in before 9:00 AM Nov 5 (your time).
 
@@ -429,7 +440,7 @@ Sub-steps run in parallel (local = `local`, codespace slices =
 - **Cost is visible:** every AI call lands in `ai_usage`; the admin view reads that table, never a guess.
 - **Small commits:** commit every ~2 hours with descriptive messages, so the git timeline proves the work.
 - **Tests run on CI only:** never `npm test`, `npm run typecheck`, or `npm run build` locally.
-  That is reserved for GitHub Actions on `develop` pushes. Write the tests, commit, push, read CI.
+  That is reserved for GitHub Actions on `develop`/`local`/`codespace` pushes. Write the tests, commit, push, read CI.
 - **Who does what (explicit):** tracks are named by branch.
   - **Local (this session, Mac checkout):** all implementation — backend AND
     frontend — on the `local` branch, plus commits, plan checkoffs, reviews.
