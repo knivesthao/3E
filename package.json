@@ -7,6 +7,8 @@
     "dev": "vite",
     "dev:api": "wrangler dev --config api/wrangler.toml --port 8787 --remote",
     "dev:api:local": "wrangler dev --config api/wrangler.toml --port 8787",
+    "db:migrate:local": "wrangler --config api/wrangler.toml d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler --config api/wrangler.toml d1 migrations apply DB --remote",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
