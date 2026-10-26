@@ -5,7 +5,7 @@ export type Level = (typeof LEVELS)[number];
 export const PURPOSES = ['learning', 'reading'] as const;
 export type Purpose = (typeof PURPOSES)[number];
 
-const isRecord = (v: unknown): v is Record<string, unknown> =>
+export const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 
 const isLevel = (v: unknown): v is Level =>

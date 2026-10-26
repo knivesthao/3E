@@ -12,7 +12,7 @@ import {
 // Missing-or-foreign resources all return 404 so ids can't be probed.
 export const projects = new Hono<{ Bindings: Bindings; Variables: Variables }>({ strict: false });
 
-interface ProjectRow {
+export interface ProjectRow {
   id: string;
   creator_id: string;
   title: string;
@@ -36,7 +36,11 @@ interface SceneRow {
 const NOT_FOUND = { error: 'not found' } as const;
 const INVALID = { error: 'invalid request' } as const;
 
-async function ownProject(db: D1Database, id: string, userId: string): Promise<ProjectRow | null> {
+export async function ownProject(
+  db: D1Database,
+  id: string,
+  userId: string,
+): Promise<ProjectRow | null> {
   return await db
     .prepare('SELECT * FROM projects WHERE id = ? AND creator_id = ?')
     .bind(id, userId)

@@ -85,3 +85,15 @@ export const reorderScenes = (projectId: string, order: string[]) =>
     method: 'POST',
     body: JSON.stringify({ order }),
   });
+
+export const aiFinish = (projectId: string) =>
+  api<{ job: { id: string; status: string }; saved: number[]; failed: { scene_number: number; reason: string }[] }>(
+    '/api/ai/finish',
+    { method: 'POST', body: JSON.stringify({ projectId }) },
+  );
+
+export const aiSimplify = (text: string, level: string) =>
+  api<{ rewritten: string; check: { passed: boolean; coverage: number; unknown: string[]; words: number } }>(
+    '/api/ai/simplify',
+    { method: 'POST', body: JSON.stringify({ text, level }) },
+  );

@@ -10,6 +10,7 @@ import {
   newToken,
 } from './auth';
 import { projects } from './projects';
+import { ai } from './ai/routes';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>({ strict: false });
 
@@ -117,6 +118,7 @@ app.post('/api/auth/logout', async (c) => {
 });
 
 app.route('/api/projects', projects);
+app.route('/api/ai', ai);
 
 app.notFound((c) => c.json({ error: 'not found' }, 404));
 

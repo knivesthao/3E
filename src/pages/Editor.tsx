@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
+  aiFinish,
+  aiSimplify,
   createScene,
   deleteScene,
   getProject,
@@ -125,6 +127,36 @@ export default function Editor() {
     }
   }
 
+  async function finish() {
+    setError(null);
+    try {
+      const res = await aiFinish(id);
+      await refresh();
+      if (res.failed.length > 0) {
+        setError(`Some scenes need help: ${res.failed.map((f) => `#${f.scene_number} (${f.reason})`).join(', ')}`);
+      }
+    } catch {
+      setError('3E Finish failed. Try again or write the scenes yourself.');
+    }
+  }
+
+  async function simplifyScene(sceneId: string) {
+    setError(null);
+    try {
+      const d = drafts[sceneId] ?? blank;
+      const res = await aiSimplify(d.narration, level);
+      const next = { ...d, narration: res.rewritten };
+      const saved = await updateScene(id, sceneId, next);
+      setScenes((s) => s.map((x) => (x.id === sceneId ? saved.scene : x)));
+      setDrafts((all) => ({ ...all, [sceneId]: parseScene(saved.scene) }));
+      if (!res.check.passed) {
+        setError(`Still hard words: ${res.check.unknown.join(', ')}`);
+      }
+    } catch {
+      setError('Simplify failed.');
+    }
+  }
+
   if (!project) return <main><p>Loading…</p>{error && <p>{error}</p>}</main>;
 
   return (
@@ -148,6 +180,7 @@ export default function Editor() {
       <div>
         <button onClick={() => setTab('scenes')}>Scenes</button>
         <button onClick={() => setTab('cast')}>Cast</button>
+        <button onClick={() => void finish()}>3E Finish</button>
       </div>
       {error && <p>{error}</p>}
       {tab === 'scenes' ? (
@@ -211,6 +244,7 @@ export default function Editor() {
                 </button>
                 <div>
                   <button onClick={() => void saveScene(s.id)}>Save scene</button>
+                  <button onClick={() => void simplifyScene(s.id)}>Simplify</button>
                   <button onClick={() => void move(i, -1)}>Up</button>
                   <button onClick={() => void move(i, 1)}>Down</button>
                   <button onClick={() => void removeScene(s.id)}>Delete</button>
