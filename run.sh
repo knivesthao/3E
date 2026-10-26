@@ -21,6 +21,7 @@ case "$cmd" in
     docker volume create 3e-node-modules >/dev/null
     docker volume create 3e-wrangler >/dev/null
 
+    echo "Starting 3E dev stack — frontend http://localhost:5173, API http://localhost:8787"
     exec docker run --rm -it --platform linux/amd64 \
       -p 5173:5173 -p 8787:8787 \
       -v "$ROOT:/app" \
