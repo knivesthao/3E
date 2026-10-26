@@ -417,6 +417,9 @@ Application copy for both: `milestones.md`.
 - **Small commits:** commit every ~2 hours with descriptive messages, so the git timeline proves the work.
 - **Tests run on CI only:** never `npm test`, `npm run typecheck`, or `npm run build` locally.
   That is reserved for GitHub Actions on `develop` pushes. Write the tests, commit, push, read CI.
+- **Parallel tracks:** backend (`api/`, `src/lib/api.ts`, wrangler, migrations, CI) is
+  agent-built; frontend pages/components, content, UAT, and research are human-built.
+  Never edit the same file at the same time; pull before starting, push when done.
 
 ## Definition of done (the demo)
 
