@@ -417,9 +417,22 @@ Application copy for both: `milestones.md`.
 - **Small commits:** commit every ~2 hours with descriptive messages, so the git timeline proves the work.
 - **Tests run on CI only:** never `npm test`, `npm run typecheck`, or `npm run build` locally.
   That is reserved for GitHub Actions on `develop` pushes. Write the tests, commit, push, read CI.
-- **Parallel tracks:** backend (`api/`, `src/lib/api.ts`, wrangler, migrations, CI) is
-  agent-built; frontend pages/components, content, UAT, and research are human-built.
-  Never edit the same file at the same time; pull before starting, push when done.
+- **Parallel tracks (explicit):**
+  - **Local Mac (free, default):** all editing, git, Cloudflare dashboard/billing,
+    prompting the agent, manual QA in the Mac browser, UAT, content, pricing
+    research, submission materials. Backend files (`api/`, `src/lib/api.ts`,
+    wrangler, migrations, CI) are agent-built; pages/components are human-built.
+  - **Codespace (metered — deliberate use only):** jobs the Mac cannot do well:
+    local workerd dev (native Linux, no container), long/heavy builds, public
+    preview URLs (e.g. phone testing), pre-authenticated push and `gh` runs.
+    Spin up, run the job, capture output, stop/delete. Never idle; smallest
+    machine type that works; watch github.com/settings/billing.
+  - **Agent (this session):** implements steps (code + CI-written tests), commits
+    on `develop`, plan checkoffs, reviews. Cannot push, run authed CLIs, reach
+    your localhost, or run Docker.
+  - Routing: default local; escalate to Codespace only for Linux-only, heavy,
+    public-URL, or authed-git jobs; de-escalate when done. Never two writers on
+    the same file at once; pull before starting, push when done.
 
 ## Definition of done (the demo)
 
