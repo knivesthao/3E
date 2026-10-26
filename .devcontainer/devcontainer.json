@@ -1,0 +1,11 @@
+{
+  "name": "3E",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:22-bookworm",
+  "forwardPorts": [5173, 8787],
+  "portsAttributes": {
+    "5173": { "label": "Frontend", "onAutoForward": "openPreview" },
+    "8787": { "label": "API", "onAutoForward": "silent" }
+  },
+  "postCreateCommand": "npm install --no-audit --no-fund",
+  "remoteUser": "node"
+}
