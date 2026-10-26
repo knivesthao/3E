@@ -6,6 +6,6 @@
     "5173": { "label": "Frontend", "onAutoForward": "openPreview" },
     "8787": { "label": "API", "onAutoForward": "silent" }
   },
-  "postCreateCommand": "curl -fsSL https://meta.ai | sh && npm install --no-audit --no-fund && npx wrangler --config api/wrangler.toml d1 migrations apply DB --local",
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y git-lfs && npm install --no-audit --no-fund && npx wrangler --config api/wrangler.toml d1 migrations apply DB --local",
   "remoteUser": "node"
 }
