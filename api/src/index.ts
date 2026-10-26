@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import type { D1Database } from '@cloudflare/workers-types';
+import type { Bindings, Variables } from './types';
 import {
   MAGIC_LINK_TTL_MS,
   SESSION_COOKIE,
@@ -9,11 +9,9 @@ import {
   isValidEmail,
   newToken,
 } from './auth';
+import { projects } from './projects';
 
-type Bindings = { DB: D1Database; DEV_LINKS?: string };
-type Variables = { userId: string; userEmail: string };
-
-const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+const app = new Hono<{ Bindings: Bindings; Variables: Variables }>({ strict: false });
 
 // Session gate: everything under /api/* requires a valid session except
 // the health probe and the two magic-link endpoints.
@@ -117,6 +115,8 @@ app.post('/api/auth/logout', async (c) => {
   deleteCookie(c, SESSION_COOKIE, { path: '/' });
   return c.json({ ok: true });
 });
+
+app.route('/api/projects', projects);
 
 app.notFound((c) => c.json({ error: 'not found' }, 404));
 

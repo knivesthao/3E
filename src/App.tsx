@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import Library from './pages/Library';
 import Studio from './pages/Studio';
+import Editor from './pages/Editor';
 import Reader from './pages/Reader';
 import SignIn from './pages/SignIn';
 import { getMe, logout } from './lib/api';
@@ -64,6 +65,14 @@ export default function App() {
           element={
             <Guard email={email}>
               <Studio />
+            </Guard>
+          }
+        />
+        <Route
+          path="/studio/:id"
+          element={
+            <Guard email={email}>
+              <Editor />
             </Guard>
           }
         />
