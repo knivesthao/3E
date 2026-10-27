@@ -149,6 +149,49 @@ export const publishProject = (id: string) =>
 
 export const getBook = (projectId: string) => api<{ book: Book }>(`/api/projects/${projectId}/book`);
 
+export const getSharedBook = (bookId: string) => api<{ book: Book }>(`/api/share/${bookId}`);
+
+export const getPosition = (bookId: string) =>
+  api<{ scene_number: number; updated_at: string | null }>(`/api/share/${bookId}/position`);
+
+export const setPosition = (bookId: string, sceneNumber: number) =>
+  api<{ ok: true; scene_number: number }>(`/api/share/${bookId}/position`, {
+    method: 'POST',
+    body: JSON.stringify({ scene_number: sceneNumber }),
+  });
+
+export interface CostTotals {
+  total: number;
+  first_try_cost: number;
+  retry_overhead: number;
+}
+
+export interface BookCosts {
+  totals: CostTotals;
+  by_task: { task: string; cost: number; calls: number; tokens_in: number; tokens_out: number }[];
+  by_model: { model: string; cost: number; calls: number; tokens_in: number; tokens_out: number }[];
+  retries: { model: string; task: string; retries: number; max_attempt: number }[];
+  attempts: {
+    op_id: string;
+    attempt: number;
+    task: string;
+    provider: string;
+    model: string;
+    input_tokens: number | null;
+    output_tokens: number | null;
+    cost_usd: number;
+    ok: number;
+    error: string | null;
+    created_at: string;
+  }[];
+}
+
+export const getBookCosts = (projectId: string) =>
+  api<BookCosts>(`/api/admin/costs/book?projectId=${encodeURIComponent(projectId)}`);
+
+export const getCostsOverview = () =>
+  api<{ by_user_month: { user_id: string; month: string; cost: number }[] }>('/api/admin/costs/overview');
+
 export const aiMeanings = (words: string[], level: string) =>
   api<{ meanings: { word: string; meaning: string }[] }>('/api/ai/meanings', {
     method: 'POST',

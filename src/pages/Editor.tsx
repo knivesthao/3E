@@ -40,6 +40,7 @@ export default function Editor() {
   const [panels, setPanels] = useState<Record<number, Panel>>({});
   const [publishBusy, setPublishBusy] = useState(false);
   const [book, setBook] = useState<Book | null>(null);
+  const [shared, setShared] = useState(false);
 
   async function refresh() {
     try {
@@ -233,6 +234,23 @@ export default function Editor() {
         <p>
           Published{book ? ` · ${book.reading_level}` : ''}{' '}
           <Link to={`/read/${project.id}`}>Read</Link>{' '}
+          {book && (
+            <button
+              onClick={() => {
+                setShared(false);
+                const url = `${window.location.origin}/s/${book.id}`;
+                const done = () => setShared(true);
+                if (navigator.share) {
+                  navigator.share({ title: book.title, url }).then(done, () => {});
+                } else {
+                  navigator.clipboard.writeText(url).then(done, () => {});
+                }
+              }}
+            >
+              Share
+            </button>
+          )}{' '}
+          {shared && <span>Link ready to send.</span>}{' '}
           {book?.cover_url && <img src={book.cover_url} alt="Book cover" width={96} />}
         </p>
       )}

@@ -37,6 +37,20 @@ interface SceneRow {
   updated_at: string;
 }
 
+export interface BookRow {
+  id: string;
+  project_id: string;
+  creator_id: string;
+  title: string;
+  description: string;
+  level: string;
+  reading_level: string;
+  cover_url: string | null;
+  manifest_json: string;
+  published_at: string;
+  updated_at: string;
+}
+
 const NOT_FOUND = { error: 'not found' } as const;
 const INVALID = { error: 'invalid request' } as const;
 
@@ -123,19 +137,7 @@ projects.get('/:id/book', async (c) => {
   if (!project) return c.json(NOT_FOUND, 404);
   const book = await c.env.DB.prepare('SELECT * FROM books WHERE project_id = ?')
     .bind(project.id)
-    .first<{
-      id: string;
-      project_id: string;
-      creator_id: string;
-      title: string;
-      description: string;
-      level: string;
-      reading_level: string;
-      cover_url: string | null;
-      manifest_json: string;
-      published_at: string;
-      updated_at: string;
-    }>();
+    .first<BookRow>();
   if (!book) return c.json(NOT_FOUND, 404);
   return c.json({ book: { ...book, manifest: JSON.parse(book.manifest_json) as unknown } });
 });

@@ -11,6 +11,8 @@ import {
 } from './auth';
 import { projects } from './projects';
 import { ai } from './ai/routes';
+import { share } from './share';
+import { costs } from './costs';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>({ strict: false });
 
@@ -21,6 +23,10 @@ app.use('/api/*', async (c, next) => {
   if (path === '/api/health' || path === '/api/auth/request-link' || path === '/api/auth/verify') {
     return next();
   }
+  // Step 5a public share: anyone with the link can read a published book.
+  if (path.startsWith('/api/share/')) return next();
+  // Panel images must load for anonymous share readers (generation stays gated).
+  if (c.req.method === 'GET' && path.startsWith('/api/ai/art/')) return next();
   const raw = getCookie(c, SESSION_COOKIE);
   if (!raw) return c.json({ error: 'unauthorized' }, 401);
   const row = await c.env.DB.prepare(
@@ -119,6 +125,8 @@ app.post('/api/auth/logout', async (c) => {
 
 app.route('/api/projects', projects);
 app.route('/api/ai', ai);
+app.route('/api/share', share);
+app.route('/api/admin/costs', costs);
 
 app.notFound((c) => c.json({ error: 'not found' }, 404));
 

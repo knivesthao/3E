@@ -5,6 +5,7 @@ import Library from './pages/Library';
 import Studio from './pages/Studio';
 import Editor from './pages/Editor';
 import Reader from './pages/Reader';
+import Costs from './pages/Costs';
 import SignIn from './pages/SignIn';
 import { getMe, logout } from './lib/api';
 
@@ -39,7 +40,7 @@ export default function App() {
   return (
     <>
       <nav>
-        <Link to="/">Library</Link> | <Link to="/studio">Studio</Link>
+        <Link to="/">Library</Link> | <Link to="/studio">Studio</Link> | <Link to="/admin/costs">Costs</Link>
         {email ? (
           <>
             {' '}| {email} <button onClick={signOut}>Sign out</button>
@@ -81,6 +82,15 @@ export default function App() {
           element={
             <Guard email={email}>
               <Reader />
+            </Guard>
+          }
+        />
+        <Route path="/s/:bookId" element={<Reader />} />
+        <Route
+          path="/admin/costs"
+          element={
+            <Guard email={email}>
+              <Costs />
             </Guard>
           }
         />
