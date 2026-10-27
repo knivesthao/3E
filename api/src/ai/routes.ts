@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Bindings, Variables } from '../types';
 import { AiError } from './meta';
+import { basetenConfig } from './config';
+import type { BasetenConfig } from './config';
 import { FAILED, INVALID, finishJob, modelKey, overLimit, readJson } from './http';
 import { generate, parseJson } from './client';
 import { checkPrompt, draftPrompt, ideaPrompt, meaningsPrompt, sceneActionText, simplifyPrompt } from './prompts';
@@ -59,6 +61,7 @@ ai.post('/idea', async (c) => {
       prompt: ideaPrompt(body.idea.trim()),
       json: true,
       apiUrl: c.env.AI_API_URL,
+      baseten: basetenConfig(c.env),
       validate: (t) => {
         const v = parseJson(t, isRecord);
         return !!v && typeof v.description === 'string' && isLevel(v.level);
@@ -97,6 +100,7 @@ ai.post('/meanings', async (c) => {
       prompt: meaningsPrompt(level, wordsList),
       json: true,
       apiUrl: c.env.AI_API_URL,
+      baseten: basetenConfig(c.env),
       validate: (t) => {
         const v = parseJson(t, isRecord);
         if (!v || !Array.isArray(v.meanings) || v.meanings.length !== words.length) return false;
@@ -132,6 +136,7 @@ ai.post('/simplify', async (c) => {
       prompt: simplifyPrompt(body.level, body.text),
       json: true,
       apiUrl: c.env.AI_API_URL,
+      baseten: basetenConfig(c.env),
       validate: (t) => {
         const v = parseJson(t, isRecord);
         return !!v && typeof v.rewritten === 'string' && v.rewritten.length > 0;
@@ -172,7 +177,7 @@ const isCheckReply = (v: unknown): v is { passed: boolean; reason: string } => {
 
 async function draftMissing(
   db: D1Database,
-  ctx: { apiKey: string; userId: string; projectId: string; opId: string; apiUrl?: string },
+  ctx: { apiKey: string; userId: string; projectId: string; opId: string; apiUrl?: string; baseten?: BasetenConfig | null },
   project: ProjectRow,
   scenesSoFar: { scene_number: number; narration: string; bubbles: unknown[] }[],
   targetCount: number,
@@ -209,7 +214,7 @@ ai.post('/finish', async (c) => {
   const now = new Date().toISOString();
   const jobId = crypto.randomUUID();
   const opId = crypto.randomUUID();
-  const ctx = { apiKey, userId, projectId: project.id, opId, apiUrl: c.env.AI_API_URL };
+  const ctx = { apiKey, userId, projectId: project.id, opId, apiUrl: c.env.AI_API_URL, baseten: basetenConfig(c.env) };
   await db
     .prepare(
       "INSERT INTO jobs (id, user_id, project_id, kind, payload, status, created_at, updated_at) VALUES (?, ?, ?, 'finish', ?, 'running', ?, ?)",

@@ -43,6 +43,12 @@ export default function Editor() {
   const [shared, setShared] = useState(false);
 
   async function refresh() {
+    setScenes([]);
+    setDrafts({});
+    setBook(null);
+    setPanels({});
+    setArtBusy({});
+    setShared(false);
     try {
       const res = await getProject(id);
       setProject(res.project);

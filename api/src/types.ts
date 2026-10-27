@@ -6,5 +6,8 @@ export type Bindings = {
   DEV_LINKS?: string;
   MODEL_API_KEY?: string;
   AI_API_URL?: string;
+  BASETEN_API_URL?: string;
+  BASETEN_API_KEY?: string;
+  BASETEN_MODEL?: string;
 };
 export type Variables = { userId: string; userEmail: string };

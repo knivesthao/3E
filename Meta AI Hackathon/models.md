@@ -20,6 +20,7 @@
 | Character isolation / consistency | SAM 3.1 | `sam-3.1` | 🟢 Verified |
 | Visual scene validation (optional) | Muse Spark (multimodal) | `muse-spark-1.3` | 🟢 Verified |
 | Safety | — (no safety model on this API) | Muse Spark prompt check | ⚪ optional |
+| Story draft / level check (cheap path, own Baseten credits) | Muse Glimmer (self-host) | config `GLIMMER_MODEL`, override via `BASETEN_MODEL` | 🟡 Self-host |
 | Coding | Muse Code | CLI + Meta Cloud API | 🔴 Primary |
 
 Notes:

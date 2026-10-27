@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { aiMeanings, getBook, getSharedBook } from '../lib/api';
+import { aiMeanings, getBook, getPosition, getSharedBook, setPosition } from '../lib/api';
 import { getCachedBook, putBook } from '../lib/db';
 import type { Book } from '../lib/api';
 
@@ -51,6 +51,9 @@ export default function Reader() {
   const [lookingUp, setLookingUp] = useState(false);
   const [visible, setVisible] = useState(CHUNK);
   const moreRef = useRef<HTMLDivElement | null>(null);
+  const currentRef = useRef(1);
+  const lastMoveRef = useRef(0);
+  const [followed, setFollowed] = useState<number | null>(null);
 
   useEffect(() => {
     const key = shareMode ? `s:${bookId}` : `p:${id}`;
@@ -62,6 +65,9 @@ export default function Reader() {
         setActive(null);
         setOffline(false);
         setError(null);
+        currentRef.current = 1;
+        lastMoveRef.current = 0;
+        setFollowed(null);
         putBook(key, res.book).catch(() => {});
       })
       .catch(() =>
@@ -80,6 +86,50 @@ export default function Reader() {
         }),
       );
   }, [id, bookId, shareMode]);
+
+  // Live sync (Step 6c): report the scene being read, follow the shared
+  // position when someone else moves it. Polling; 15s grace after a local move.
+  useEffect(() => {
+    if (!book) return;
+    const t = setInterval(() => {
+      getPosition(book.id)
+        .then((p) => {
+          if (p.scene_number !== currentRef.current && Date.now() - lastMoveRef.current > 15000) {
+            currentRef.current = p.scene_number;
+            setVisible((v) => Math.max(v, p.scene_number));
+            setFollowed(p.scene_number);
+          }
+        })
+        .catch(() => {});
+    }, 3000);
+    return () => clearInterval(t);
+  }, [book]);
+
+  useEffect(() => {
+    if (followed == null) return;
+    document.querySelector(`[data-scene="${followed}"]`)?.scrollIntoView({ block: 'start' });
+  }, [followed, visible]);
+
+  useEffect(() => {
+    if (!book) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          const n = Number((e.target as HTMLElement).dataset.scene);
+          if (n !== currentRef.current) {
+            currentRef.current = n;
+            lastMoveRef.current = Date.now();
+            setFollowed(null);
+            setPosition(book.id, n).catch(() => {});
+          }
+        }
+      },
+      { threshold: 0.5 },
+    );
+    document.querySelectorAll('[data-scene]').forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [book, visible]);
 
   useEffect(() => {
     if (!book || visible >= book.manifest.scenes.length) return;
@@ -132,8 +182,9 @@ export default function Reader() {
         Level {book.level} · {book.reading_level}
         {offline && ' · Offline copy'}
       </p>
+      {followed != null && <p>Following shared position · Scene {followed}</p>}
       {book.manifest.scenes.slice(0, visible).map((s) => (
-        <section key={s.scene_number} style={{ marginBottom: 32 }}>
+        <section key={s.scene_number} data-scene={s.scene_number} style={{ marginBottom: 32 }}>
           <h3>Scene {s.scene_number}</h3>
           {s.image_url && (
             <img

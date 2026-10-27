@@ -9,12 +9,37 @@ export const PRICES: Record<string, { in: number; out: number }> = {
   'muse-wonder-1.0': { in: 0, out: 0 },
   'muse-image-1.0': { in: 0, out: 0 },
   'sam-3.1': { in: 0, out: 0 },
+  // Self-hosted Glimmer via Baseten (own credits) — fill when known.
+  'Muse-Glimmer': { in: 0, out: 0 },
 };
 
 export const TEXT_MODEL = 'muse-spark-1.3';
 export const HARD_MODEL = 'muse-wonder-1.0';
 export const IMAGE_MODEL = 'muse-image-1.0';
 export const SEGMENT_MODEL = 'sam-3.1';
+// Open-weight text model served on Baseten. Must match the deployment's
+// model name; override without a code change via BASETEN_MODEL.
+export const GLIMMER_MODEL = 'Muse-Glimmer';
+
+// Text tasks served by Glimmer when Baseten is configured (PLAN
+// §Self-hosting). Art/segment stay on the Meta Model API.
+export const BASETEN_TASKS: AiTask[] = ['draft', 'check', 'idea', 'meanings', 'simplify', 'safety'];
+
+export interface BasetenConfig {
+  apiUrl: string;
+  apiKey: string;
+  model: string;
+}
+
+// Null when Baseten is not configured — callers fall back to Meta API.
+export function basetenConfig(env: {
+  BASETEN_API_URL?: string;
+  BASETEN_API_KEY?: string;
+  BASETEN_MODEL?: string;
+}): BasetenConfig | null {
+  if (!env.BASETEN_API_URL || !env.BASETEN_API_KEY) return null;
+  return { apiUrl: env.BASETEN_API_URL, apiKey: env.BASETEN_API_KEY, model: env.BASETEN_MODEL ?? GLIMMER_MODEL };
+}
 
 export type AiTask = 'draft' | 'check' | 'idea' | 'meanings' | 'simplify' | 'safety' | 'art' | 'isolate';
 

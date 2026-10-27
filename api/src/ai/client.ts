@@ -1,8 +1,9 @@
 import type { D1Database } from '@cloudflare/workers-types';
-import { TASK_MODEL, textCost } from './config';
-import type { AiTask } from './config';
+import { BASETEN_TASKS, TASK_MODEL, textCost } from './config';
+import type { AiTask, BasetenConfig } from './config';
 import { AiError, metaImage, metaSegment, metaText } from './meta';
 import type { ImageOut } from './meta';
+import { basetenText } from './baseten';
 
 // Metered generation: every attempt is a row (retry reuses op_id, attempt+1).
 // Exactly one retry on retryable errors or invalid JSON, then surface.
@@ -17,26 +18,34 @@ export async function generate(
     prompt: string;
     json: boolean;
     apiUrl?: string;
+    baseten?: BasetenConfig | null;
     validate?: (text: string) => boolean;
   },
 ): Promise<{ text: string; attempts: number }> {
   const model = TASK_MODEL[opts.task];
+  // Self-hosted path (PLAN §Self-hosting): Glimmer on Baseten takes the text
+  // tasks when configured; otherwise everything stays on the Meta Model API.
+  const bt = opts.baseten && BASETEN_TASKS.includes(opts.task) ? opts.baseten : null;
+  const activeModel = bt ? bt.model : model;
+  const provider = bt ? 'baseten' : 'meta-model-api';
   for (let attempt = 1; attempt <= 2; attempt++) {
     const start = Date.now();
     try {
-      const out = await metaText(opts.apiKey, model, opts.prompt, { json: opts.json, apiUrl: opts.apiUrl });
+      const out = bt
+        ? await basetenText(bt, opts.prompt, { json: opts.json })
+        : await metaText(opts.apiKey, model, opts.prompt, { json: opts.json, apiUrl: opts.apiUrl });
       const ms = Date.now() - start;
       if (opts.validate && !opts.validate(out.text)) {
         // Tokens were spent on an unusable reply: log it, retry same op_id.
-        await logAttempt(db, opts, model, 'text', attempt, out.inputTokens, out.outputTokens, false, 'invalid shape', ms);
+        await logAttempt(db, opts, activeModel, 'text', attempt, out.inputTokens, out.outputTokens, false, 'invalid shape', ms, provider);
         if (attempt === 2) break;
         continue;
       }
-      await logAttempt(db, opts, model, 'text', attempt, out.inputTokens, out.outputTokens, true, null, ms);
+      await logAttempt(db, opts, activeModel, 'text', attempt, out.inputTokens, out.outputTokens, true, null, ms, provider);
       return { text: out.text, attempts: attempt };
     } catch (e) {
       const retryable = e instanceof AiError && e.retryable;
-      await logAttempt(db, opts, model, 'text', attempt, 0, 0, false, e instanceof Error ? e.message : 'failed', Date.now() - start);
+      await logAttempt(db, opts, activeModel, 'text', attempt, 0, 0, false, e instanceof Error ? e.message : 'failed', Date.now() - start, provider);
       if (!retryable || attempt === 2) break;
     }
   }
@@ -137,6 +146,7 @@ async function logAttempt(
   ok: boolean,
   error: string | null,
   ms: number,
+  provider = 'meta-model-api',
 ): Promise<void> {
   await db
     .prepare(
@@ -148,7 +158,7 @@ async function logAttempt(
       opts.opId,
       attempt,
       opts.task,
-      'meta-model-api',
+      provider,
       model,
       kind,
       inputTokens,

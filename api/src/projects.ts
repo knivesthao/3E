@@ -8,6 +8,7 @@ import {
   validateSceneOrder,
 } from './validate';
 import { generate } from './ai/client';
+import { basetenConfig } from './ai/config';
 import { finishJob, modelKey, overLimit } from './ai/http';
 import { AiError } from './ai/meta';
 import { safetyPrompt, sceneActionText } from './ai/prompts';
@@ -233,6 +234,7 @@ projects.post('/:id/publish', async (c) => {
       prompt: safetyPrompt(fullText),
       json: false,
       apiUrl: c.env.AI_API_URL,
+      baseten: basetenConfig(c.env),
       validate: (t) => {
         const v = t.trim().toLowerCase();
         return v === 'safe' || v === 'unsafe';

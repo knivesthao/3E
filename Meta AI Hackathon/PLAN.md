@@ -355,23 +355,23 @@ Application copy for both: `milestones.md`.
 
 ### Step 4 — Art + publish + reader (Day 4)
 
-- [ ] **4a (local, backend):** `ImageModel` (`muse-image-1.0`) + `SegmentModel`
+- [x] **4a (local, backend):** `ImageModel` (`muse-image-1.0`) + `SegmentModel`
       (`sam-3.1`) adapters, config routing + prices, `kind='scene'` art-job pipeline,
       R2 upload/storage. Done when a scene job returns stored panel URLs.
-- [ ] **4b (local, backend):** publish endpoint (owner-only) + Muse Spark
+- [x] **4b (local, backend):** publish endpoint (owner-only) + Muse Spark
       safe/unsafe screen + **manifest v2** packaging → `books.manifest_json` +
       cover. Done when a draft becomes a `books` row via one call.
-- [ ] **4c (codespace, UI):** per-scene "Generate" button with job progress +
+- [x] **4c (codespace, UI):** per-scene "Generate" button with job progress +
       publish button wiring in the Editor. Needs 4a/4b contract. Done when art
       and publish run from clicks.
-- [ ] **4d (codespace, UI):** reader — swipe scenes, tap a word for its meaning
+- [x] **4d (codespace, UI):** reader — swipe scenes, tap a word for its meaning
       (`/meanings`), show `reading_level`. Needs 4b output shape (mock with a
       fixture until then). Done when a published book reads swipeably.
-- [ ] **4e (codespace/content):** prompt-template review + character-sheet
+- [x] **4e (codespace/content):** prompt-template review + character-sheet
       authoring — **anytime, needs nothing**. Phone preview of the reader needs
       4d. Done when the character looks identical across all scenes on a phone.
 - [ ] (Optional, local) Muse Spark multimodal validation loop before showing a panel.
-- [ ] **SAM 3.1 character consistency (required)** is covered by 4a + 4e together.
+- [x] **SAM 3.1 character consistency (required)** is covered by 4a + 4e together.
 
 Sub-steps run in parallel (local = backend on `local`, codespace = UI on
 `codespace`, human QA). UI builds against the API contract in
@@ -382,10 +382,10 @@ Sub-steps run in parallel (local = backend on `local`, codespace = UI on
 
 ### Step 5 — PWA + share → MVP DONE (Day 5)
 
-- [ ] **5a (local, backend):** share backend — public read route for published
+- [x] **5a (local, backend):** share backend — public read route for published
       books; `/admin/costs` endpoints serving the §Cost & usage tracking queries.
       Done when share URLs resolve and costs endpoints return ledger numbers.
-- [ ] **5b (codespace, UI):** PWA shell (manifest + service worker, book saved to
+- [x] **5b (codespace, UI):** PWA shell (manifest + service worker, book saved to
       IndexedDB for offline reading), chunked per-scene loading, share UI,
       `/admin/costs` page (read-only). Needs 5a shapes. Done when the app
       installs offline and a book reads from cache.
@@ -396,11 +396,11 @@ Sub-steps run in parallel (local = backend on `local`, codespace = UI on
 
 ### Step 6 — UAT + dual reading (Days 6–7)
 
-- [ ] **6a (local, backend):** dual-reading sync — shared link where two
+- [x] **6a (local, backend):** dual-reading sync — shared link where two
       readers stay in sync (polling first; Durable Objects only if polling
       proves inadequate). Done when two sessions track one position.
 - [ ] **6b (human):** get 2–3 real people to make test books; file the bugs.
-- [ ] **6c (codespace):** dual-device sync test over public URLs.
+- [x] **6c (codespace):** dual-device sync test over public URLs.
 - [ ] **6d (local):** fix the bugs from 6b. Runs after 6b reports land.
 
 ✅ **Done when:** test books are live and two devices can read one book together.
