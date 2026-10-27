@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import {
+  aiArt,
   aiFinish,
   aiSimplify,
   createScene,
   deleteScene,
   getProject,
   parseScene,
+  publishProject,
   reorderScenes,
   updateProject,
   updateScene,
 } from '../lib/api';
 import { LEVELS } from '../lib/api';
-import type { Project, Scene, SceneData } from '../lib/api';
+import type { Book, Panel, Project, Scene, SceneData } from '../lib/api';
 
 const blank: SceneData = { narration: '', bubbles: [] };
 
@@ -24,13 +26,20 @@ export default function Editor() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [level, setLevel] = useState('A1');
-  const [cast, setCast] = useState<{ characters: { name: string }[]; places: { name: string }[] }>({
+  const [cast, setCast] = useState<{
+    characters: { name: string; description?: string }[];
+    places: { name: string; description?: string }[];
+  }>({
     characters: [],
     places: [],
   });
   const [tab, setTab] = useState<'scenes' | 'cast'>('scenes');
   const [newNarration, setNewNarration] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [artBusy, setArtBusy] = useState<Record<string, boolean>>({});
+  const [panels, setPanels] = useState<Record<number, Panel>>({});
+  const [publishBusy, setPublishBusy] = useState(false);
+  const [book, setBook] = useState<Book | null>(null);
 
   async function refresh() {
     try {
@@ -120,7 +129,11 @@ export default function Editor() {
   async function saveCast() {
     setError(null);
     try {
-      const res = await updateProject(id, { cast_json: cast });
+      const clean = (list: { name: string; description?: string }[]) =>
+        list.filter((e) => e.name.trim() !== '');
+      const res = await updateProject(id, {
+        cast_json: { characters: clean(cast.characters), places: clean(cast.places) },
+      });
       setProject(res.project);
     } catch {
       setError('Could not save the cast.');
@@ -137,6 +150,37 @@ export default function Editor() {
       }
     } catch {
       setError('3E Finish failed. Try again or write the scenes yourself.');
+    }
+  }
+
+  async function generateSceneArt(scene: Scene) {
+    setError(null);
+    setArtBusy((b) => ({ ...b, [scene.id]: true }));
+    try {
+      const res = await aiArt(id, scene.scene_number);
+      setPanels((p) => {
+        const next = { ...p };
+        for (const panel of res.panels) next[panel.scene_number] = panel;
+        return next;
+      });
+    } catch {
+      setError(`Art failed for scene ${scene.scene_number}.`);
+    } finally {
+      setArtBusy((b) => ({ ...b, [scene.id]: false }));
+    }
+  }
+
+  async function publish() {
+    setError(null);
+    setPublishBusy(true);
+    try {
+      const res = await publishProject(id);
+      setBook(res.book);
+      setProject((p) => (p ? { ...p, status: 'published' } : p));
+    } catch {
+      setError('Publish failed.');
+    } finally {
+      setPublishBusy(false);
     }
   }
 
@@ -181,7 +225,17 @@ export default function Editor() {
         <button onClick={() => setTab('scenes')}>Scenes</button>
         <button onClick={() => setTab('cast')}>Cast</button>
         <button onClick={() => void finish()}>3E Finish</button>
+        <button onClick={() => void publish()} disabled={publishBusy}>
+          {publishBusy ? 'Publishing…' : 'Publish'}
+        </button>
       </div>
+      {(book || project.status === 'published') && (
+        <p>
+          Published{book ? ` · ${book.reading_level}` : ''}{' '}
+          <Link to={`/read/${project.id}`}>Read</Link>{' '}
+          {book?.cover_url && <img src={book.cover_url} alt="Book cover" width={96} />}
+        </p>
+      )}
       {error && <p>{error}</p>}
       {tab === 'scenes' ? (
         <>
@@ -242,9 +296,15 @@ export default function Editor() {
                 >
                   Add bubble
                 </button>
+                {panels[s.scene_number] && (
+                  <img src={panels[s.scene_number].image_url} alt={`Scene ${s.scene_number} art`} width={192} />
+                )}
                 <div>
                   <button onClick={() => void saveScene(s.id)}>Save scene</button>
                   <button onClick={() => void simplifyScene(s.id)}>Simplify</button>
+                  <button onClick={() => void generateSceneArt(s)} disabled={!!artBusy[s.id]}>
+                    {artBusy[s.id] ? 'Generating…' : 'Generate'}
+                  </button>
                   <button onClick={() => void move(i, -1)}>Up</button>
                   <button onClick={() => void move(i, 1)}>Down</button>
                   <button onClick={() => void removeScene(s.id)}>Delete</button>
@@ -261,7 +321,34 @@ export default function Editor() {
               <ul>
                 {cast[kind].map((c, ci) => (
                   <li key={ci}>
-                    {c.name}
+                    <input
+                      maxLength={100}
+                      placeholder={kind === 'characters' ? 'Name (e.g. Noy)' : 'Name (e.g. rice field)'}
+                      value={c.name}
+                      onChange={(e) =>
+                        setCast((all) => ({
+                          ...all,
+                          [kind]: all[kind].map((x, k) => (k === ci ? { ...x, name: e.target.value } : x)),
+                        }))
+                      }
+                    />
+                    <input
+                      maxLength={500}
+                      placeholder={
+                        kind === 'characters'
+                          ? 'Looks (e.g. 8-year-old, short black bob, yellow t-shirt, red backpack)'
+                          : 'Looks (e.g. a rice field at sunrise)'
+                      }
+                      value={c.description ?? ''}
+                      onChange={(e) =>
+                        setCast((all) => ({
+                          ...all,
+                          [kind]: all[kind].map((x, k) =>
+                            k === ci ? { ...x, description: e.target.value } : x,
+                          ),
+                        }))
+                      }
+                    />
                     <button
                       onClick={() =>
                         setCast((all) => ({ ...all, [kind]: all[kind].filter((_, k) => k !== ci) }))
@@ -273,10 +360,7 @@ export default function Editor() {
                 ))}
               </ul>
               <button
-                onClick={() => {
-                  const name = window.prompt(`New ${kind.slice(0, -1)} name:`)?.trim();
-                  if (name) setCast((all) => ({ ...all, [kind]: [...all[kind], { name }] }));
-                }}
+                onClick={() => setCast((all) => ({ ...all, [kind]: [...all[kind], { name: '' }] }))}
               >
                 Add
               </button>

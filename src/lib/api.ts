@@ -146,3 +146,11 @@ export interface Book {
 
 export const publishProject = (id: string) =>
   api<{ job: { id: string; status: string }; book: Book }>(`/api/projects/${id}/publish`, { method: 'POST' });
+
+export const getBook = (projectId: string) => api<{ book: Book }>(`/api/projects/${projectId}/book`);
+
+export const aiMeanings = (words: string[], level: string) =>
+  api<{ meanings: { word: string; meaning: string }[] }>('/api/ai/meanings', {
+    method: 'POST',
+    body: JSON.stringify({ words, level }),
+  });

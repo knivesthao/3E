@@ -112,14 +112,16 @@ export function validateSceneData(
 export function validateCast(input: unknown): { ok: true; value: string } | { ok: false } {
   const obj = typeof input === 'string' ? tryParse(input) : input;
   if (!isRecord(obj)) return { ok: false };
-  const norm = (v: unknown): { name: string }[] | null => {
+  const norm = (v: unknown): { name: string; description?: string }[] | null => {
     if (!Array.isArray(v) || v.length > 50) return null;
-    const out: { name: string }[] = [];
+    const out: { name: string; description?: string }[] = [];
     for (const e of v) {
       if (!isRecord(e) || typeof e.name !== 'string' || e.name.trim() === '' || e.name.length > 100) {
         return null;
       }
-      out.push({ name: e.name.trim() });
+      if (e.description !== undefined && typeof e.description !== 'string') return null;
+      const description = typeof e.description === 'string' ? e.description.trim().slice(0, 500) : '';
+      out.push(description === '' ? { name: e.name.trim() } : { name: e.name.trim(), description });
     }
     return out;
   };

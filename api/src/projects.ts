@@ -116,6 +116,30 @@ projects.get('/:id', async (c) => {
   return c.json({ project, scenes: results });
 });
 
+// Reader (Step 4d): owner-only fetch of the published book + manifest v2
+// for one project. 404 until the draft has been published once.
+projects.get('/:id/book', async (c) => {
+  const project = await ownProject(c.env.DB, c.req.param('id'), c.get('userId'));
+  if (!project) return c.json(NOT_FOUND, 404);
+  const book = await c.env.DB.prepare('SELECT * FROM books WHERE project_id = ?')
+    .bind(project.id)
+    .first<{
+      id: string;
+      project_id: string;
+      creator_id: string;
+      title: string;
+      description: string;
+      level: string;
+      reading_level: string;
+      cover_url: string | null;
+      manifest_json: string;
+      published_at: string;
+      updated_at: string;
+    }>();
+  if (!book) return c.json(NOT_FOUND, 404);
+  return c.json({ book: { ...book, manifest: JSON.parse(book.manifest_json) as unknown } });
+});
+
 projects.patch('/:id', async (c) => {
   const project = await ownProject(c.env.DB, c.req.param('id'), c.get('userId'));
   if (!project) return c.json(NOT_FOUND, 404);
