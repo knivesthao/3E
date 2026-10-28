@@ -1,0 +1,16 @@
+{
+  "$comment": "3E Modal SAM development endpoint record (dev-only, parked). Secrets never live here. Deploy with modal deploy modal/sam.py, then MODAL_PROXY_TOKEN='<id>.ws-<secret>' ./modal/link.sh <endpoint-url>.",
+  "status": "parked 2026-10-28: isolate stays on Meta Model API until per-cutout Modal spend is verified cheaper",
+  "environment": "development",
+  "gpu": "L4",
+  "scaling": {
+    "minContainers": 0,
+    "maxContainers": 1,
+    "$comment": "Scale to zero: per-second billing means $0 idle. Cold starts reload weights."
+  },
+  "contract": {
+    "request": "{ image_b64, prompt }",
+    "response": "{ mask_b64, content_type }"
+  },
+  "apiUrl": "<modal-web-endpoint-url>"
+}

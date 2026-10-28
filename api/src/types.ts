@@ -9,5 +9,7 @@ export type Bindings = {
   BASETEN_API_URL?: string;
   BASETEN_API_KEY?: string;
   BASETEN_MODEL?: string;
+  MODAL_API_URL?: string;
+  MODAL_PROXY_TOKEN?: string;
 };
 export type Variables = { userId: string; userEmail: string };

@@ -42,6 +42,21 @@ export function basetenConfig(env: {
   return { apiUrl: env.BASETEN_API_URL, apiKey: env.BASETEN_API_KEY, model: env.BASETEN_MODEL ?? GLIMMER_MODEL };
 }
 
+export interface ModalConfig {
+  apiUrl: string;
+  proxyToken: string;
+}
+
+// Null when Modal is not configured — callers fall back to Meta API.
+// Off by default: enable only when per-cutout Modal spend beats Meta.
+export function modalConfig(env: {
+  MODAL_API_URL?: string;
+  MODAL_PROXY_TOKEN?: string;
+}): ModalConfig | null {
+  if (!env.MODAL_API_URL || !env.MODAL_PROXY_TOKEN) return null;
+  return { apiUrl: env.MODAL_API_URL, proxyToken: env.MODAL_PROXY_TOKEN };
+}
+
 export type AiTask = 'draft' | 'check' | 'idea' | 'meanings' | 'simplify' | 'safety' | 'art' | 'isolate';
 
 export const TASK_MODEL: Record<AiTask, string> = {

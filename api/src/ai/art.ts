@@ -4,6 +4,7 @@ import type { Bindings, Variables } from '../types';
 import { AiError } from './meta';
 import { generateArt, generateMask } from './client';
 import { FAILED, INVALID, finishJob, modelKey, overLimit, readJson } from './http';
+import { modalConfig } from './config';
 import { isolateText, sceneArtPrompt } from './prompts';
 import { ownProject } from '../projects';
 import { isRecord, validateSceneData } from '../validate';
@@ -97,7 +98,7 @@ art.post('/', async (c) => {
     .bind(jobId, userId, project.id, JSON.stringify({ projectId: project.id, sceneNumber }), now, now)
     .run();
 
-  const ctx = { apiKey, userId, projectId: project.id, apiUrl: c.env.AI_API_URL };
+  const ctx = { apiKey, userId, projectId: project.id, apiUrl: c.env.AI_API_URL, modal: modalConfig(c.env) };
   const character = describeCharacter(project.cast_json);
   try {
     const prompt = sceneArtPrompt({

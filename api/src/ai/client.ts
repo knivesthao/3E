@@ -1,9 +1,10 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import { BASETEN_TASKS, TASK_MODEL, textCost } from './config';
-import type { AiTask, BasetenConfig } from './config';
+import type { AiTask, BasetenConfig, ModalConfig } from './config';
 import { AiError, metaImage, metaSegment, metaText } from './meta';
 import type { ImageOut } from './meta';
 import { basetenText } from './baseten';
+import { modalMask } from './modal';
 
 // Metered generation: every attempt is a row (retry reuses op_id, attempt+1).
 // Exactly one retry on retryable errors or invalid JSON, then surface.
@@ -105,30 +106,38 @@ export async function generateMask(
     imageBytes: ArrayBuffer;
     textPrompt: string;
     apiUrl?: string;
+    modal?: ModalConfig | null;
   },
 ): Promise<{ bytes: ArrayBuffer; contentType: string; attempts: number }> {
   const model = TASK_MODEL.isolate;
+  // Cost-efficient path: text-prompted SAM on Modal (per-second GPU,
+  // scale-to-zero) when configured; otherwise Meta Model API.
+  const useModal = !!opts.modal;
+  const activeModel = useModal ? 'modal/sam-3.1' : model;
+  const provider = useModal ? 'modal' : 'meta-model-api';
   for (let attempt = 1; attempt <= 2; attempt++) {
     const start = Date.now();
     try {
-      const out: ImageOut = await metaSegment(
-        opts.apiKey,
-        model,
-        { imageBytes: opts.imageBytes },
-        opts.textPrompt,
-        { apiUrl: opts.apiUrl },
-      );
+      const out: ImageOut = useModal
+        ? await modalMask(opts.modal as ModalConfig, opts.imageBytes, opts.textPrompt)
+        : await metaSegment(
+            opts.apiKey,
+            model,
+            { imageBytes: opts.imageBytes },
+            opts.textPrompt,
+            { apiUrl: opts.apiUrl },
+          );
       const ms = Date.now() - start;
       if (out.bytes.byteLength === 0 || !out.contentType.startsWith('image/')) {
-        await logAttempt(db, { ...opts, task: 'isolate' }, model, 'segment', attempt, out.inputTokens, out.outputTokens, false, 'invalid shape', ms);
+        await logAttempt(db, { ...opts, task: 'isolate' }, activeModel, 'segment', attempt, out.inputTokens, out.outputTokens, false, 'invalid shape', ms, provider);
         if (attempt === 2) break;
         continue;
       }
-      await logAttempt(db, { ...opts, task: 'isolate' }, model, 'segment', attempt, out.inputTokens, out.outputTokens, true, null, ms);
+      await logAttempt(db, { ...opts, task: 'isolate' }, activeModel, 'segment', attempt, out.inputTokens, out.outputTokens, true, null, ms, provider);
       return { bytes: out.bytes, contentType: out.contentType, attempts: attempt };
     } catch (e) {
       const retryable = e instanceof AiError && e.retryable;
-      await logAttempt(db, { ...opts, task: 'isolate' }, model, 'segment', attempt, 0, 0, false, e instanceof Error ? e.message : 'failed', Date.now() - start);
+      await logAttempt(db, { ...opts, task: 'isolate' }, activeModel, 'segment', attempt, 0, 0, false, e instanceof Error ? e.message : 'failed', Date.now() - start, provider);
       if (!retryable || attempt === 2) break;
     }
   }

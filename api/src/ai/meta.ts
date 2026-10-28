@@ -81,14 +81,14 @@ const IMAGE_PATH = '/images/generations';
 const SEGMENT_PATH = '/segmentations';
 const IMAGE_TIMEOUT_MS = 120_000;
 
-function b64ToBytes(b64: string): ArrayBuffer {
+export function b64ToBytes(b64: string): ArrayBuffer {
   const bin = atob(b64);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out.buffer;
 }
 
-function bytesToB64(buf: ArrayBuffer): string {
+export function bytesToB64(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
   let bin = '';
   const CHUNK = 0x8000;

@@ -12,6 +12,8 @@
     "baseten:link": "./baseten/link-dev.sh",
     "baseten:check": "test -f api/.dev.vars && grep -q '^BASETEN_API_URL=https\\?://' api/.dev.vars && grep -q '^BASETEN_API_KEY=...' api/.dev.vars && echo 'baseten dev wiring: present' || (echo 'baseten dev wiring: missing (run ./baseten/link-dev.sh <model-id>)' >&2; exit 1)",
     "qa:seed": "node qa/seed.mjs",
+    "modal:link": "./modal/link.sh",
+    "modal:check": "test -f api/.dev.vars && grep -q '^MODAL_API_URL=https\\?://' api/.dev.vars && grep -q '^MODAL_PROXY_TOKEN=..*' api/.dev.vars && echo 'modal dev wiring: present' || (echo 'modal dev wiring: missing (see modal/README.md)' >&2; exit 1)",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
