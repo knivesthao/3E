@@ -35,21 +35,34 @@ export default function App() {
     }
   }
 
-  if (loading) return <p>Loading…</p>;
+  if (loading) return <p className="p-4 text-base">Loading…</p>;
 
   return (
     <>
-      <nav>
-        <Link to="/">Library</Link> | <Link to="/studio">Studio</Link> | <Link to="/admin/costs">Costs</Link>
-        {email ? (
-          <>
-            {' '}| {email} <button onClick={signOut}>Sign out</button>
-          </>
-        ) : (
-          <>
-            {' '}| <Link to="/signin">Sign in</Link>
-          </>
-        )}
+      <nav
+        aria-label="Main"
+        className="border-b border-stone-200 bg-white"
+      >
+        <div className="mx-auto flex w-full max-w-2xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 sm:px-6">
+          <Link to="/" className="underline underline-offset-2">Library</Link>
+          <Link to="/studio" className="underline underline-offset-2">Studio</Link>
+          <Link to="/admin/costs" className="underline underline-offset-2">Costs</Link>
+          <span className="ms-auto flex flex-wrap items-center gap-2 text-sm">
+            {email ? (
+              <>
+                <span className="break-all">{email}</span>
+                <button
+                  onClick={signOut}
+                  className="rounded-md border border-stone-300 px-3 text-sm underline underline-offset-2"
+                >
+                  Sign out
+                </button>
+              </>
+            ) : (
+              <Link to="/signin" className="underline underline-offset-2">Sign in</Link>
+            )}
+          </span>
+        </div>
       </nav>
       <Routes>
         <Route path="/signin" element={<SignIn />} />

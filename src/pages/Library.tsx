@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Tour from '../components/Tour';
+import { Button, Page } from '../components/ui';
 
 const SEEN_KEY = 'e3-tour';
 
@@ -22,10 +23,10 @@ function markSeen(): void {
 export default function Library() {
   const [tour, setTour] = useState(() => !seen());
   return (
-    <main>
-      <h1>Library</h1>
+    <Page title="Library">
       <p>
-        Your published books will live here. <button onClick={() => setTour(true)}>Replay tour</button>
+        Your published books will live here.{' '}
+        <Button onClick={() => setTour(true)}>Replay tour</Button>
       </p>
       {tour && (
         <Tour
@@ -35,6 +36,6 @@ export default function Library() {
           }}
         />
       )}
-    </main>
+    </Page>
   );
 }

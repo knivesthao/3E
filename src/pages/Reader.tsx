@@ -25,12 +25,12 @@ function Words({
         ) : (
           <button
             key={i}
+            type="button"
             onClick={() => void onTap(part)}
-            style={{
-              all: 'unset',
-              cursor: 'pointer',
-              textDecoration: clean(part) === tapped ? 'underline' : 'none',
-            }}
+            aria-label={`Look up ${clean(part)}`}
+            className={`min-h-0 cursor-pointer rounded-sm px-0.5 text-left underline-offset-4 ${
+              clean(part) === tapped ? 'underline decoration-2' : ''
+            }`}
           >
             {part}
           </button>
@@ -172,33 +172,50 @@ export default function Reader() {
     }
   }
 
-  if (error) return <main><p>{error}</p></main>;
-  if (!book) return <main><p>Loading…</p></main>;
+  if (error) {
+    return (
+      <main className="mx-auto w-full max-w-xl px-4 py-6">
+        <p role="alert" className="rounded-md border border-stone-900 bg-stone-100 px-3 py-2">
+          <strong>Error: </strong>
+          {error}
+        </p>
+      </main>
+    );
+  }
+  if (!book) {
+    return (
+      <main className="mx-auto w-full max-w-xl px-4 py-6">
+        <p>Loading…</p>
+      </main>
+    );
+  }
 
   return (
-    <main style={{ maxWidth: 480, margin: '0 auto' }}>
-      <h1>{book.manifest.title}</h1>
-      <p>
+    <main className="mx-auto w-full max-w-xl px-4 py-6">
+      <h1 className="mb-1 text-3xl font-bold">{book.manifest.title}</h1>
+      <p className="mb-4 text-base">
         Level {book.level} · {book.reading_level}
         {offline && ' · Offline copy'}
       </p>
-      {followed != null && <p>Following shared position · Scene {followed}</p>}
+      {followed != null && (
+        <p className="mb-4 rounded-md bg-stone-100 px-3 py-2">Following shared position · Scene {followed}</p>
+      )}
       {book.manifest.scenes.slice(0, visible).map((s) => (
-        <section key={s.scene_number} data-scene={s.scene_number} style={{ marginBottom: 32 }}>
-          <h3>Scene {s.scene_number}</h3>
+        <section key={s.scene_number} data-scene={s.scene_number} aria-label={`Scene ${s.scene_number}`} className="mb-8">
+          <h2 className="mb-2 text-xl font-bold">Scene {s.scene_number}</h2>
           {s.image_url && (
             <img
               src={s.image_url}
               alt={`Scene ${s.scene_number} art`}
               loading="lazy"
-              style={{ width: '100%', aspectRatio: '4 / 5', objectFit: 'cover' }}
+              className="mb-2 aspect-[4/5] w-full rounded-md object-cover"
             />
           )}
-          <p>
+          <p className="mb-2 text-lg leading-relaxed">
             <Words text={s.narration} onTap={(w) => void tap(w)} tapped={active?.word ?? null} />
           </p>
           {s.bubbles.map((b, bi) => (
-            <p key={bi}>
+            <p key={bi} className="mb-2 text-lg leading-relaxed">
               <strong>{b.speaker}: </strong>
               <Words text={b.text} onTap={(w) => void tap(w)} tapped={active?.word ?? null} />
             </p>
@@ -206,7 +223,7 @@ export default function Reader() {
         </section>
       ))}
       {visible < book.manifest.scenes.length && <div ref={moreRef}><p>Loading more…</p></div>}
-      <div>
+      <div aria-live="polite" className="rounded-md bg-stone-100 px-3 py-2">
         {lookingUp ? (
           <p>Looking up…</p>
         ) : (
@@ -217,7 +234,7 @@ export default function Reader() {
           )
         )}
       </div>
-      <p>Tap any word to see its meaning.</p>
+      <p className="mt-2 text-sm">Tap any word to see its meaning.</p>
     </main>
   );
 }

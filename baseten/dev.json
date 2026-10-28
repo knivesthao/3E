@@ -1,0 +1,17 @@
+{
+  "$comment": "3E Baseten development environment record (dev-only, no production). Single source for the dev endpoint shape; secrets never live here. Fill modelId after the first library deploy, then run npm run baseten:link.",
+  "status": "parked 2026-10-28: Meta Model API for all tasks (cost efficiency); re-enable with baseten/link-dev.sh",
+  "environment": "development",
+  "model": "meta-models/Muse-Glimmer-30B",
+  "modelId": "<model-id>",
+  "deploymentId": "<deployment-id>",
+  "syncBasePath": "/environments/development/sync/v1",
+  "chatPath": "/chat/completions",
+  "scaling": {
+    "minReplicas": 0,
+    "maxReplicas": 1,
+    "$comment": "Scale to zero when idle: cold starts are slow (30B reload) but idle H100 costs ~$0.10833/min, which was $9.75 for 90 idle minutes on 10/27."
+  },
+  "tasks": ["draft", "check", "idea", "meanings", "simplify", "safety"],
+  "notes": "Art and isolate stay on the Meta Model API; only text tasks route to Baseten (see api/src/ai/config.ts BASETEN_TASKS)."
+}

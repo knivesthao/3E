@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+/* 3E theme: neutral by design. White surfaces, stone text, one dark
+   primary action color. No saturated hues anywhere, so nothing is
+   carried by color alone and nothing clashes with color sensitivity.
+   Status and errors always pair text labels with any visual cue. */
+
+@theme {
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: #fff;
+  color: var(--color-stone-900);
+}
+
+/* Visible keyboard focus everywhere. Single dark rule so it reads on
+   both light surfaces and the dark primary button (offset pushes it
+   onto the surrounding background). */
+:focus-visible {
+  outline: 3px solid var(--color-stone-900);
+  outline-offset: 2px;
+}
+
+/* Touch targets and readable form text by default. In @layer base so a
+   utility like min-h-0 can still opt an element out (reader word buttons). */
+@layer base {
+  button,
+  input,
+  select,
+  textarea,
+  a {
+    min-height: 44px;
+  }
+}
+
+input,
+select,
+textarea {
+  font-size: 1rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

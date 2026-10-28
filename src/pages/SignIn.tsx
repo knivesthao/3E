@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { requestLink } from '../lib/api';
+import { Alert, Button, Field, Page, inputClass } from '../components/ui';
 
 export default function SignIn() {
   const [email, setEmail] = useState('');
@@ -21,25 +22,32 @@ export default function SignIn() {
   }
 
   return (
-    <main>
-      <h1>Sign in</h1>
-      <form onSubmit={submit}>
-        <input
-          type="email"
-          required
-          placeholder="you@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <button type="submit">Send magic link</button>
+    <Page title="Sign in">
+      <form onSubmit={submit} className="flex flex-col gap-3">
+        <Field label="Email">
+          <input
+            type="email"
+            required
+            autoComplete="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={inputClass}
+          />
+        </Field>
+        <div>
+          <Button type="submit" variant="primary">Send magic link</Button>
+        </div>
       </form>
-      {error && <p>{error}</p>}
+      {error && <Alert>{error}</Alert>}
       {sent && <p>Link sent. Check your inbox (dev: click below).</p>}
       {devLink && (
         <p>
-          <a href={devLink}>Sign in (dev link)</a>
+          <a href={devLink} className="underline underline-offset-2">
+            Sign in (dev link)
+          </a>
         </p>
       )}
-    </main>
+    </Page>
   );
 }

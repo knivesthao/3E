@@ -15,6 +15,8 @@ import {
 } from '../lib/api';
 import { LEVELS } from '../lib/api';
 import type { Book, Panel, Project, Scene, SceneData } from '../lib/api';
+import { Alert, Badge, Button, Field, Page, inputClass } from '../components/ui';
+import { useConfirm } from '../components/Dialog';
 
 const blank: SceneData = { narration: '', bubbles: [] };
 
@@ -41,6 +43,7 @@ export default function Editor() {
   const [publishBusy, setPublishBusy] = useState(false);
   const [book, setBook] = useState<Book | null>(null);
   const [shared, setShared] = useState(false);
+  const { requestConfirm, dialog } = useConfirm();
 
   async function refresh() {
     setScenes([]);
@@ -102,7 +105,13 @@ export default function Editor() {
     }
   }
 
-  async function removeScene(sceneId: string) {
+  async function removeScene(sceneId: string, sceneNumber: number) {
+    const ok = await requestConfirm({
+      title: 'Delete scene',
+      message: `Delete scene ${sceneNumber}? This cannot be undone.`,
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
     setError(null);
     try {
       await deleteScene(id, sceneId);
@@ -208,40 +217,59 @@ export default function Editor() {
     }
   }
 
-  if (!project) return <main><p>Loading…</p>{error && <p>{error}</p>}</main>;
+  if (!project) {
+    return (
+      <Page title="Loading…">
+        {error && <Alert>{error}</Alert>}
+      </Page>
+    );
+  }
 
   return (
-    <main>
-      <h1>{project.title}</h1>
-      <div>
-        <input maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
-        <input
-          maxLength={2000}
-          placeholder="Description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-        <select value={level} onChange={(e) => setLevel(e.target.value)}>
-          {LEVELS.map((l) => (
-            <option key={l} value={l}>{l}</option>
-          ))}
-        </select>
-        <button onClick={() => void saveProject()}>Save</button>
-      </div>
-      <div>
-        <button onClick={() => setTab('scenes')}>Scenes</button>
-        <button onClick={() => setTab('cast')}>Cast</button>
-        <button onClick={() => void finish()}>3E Finish</button>
-        <button onClick={() => void publish()} disabled={publishBusy}>
+    <Page title={project.title}>
+      <p className="-mt-2 text-sm">
+        {project.level} <Badge status={project.status} />
+      </p>
+      <section aria-label="Comic details" className="flex flex-col gap-3 rounded-md border border-stone-200 p-3">
+        <Field label="Title">
+          <input maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
+        </Field>
+        <Field label="Description">
+          <input
+            maxLength={2000}
+            placeholder="Description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className={inputClass}
+          />
+        </Field>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="sm:w-32">
+            <Field label="Level">
+              <select value={level} onChange={(e) => setLevel(e.target.value)} className={inputClass}>
+                {LEVELS.map((l) => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <Button onClick={() => void saveProject()}>Save</Button>
+        </div>
+      </section>
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Editor actions">
+        <Button onClick={() => setTab('scenes')} aria-pressed={tab === 'scenes'}>Scenes</Button>
+        <Button onClick={() => setTab('cast')} aria-pressed={tab === 'cast'}>Cast</Button>
+        <Button onClick={() => void finish()} variant="primary">3E Finish</Button>
+        <Button onClick={() => void publish()} disabled={publishBusy}>
           {publishBusy ? 'Publishing…' : 'Publish'}
-        </button>
+        </Button>
       </div>
       {(book || project.status === 'published') && (
-        <p>
+        <p className="flex flex-wrap items-center gap-2 rounded-md bg-stone-100 px-3 py-2">
           Published{book ? ` · ${book.reading_level}` : ''}{' '}
-          <Link to={`/read/${project.id}`}>Read</Link>{' '}
+          <Link to={`/read/${project.id}`} className="underline underline-offset-2">Read</Link>{' '}
           {book && (
-            <button
+            <Button
               onClick={() => {
                 setShared(false);
                 const url = `${window.location.origin}/s/${book.id}`;
@@ -254,51 +282,72 @@ export default function Editor() {
               }}
             >
               Share
-            </button>
+            </Button>
           )}{' '}
           {shared && <span>Link ready to send.</span>}{' '}
-          {book?.cover_url && <img src={book.cover_url} alt="Book cover" width={96} />}
+          {book?.cover_url && <img src={book.cover_url} alt="Book cover" className="h-auto w-24" />}
         </p>
       )}
-      {error && <p>{error}</p>}
+      {error && <Alert>{error}</Alert>}
+      {dialog}
       {tab === 'scenes' ? (
         <>
-          <div>
-            <input
-              maxLength={2000}
-              placeholder="New scene narration"
-              value={newNarration}
-              onChange={(e) => setNewNarration(e.target.value)}
-            />
-            <button onClick={() => void addScene()}>Add scene</button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <Field label="New scene narration">
+                <input
+                  maxLength={2000}
+                  placeholder="New scene narration"
+                  value={newNarration}
+                  onChange={(e) => setNewNarration(e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+            </div>
+            <Button onClick={() => void addScene()}>Add scene</Button>
           </div>
           {scenes.map((s, i) => {
             const d = drafts[s.id] ?? blank;
             return (
-              <section key={s.id}>
-                <h3>Scene {s.scene_number}</h3>
-                <textarea
-                  maxLength={2000}
-                  value={d.narration}
-                  onChange={(e) =>
-                    setDrafts((all) => ({ ...all, [s.id]: { ...d, narration: e.target.value } }))
-                  }
-                />
+              <section key={s.id} aria-label={`Scene ${s.scene_number}`} className="flex flex-col gap-2 rounded-md border border-stone-200 p-3">
+                <h2 className="text-xl font-bold">Scene {s.scene_number}</h2>
+                <Field label="Narration">
+                  <textarea
+                    maxLength={2000}
+                    rows={3}
+                    value={d.narration}
+                    onChange={(e) =>
+                      setDrafts((all) => ({ ...all, [s.id]: { ...d, narration: e.target.value } }))
+                    }
+                    className={inputClass}
+                  />
+                </Field>
                 {d.bubbles.map((b, bi) => (
-                  <div key={bi}>
-                    <input
-                      maxLength={50}
-                      placeholder="Speaker"
-                      value={b.speaker}
-                      onChange={(e) => editBubble(s.id, bi, 'speaker', e.target.value)}
-                    />
-                    <input
-                      maxLength={500}
-                      placeholder="Line"
-                      value={b.text}
-                      onChange={(e) => editBubble(s.id, bi, 'text', e.target.value)}
-                    />
-                    <button
+                  <div key={bi} className="flex flex-col gap-2 rounded-md bg-stone-100 p-2 sm:flex-row sm:items-end">
+                    <div className="sm:w-32">
+                      <Field label="Speaker">
+                        <input
+                          maxLength={50}
+                          placeholder="Speaker"
+                          value={b.speaker}
+                          onChange={(e) => editBubble(s.id, bi, 'speaker', e.target.value)}
+                          className={inputClass}
+                        />
+                      </Field>
+                    </div>
+                    <div className="flex-1">
+                      <Field label="Line">
+                        <input
+                          maxLength={500}
+                          placeholder="Line"
+                          value={b.text}
+                          onChange={(e) => editBubble(s.id, bi, 'text', e.target.value)}
+                          className={inputClass}
+                        />
+                      </Field>
+                    </div>
+                    <Button
+                      variant="danger"
                       onClick={() =>
                         setDrafts((all) => ({
                           ...all,
@@ -307,10 +356,10 @@ export default function Editor() {
                       }
                     >
                       Remove
-                    </button>
+                    </Button>
                   </div>
                 ))}
-                <button
+                <Button
                   onClick={() =>
                     setDrafts((all) => ({
                       ...all,
@@ -319,19 +368,23 @@ export default function Editor() {
                   }
                 >
                   Add bubble
-                </button>
+                </Button>
                 {panels[s.scene_number] && (
-                  <img src={panels[s.scene_number].image_url} alt={`Scene ${s.scene_number} art`} width={192} />
+                  <img
+                    src={panels[s.scene_number].image_url}
+                    alt={`Scene ${s.scene_number} art`}
+                    className="h-auto w-48"
+                  />
                 )}
-                <div>
-                  <button onClick={() => void saveScene(s.id)}>Save scene</button>
-                  <button onClick={() => void simplifyScene(s.id)}>Simplify</button>
-                  <button onClick={() => void generateSceneArt(s)} disabled={!!artBusy[s.id]}>
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={() => void saveScene(s.id)} variant="primary">Save scene</Button>
+                  <Button onClick={() => void simplifyScene(s.id)}>Simplify</Button>
+                  <Button onClick={() => void generateSceneArt(s)} disabled={!!artBusy[s.id]}>
                     {artBusy[s.id] ? 'Generating…' : 'Generate'}
-                  </button>
-                  <button onClick={() => void move(i, -1)}>Up</button>
-                  <button onClick={() => void move(i, 1)}>Down</button>
-                  <button onClick={() => void removeScene(s.id)}>Delete</button>
+                  </Button>
+                  <Button onClick={() => void move(i, -1)} aria-label={`Move scene ${s.scene_number} up`}>Up</Button>
+                  <Button onClick={() => void move(i, 1)} aria-label={`Move scene ${s.scene_number} down`}>Down</Button>
+                  <Button onClick={() => void removeScene(s.id, s.scene_number)} variant="danger">Delete</Button>
                 </div>
               </section>
             );
@@ -340,59 +393,74 @@ export default function Editor() {
       ) : (
         <>
           {(['characters', 'places'] as const).map((kind) => (
-            <section key={kind}>
-              <h3>{kind}</h3>
-              <ul>
+            <section key={kind} aria-label={kind} className="flex flex-col gap-2 rounded-md border border-stone-200 p-3">
+              <h2 className="text-xl font-bold capitalize">{kind}</h2>
+              <ul className="flex flex-col gap-2">
                 {cast[kind].map((c, ci) => (
-                  <li key={ci}>
-                    <input
-                      maxLength={100}
-                      placeholder={kind === 'characters' ? 'Name (e.g. Noy)' : 'Name (e.g. rice field)'}
-                      value={c.name}
-                      onChange={(e) =>
-                        setCast((all) => ({
-                          ...all,
-                          [kind]: all[kind].map((x, k) => (k === ci ? { ...x, name: e.target.value } : x)),
-                        }))
-                      }
-                    />
-                    <input
-                      maxLength={500}
-                      placeholder={
-                        kind === 'characters'
-                          ? 'Looks (e.g. 8-year-old, short black bob, yellow t-shirt, red backpack)'
-                          : 'Looks (e.g. a rice field at sunrise)'
-                      }
-                      value={c.description ?? ''}
-                      onChange={(e) =>
-                        setCast((all) => ({
-                          ...all,
-                          [kind]: all[kind].map((x, k) =>
-                            k === ci ? { ...x, description: e.target.value } : x,
-                          ),
-                        }))
-                      }
-                    />
-                    <button
+                  <li key={ci} className="flex flex-col gap-2 rounded-md bg-stone-100 p-2 sm:flex-row sm:items-end">
+                    <div className="sm:w-48">
+                      <Field label="Name">
+                        <input
+                          maxLength={100}
+                          placeholder={kind === 'characters' ? 'Name (e.g. Noy)' : 'Name (e.g. rice field)'}
+                          value={c.name}
+                          onChange={(e) =>
+                            setCast((all) => ({
+                              ...all,
+                              [kind]: all[kind].map((x, k) => (k === ci ? { ...x, name: e.target.value } : x)),
+                            }))
+                          }
+                          className={inputClass}
+                        />
+                      </Field>
+                    </div>
+                    <div className="flex-1">
+                      <Field label="Looks">
+                        <input
+                          maxLength={500}
+                          placeholder={
+                            kind === 'characters'
+                              ? 'Looks (e.g. 8-year-old, short black bob, yellow t-shirt, red backpack)'
+                              : 'Looks (e.g. a rice field at sunrise)'
+                          }
+                          value={c.description ?? ''}
+                          onChange={(e) =>
+                            setCast((all) => ({
+                              ...all,
+                              [kind]: all[kind].map((x, k) =>
+                                k === ci ? { ...x, description: e.target.value } : x,
+                              ),
+                            }))
+                          }
+                          className={inputClass}
+                        />
+                      </Field>
+                    </div>
+                    <Button
+                      variant="danger"
                       onClick={() =>
                         setCast((all) => ({ ...all, [kind]: all[kind].filter((_, k) => k !== ci) }))
                       }
                     >
                       Remove
-                    </button>
+                    </Button>
                   </li>
                 ))}
               </ul>
-              <button
-                onClick={() => setCast((all) => ({ ...all, [kind]: [...all[kind], { name: '' }] }))}
-              >
-                Add
-              </button>
+              <div>
+                <Button
+                  onClick={() => setCast((all) => ({ ...all, [kind]: [...all[kind], { name: '' }] }))}
+                >
+                  Add
+                </Button>
+              </div>
             </section>
           ))}
-          <button onClick={() => void saveCast()}>Save cast</button>
+          <div>
+            <Button onClick={() => void saveCast()} variant="primary">Save cast</Button>
+          </div>
         </>
       )}
-    </main>
+    </Page>
   );
 }

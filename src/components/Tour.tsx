@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Button } from './ui';
 
 const STEPS = [
   {
@@ -25,31 +26,24 @@ export default function Tour({ onClose }: { onClose: () => void }) {
   return (
     <div
       role="dialog"
+      aria-modal="true"
       aria-label="App tour"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16,
-      }}
+      className="fixed inset-0 flex items-center justify-center bg-black/60 p-4"
     >
-      <div style={{ background: '#fff', maxWidth: 360, padding: 20 }}>
-        <h2>{STEPS[i].title}</h2>
-        <p>{STEPS[i].body}</p>
-        <p>
+      <div className="w-full max-w-sm rounded-md border border-stone-300 bg-white p-5">
+        <h2 className="mb-2 text-xl font-bold">{STEPS[i].title}</h2>
+        <p className="mb-2">{STEPS[i].body}</p>
+        <p className="mb-4 text-sm">
           Step {i + 1} of {STEPS.length}
         </p>
-        <div>
-          {i > 0 && <button onClick={() => setI(i - 1)}>Back</button>}{' '}
+        <div className="flex flex-wrap gap-2">
+          {i > 0 && <Button onClick={() => setI(i - 1)}>Back</Button>}{' '}
           {!last ? (
-            <button onClick={() => setI(i + 1)}>Next</button>
+            <Button onClick={() => setI(i + 1)} variant="primary">Next</Button>
           ) : (
-            <button onClick={onClose}>Done</button>
+            <Button onClick={onClose} variant="primary">Done</Button>
           )}{' '}
-          <button onClick={onClose}>Skip</button>
+          <Button onClick={onClose}>Skip</Button>
         </div>
       </div>
     </div>

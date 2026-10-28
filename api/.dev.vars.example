@@ -1,0 +1,9 @@
+# Local Worker env (gitignored). Copy to api/.dev.vars and fill in.
+# Wrangler reads api/.dev.vars for `wrangler dev --config api/wrangler.toml`.
+# The repo-root .dev.vars is NOT read by the Worker.
+MODEL_API_KEY=
+BASETEN_API_KEY=
+# Full OpenAI-compatible chat URL, e.g.
+# https://model-<model-id>.api.baseten.co/environments/development/sync/v1/chat/completions
+BASETEN_API_URL=
+BASETEN_MODEL=meta-models/Muse-Glimmer-30B

@@ -5,7 +5,7 @@
 FROM --platform=linux/amd64 node:22-bookworm-slim
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends python3 make g++ sqlite3 \
+  && apt-get install -y --no-install-recommends ca-certificates python3 make g++ sqlite3 \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
