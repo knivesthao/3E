@@ -7,6 +7,7 @@ import Studio from './pages/Studio';
 import Editor from './pages/Editor';
 import Reader from './pages/Reader';
 import Admin from './pages/Admin';
+import Exam from './pages/Exam';
 import SignIn from './pages/SignIn';
 import { getMe, logout } from './lib/api';
 
@@ -144,6 +145,14 @@ export default function App() {
           }
         />
         <Route path="/admin/costs" element={<Navigate to="/admin" replace />} />
+        <Route
+          path="/exam"
+          element={
+            <Guard email={email}>
+              <Exam />
+            </Guard>
+          }
+        />
       </Routes>
     </>
   );

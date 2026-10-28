@@ -200,6 +200,41 @@ export interface AdminStats {
 export const getAdminSpecs = () => api<AdminSpecs>('/api/admin/specs');
 export const getAdminStats = () => api<AdminStats>('/api/admin/stats');
 
+export interface ExamQuestion {
+  id: string;
+  part: 1 | 2 | 3 | 4;
+  section: 'words' | 'grammar' | 'reading';
+  prompt: string;
+  passage?: string;
+  options: string[];
+}
+
+export interface ExamItemStat {
+  id: string;
+  attempts: number;
+  correct: number;
+  pct: number | null;
+}
+
+export const getExamItems = () => api<{ items: ExamItemStat[] }>('/api/admin/exam-items');
+
+export interface ExamResult {
+  score: number;
+  total: number;
+  passed: boolean;
+  message: string;
+  review: { id: string; correct: boolean; answer: number; explanation: string }[];
+}
+
+export const getExam = () =>
+  api<{ questions: ExamQuestion[]; total: number; passMark: number }>('/api/exam');
+
+export const getExamBest = () =>
+  api<{ attempts: number; best: number | null; total: number; passMark: number }>('/api/exam/best');
+
+export const submitExam = (answers: { id: string; choice: number }[]) =>
+  api<ExamResult>('/api/exam/submit', { method: 'POST', body: JSON.stringify({ answers }) });
+
 export const getBookCosts = (projectId: string) =>
   api<BookCosts>(`/api/admin/costs/book?projectId=${encodeURIComponent(projectId)}`);
 

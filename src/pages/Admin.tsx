@@ -4,12 +4,13 @@ import {
   getAdminStats,
   getBookCosts,
   getCostsOverview,
+  getExamItems,
   listProjects,
 } from '../lib/api';
-import type { AdminSpecs, AdminStats, BookCosts, Project } from '../lib/api';
+import type { AdminSpecs, AdminStats, BookCosts, ExamItemStat, Project } from '../lib/api';
 import { Alert, Button, Field, Page, inputClass } from '../components/ui';
 
-type Tab = 'costs' | 'specs' | 'content';
+type Tab = 'costs' | 'specs' | 'content' | 'exam';
 
 function CostsSection() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -168,23 +169,60 @@ function ContentSection() {
   );
 }
 
+function ExamItemsSection() {
+  const [items, setItems] = useState<ExamItemStat[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getExamItems()
+      .then((res) => setItems(res.items))
+      .catch(() => setError('Could not load exam items.'));
+  }, []);
+
+  if (error) return <Alert>{error}</Alert>;
+  if (!items) return <p>Loading…</p>;
+  if (items.length === 0) return <p>No attempts yet — stats appear after the first test.</p>;
+  const sorted = [...items].sort((a, b) => (a.pct ?? 100) - (b.pct ?? 100));
+  return (
+    <ul className="flex flex-col gap-1">
+      {sorted.map((item) => (
+        <li key={item.id} className="rounded-md border border-stone-200 px-3 py-2">
+          <strong>{item.id}</strong> · {item.attempts} attempts ·{' '}
+          {item.pct === null ? 'no graded answers yet' : `${item.pct}% correct`}
+          {item.pct !== null && item.pct < 50 && item.attempts >= 3 && ' · hard — consider rewording'}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const TAB_LABEL: Record<Tab, string> = {
+  costs: 'Costs',
+  specs: 'Tech specs',
+  content: 'Content',
+  exam: 'Exam items',
+};
+
 export default function Admin() {
   const [tab, setTab] = useState<Tab>('costs');
   return (
     <Page title="Admin">
       <div className="flex flex-wrap gap-2" role="group" aria-label="Admin sections">
-        {(['costs', 'specs', 'content'] as const).map((t) => (
-          <Button
-            key={t}
-            onClick={() => setTab(t)}
-            aria-pressed={tab === t}
-            pressed={tab === t}
-          >
-            {t === 'costs' ? 'Costs' : t === 'specs' ? 'Tech specs' : 'Content'}
+        {(Object.keys(TAB_LABEL) as Tab[]).map((t) => (
+          <Button key={t} onClick={() => setTab(t)} aria-pressed={tab === t} pressed={tab === t}>
+            {TAB_LABEL[t]}
           </Button>
         ))}
       </div>
-      {tab === 'costs' ? <CostsSection /> : tab === 'specs' ? <SpecsSection /> : <ContentSection />}
+      {tab === 'costs' ? (
+        <CostsSection />
+      ) : tab === 'specs' ? (
+        <SpecsSection />
+      ) : tab === 'content' ? (
+        <ContentSection />
+      ) : (
+        <ExamItemsSection />
+      )}
     </Page>
   );
 }

@@ -2,14 +2,21 @@ import { describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import app from './index';
 
-// Minimal stub: real session flow (request-link + verify) plus COUNT(*)
-// answers for the stats tables. Specs needs no DB at all.
-function makeDb(counts: Record<string, number>) {
+// Minimal stub: real session flow (request-link + verify), COUNT(*)
+// answers for the stats tables, and exam_attempts rows for item stats.
+// Specs needs no DB at all.
+function makeDb(counts: Record<string, number>, examRows: string[] = []) {
   const users = new Map<string, { id: string; email: string }>();
   const sessions = new Map<string, { user_id: string; expires_at: number }>();
   return {
     prepare(sql: string) {
       const q = sql.replace(/\s+/g, ' ').trim();
+      const all = async () => {
+        if (q.startsWith('SELECT answers_json FROM exam_attempts')) {
+          return { results: examRows.map((answers_json) => ({ answers_json })) };
+        }
+        return { results: [] };
+      };
       const first = async (params: unknown[]) => {
               if (q.startsWith('SELECT id FROM users WHERE email')) {
                 const u = [...users.values()].find((x) => x.email === params[0]);
@@ -46,8 +53,10 @@ function makeDb(counts: Record<string, number>) {
         bind: (...params: unknown[]) => ({
           first: () => first(params),
           run: () => run(params),
+          all: () => all(),
         }),
         first: () => first([]),
+        all: () => all(),
       };
     },
   };
@@ -103,5 +112,41 @@ describe('GET /api/admin/stats', () => {
     expect(await res.json()).toEqual({
       counts: { users: 2, projects: 3, scenes: 12, books: 1, panels: 4, jobs: 5, ai_usage: 40 },
     });
+  });
+});
+
+describe('GET /api/admin/exam-items', () => {
+  const reviewRow = (review: { id: string; correct: boolean }[]) =>
+    JSON.stringify({ form: review.map((r) => r.id), review });
+  const legacyRow = (answers: { id: string; choice: number }[]) => JSON.stringify(answers);
+
+  it('requires a session', async () => {
+    expect((await app.request('/api/admin/exam-items')).status).toBe(401);
+  });
+
+  it('computes per-item difficulty from stored reviews', async () => {
+    const db = makeDb({}, [
+      reviewRow([
+        { id: 'p1a', correct: true },
+        { id: 'p2a', correct: false },
+      ]),
+      reviewRow([
+        { id: 'p1a', correct: false },
+        { id: 'p2a', correct: false },
+      ]),
+      legacyRow([{ id: 'p3a', choice: 0 }]),
+      'not-json{{{',
+    ]);
+    const cookie = await signIn(db);
+    const res = await app.request('/api/admin/exam-items', { headers: { cookie } }, ENV(db));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      items: { id: string; attempts: number; correct: number; pct: number | null }[];
+    };
+    const byId = new Map(body.items.map((i) => [i.id, i]));
+    expect(byId.get('p1a')).toMatchObject({ attempts: 2, correct: 1, pct: 50 });
+    expect(byId.get('p2a')).toMatchObject({ attempts: 2, correct: 0, pct: 0 });
+    // Legacy answers-only row: exposure counted, correctness unknown.
+    expect(byId.get('p3a')).toMatchObject({ attempts: 1, correct: 0, pct: 0 });
   });
 });

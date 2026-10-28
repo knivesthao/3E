@@ -11,6 +11,7 @@ import {
 } from './auth';
 import { projects } from './projects';
 import { admin } from './admin';
+import { exam } from './exam';
 import { ai } from './ai/routes';
 import { share } from './share';
 import { costs } from './costs';
@@ -126,6 +127,7 @@ app.post('/api/auth/logout', async (c) => {
 
 app.route('/api/projects', projects);
 app.route('/api/admin', admin);
+app.route('/api/exam', exam);
 app.route('/api/ai', ai);
 app.route('/api/share', share);
 app.route('/api/admin/costs', costs);
