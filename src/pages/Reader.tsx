@@ -3,10 +3,14 @@ import { useParams } from 'react-router-dom';
 import { aiMeanings, getBook, getPosition, getSharedBook, setPosition } from '../lib/api';
 import { getCachedBook, putBook } from '../lib/db';
 import type { Book } from '../lib/api';
+import { cleanWord, stopSpeaking } from '../lib/speech';
+import { Button } from '../components/ui';
+import { ReadAloudPanel } from '../components/ReadAloud';
+import { ListenPanel } from '../components/ListenPanel';
 
 const CHUNK = 2;
 
-const clean = (w: string) => w.toLowerCase().replace(/[^a-z'-]/g, '');
+const clean = cleanWord;
 
 function Words({
   text,
@@ -54,6 +58,11 @@ export default function Reader() {
   const currentRef = useRef(1);
   const lastMoveRef = useRef(0);
   const [followed, setFollowed] = useState<number | null>(null);
+  const [aloud, setAloud] = useState(false);
+  const [listen, setListen] = useState(false);
+  const [passed, setPassed] = useState<Set<number>>(new Set());
+
+  useEffect(() => stopSpeaking, []);
 
   useEffect(() => {
     const key = shareMode ? `s:${bookId}` : `p:${id}`;
@@ -193,10 +202,30 @@ export default function Reader() {
   return (
     <main className="mx-auto w-full max-w-xl px-4 py-6">
       <h1 className="mb-1 font-display text-4xl font-bold">{book.manifest.title}</h1>
-      <p className="mb-4 text-base">
+      <p className="mb-2 text-base">
         Level {book.level} · {book.reading_level}
         {offline && ' · Offline copy'}
       </p>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Button
+          onClick={() => {
+            if (listen) stopSpeaking();
+            setListen((l) => !l);
+          }}
+          aria-pressed={listen}
+          pressed={listen}
+        >
+          {listen ? 'Stop listening' : 'Listen to story'}
+        </Button>
+        <Button onClick={() => setAloud((a) => !a)} aria-pressed={aloud} pressed={aloud}>
+          {aloud ? 'Reading silently' : 'Practice reading aloud'}
+        </Button>
+        {aloud && passed.size > 0 && (
+          <p className="text-sm text-stone-600" aria-live="polite">
+            {passed.size} of {book.manifest.scenes.length} scenes read aloud
+          </p>
+        )}
+      </div>
       {followed != null && (
         <p className="mb-4 rounded-md bg-stone-100 px-3 py-2">Following shared position · Scene {followed}</p>
       )}
@@ -220,6 +249,22 @@ export default function Reader() {
               <Words text={b.text} onTap={(w) => void tap(w)} tapped={active?.word ?? null} />
             </p>
           ))}
+          {listen && (
+            <div className="mb-2">
+              <ListenPanel
+                sceneNumber={s.scene_number}
+                text={[s.narration, ...s.bubbles.map((b) => `${b.speaker}: ${b.text}`)].join(' ')}
+              />
+            </div>
+          )}
+          {aloud && (
+            <ReadAloudPanel
+              sceneNumber={s.scene_number}
+              text={[s.narration, ...s.bubbles.map((b) => b.text)].join(' ')}
+              onPass={(n) => setPassed((p) => new Set(p).add(n))}
+              onLookup={(w) => void tap(w)}
+            />
+          )}
         </section>
       ))}
       {visible < book.manifest.scenes.length && <div ref={moreRef}><p>Loading more…</p></div>}
