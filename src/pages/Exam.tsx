@@ -40,7 +40,7 @@ export default function Exam() {
       const answers = questions
         .filter((q) => choices[q.id] !== undefined)
         .map((q) => ({ id: q.id, choice: choices[q.id] }));
-      setResult(await submitExam(answers));
+      setResult(await submitExam(questions.map((q) => q.id), answers));
       const b = await getExamBest().catch(() => null);
       if (b) setBest(b.best);
       window.scrollTo(0, 0);

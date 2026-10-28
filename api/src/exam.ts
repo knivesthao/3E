@@ -44,13 +44,17 @@ const PART1: Item[] = [
   ['p1f', 'You live in it.', ['A school', 'A book', 'Water', 'A house'], 3, 'You live in a house.'],
 ];
 
+const STORY =
+  'Anna has a small red cat. The cat is happy. In the morning, Anna and the cat run in the sun. ' +
+  'The cat drinks water. At night, the cat is in the house. Anna is happy.';
+
 const PART2: Item[] = [
-  ['p2a', 'Tom has a cat. The cat says meow. The cat says woof.', ['Yes', 'No'], 1, 'A cat says meow, not woof.'],
-  ['p2b', 'One and two is three.', ['Yes', 'No'], 0, 'One and two is three.'],
-  ['p2c', 'Water is red.', ['Yes', 'No'], 1, 'Water is not red.'],
-  ['p2d', 'In the day, the sun is hot.', ['Yes', 'No'], 0, 'The sun is hot in the day.'],
-  ['p2e', 'A fish lives in a tree.', ['Yes', 'No'], 1, 'A fish lives in water, not a tree.'],
-  ['p2f', 'A bird can fly.', ['Yes', 'No'], 0, 'A bird can fly.'],
+  ['p2a', 'The cat is big.', ['Yes', 'No'], 1, 'The story says: a small red cat.', STORY],
+  ['p2b', 'Anna and the cat run in the morning.', ['Yes', 'No'], 0, 'The story says: in the morning they run in the sun.', STORY],
+  ['p2c', 'The cat drinks milk.', ['Yes', 'No'], 1, 'The story says: the cat drinks water.', STORY],
+  ['p2d', 'At night, the cat is in the house.', ['Yes', 'No'], 0, 'The story says: at night the cat is in the house.', STORY],
+  ['p2e', 'Anna is sad.', ['Yes', 'No'], 1, 'The story says: Anna is happy.', STORY],
+  ['p2f', 'The cat is red.', ['Yes', 'No'], 0, 'The story says: a small red cat.', STORY],
 ];
 
 const PART3: Item[] = [
@@ -74,8 +78,8 @@ const PART4: Item[] = [
 function buildBank(): ExamQuestion[] {
   const out: ExamQuestion[] = [];
   for (const [part, items] of [[1, PART1], [2, PART2], [3, PART3], [4, PART4]] as const) {
-    for (const [id, prompt, options, answer, explanation] of items) {
-      out.push({ id, part, section: PART_SECTION[part], prompt, options, answer, explanation });
+    for (const [id, prompt, options, answer, explanation, passage] of items) {
+      out.push({ id, part, section: PART_SECTION[part], prompt, options, answer, explanation, ...(passage ? { passage } : {}) });
     }
   }
   return out;

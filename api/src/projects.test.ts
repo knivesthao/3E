@@ -9,6 +9,17 @@ function makeDb() {
   const projects = new Map<string, Record<string, unknown>>();
   const scenes = new Map<string, Record<string, unknown>>();
 
+  // Mirrors the real UNIQUE(project_id, scene_number) constraint: throws
+  // like D1/SQLite on collision, so sequential renumbering fails here too.
+  const checkUniqueScenes = () => {
+    const seen = new Set<string>();
+    for (const s of scenes.values()) {
+      const key = `${s.project_id}|${s.scene_number}`;
+      if (seen.has(key)) throw new Error('UNIQUE constraint failed: scenes.project_id, scenes.scene_number');
+      seen.add(key);
+    }
+  };
+
   const runQuery = (q: string, p: unknown[]) => {
     if (q.startsWith('INSERT INTO users')) {
       const [id, email] = p as string[];
@@ -42,10 +53,18 @@ function makeDb() {
       const [n, d, u, id] = p as [number, string, string, string];
       const row = scenes.get(id);
       if (row) Object.assign(row, { scene_number: n, data_json: d, updated_at: u });
+      checkUniqueScenes();
+    } else if (q.startsWith('UPDATE scenes SET scene_number = -scene_number')) {
+      const [u, projectId] = p as [string, string];
+      for (const row of scenes.values()) {
+        if (row.project_id === projectId) Object.assign(row, { scene_number: -(row.scene_number as number), updated_at: u });
+      }
+      checkUniqueScenes();
     } else if (q.startsWith('UPDATE scenes SET scene_number')) {
       const [n, u, id] = p as [number, string, string];
       const row = scenes.get(id);
       if (row) Object.assign(row, { scene_number: n, updated_at: u });
+      checkUniqueScenes();
     } else if (q.startsWith('DELETE FROM scenes WHERE project_id')) {
       for (const [k, v] of scenes) if (v.project_id === p[0]) scenes.delete(k);
     } else if (q.startsWith('DELETE FROM scenes WHERE id')) {
@@ -237,6 +256,31 @@ describe('scenes CRUD + reorder', () => {
     const after = ((await re.json()) as { scenes: { id: string; scene_number: number }[] }).scenes;
     expect(after.map((s) => [s.id, s.scene_number])).toEqual([[s2.id, 1], [s1.id, 2]]);
 
+    // Three-way rotation: with UNIQUE(project_id, scene_number), naive
+    // sequential UPDATEs collide mid-batch (the reported editor bug).
+    const s3 = ((await (await mk('Three', alice)).json()) as { scene: { id: string } }).scene;
+    const rot = await app.request(
+      `/api/projects/${pid}/scenes/reorder`, json('POST', { order: [s2.id, s1.id, s3.id] }, alice), env);
+    expect(rot.status).toBe(200);
+    const rotated = ((await rot.json()) as { scenes: { id: string; scene_number: number }[] }).scenes;
+    expect(rotated.map((s) => [s.id, s.scene_number])).toEqual([[s2.id, 1], [s1.id, 2], [s3.id, 3]]);
+
+    const badOrders: unknown[] = [
+      { order: [] },
+      { order: 'nope' },
+      {},
+      { order: [s2.id, s2.id, s3.id] },
+      { order: [s2.id, s1.id, 'missing-id'] },
+      { order: [s2.id, s1.id] },
+    ];
+    for (const payload of badOrders) {
+      const r = await app.request(`/api/projects/${pid}/scenes/reorder`, json('POST', payload, alice), env);
+      expect(r.status).toBe(400);
+    }
+    expect(
+      (await app.request(`/api/projects/${pid}/scenes/reorder`, json('POST', { order: [s2.id, s1.id, s3.id] }, bob), env)).status,
+    ).toBe(404);
+
     const upd = await app.request(
       `/api/projects/${pid}/scenes/${s1.id}`,
       json('PATCH', { data_json: { narration: 'One!', bubbles: [{ speaker: 'M', text: 'Hi' }] } }, alice), env);
@@ -246,6 +290,6 @@ describe('scenes CRUD + reorder', () => {
     const gone = (await (await app.request(`/api/projects/${pid}`, { headers: { cookie: alice } }, env)).json()) as {
       scenes: unknown[];
     };
-    expect(gone.scenes).toHaveLength(1);
+    expect(gone.scenes).toHaveLength(2);
   });
 });

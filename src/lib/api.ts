@@ -232,8 +232,8 @@ export const getExam = () =>
 export const getExamBest = () =>
   api<{ attempts: number; best: number | null; total: number; passMark: number }>('/api/exam/best');
 
-export const submitExam = (answers: { id: string; choice: number }[]) =>
-  api<ExamResult>('/api/exam/submit', { method: 'POST', body: JSON.stringify({ answers }) });
+export const submitExam = (form: string[], answers: { id: string; choice: number }[]) =>
+  api<ExamResult>('/api/exam/submit', { method: 'POST', body: JSON.stringify({ form, answers }) });
 
 export const getBookCosts = (projectId: string) =>
   api<BookCosts>(`/api/admin/costs/book?projectId=${encodeURIComponent(projectId)}`);

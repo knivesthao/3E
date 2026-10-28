@@ -475,15 +475,21 @@ projects.post('/:id/scenes/reorder', async (c) => {
     return c.json(INVALID, 400);
   }
   const now = new Date().toISOString();
-  await c.env.DB.batch(
-    order.value.map((id, i) =>
-      c.env.DB.prepare('UPDATE scenes SET scene_number = ?, updated_at = ? WHERE id = ?').bind(
-        i + 1,
-        now,
-        id,
-      ),
+  // Two-phase renumber in one batch (atomic): SQLite checks UNIQUE per row
+  // as it writes, so even a single-statement swap collides mid-flight.
+  // Negating first moves every row out of the positive range (bijective,
+  // so still unique), then finals land collision-free.
+  const negate = c.env.DB.prepare(
+    'UPDATE scenes SET scene_number = -scene_number, updated_at = ? WHERE project_id = ?',
+  ).bind(now, project.id);
+  const finals = order.value.map((id, i) =>
+    c.env.DB.prepare('UPDATE scenes SET scene_number = ?, updated_at = ? WHERE id = ?').bind(
+      i + 1,
+      now,
+      id,
     ),
   );
+  await c.env.DB.batch([negate, ...finals]);
   await touch(c.env.DB, project.id, now);
   const { results: scenes } = await c.env.DB.prepare(
     'SELECT * FROM scenes WHERE project_id = ? ORDER BY scene_number ASC',
