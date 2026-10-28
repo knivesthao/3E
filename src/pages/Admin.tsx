@@ -178,7 +178,7 @@ export default function Admin() {
             key={t}
             onClick={() => setTab(t)}
             aria-pressed={tab === t}
-            className={tab === t ? 'bg-stone-900 text-white border-stone-900' : ''}
+            pressed={tab === t}
           >
             {t === 'costs' ? 'Costs' : t === 'specs' ? 'Tech specs' : 'Content'}
           </Button>

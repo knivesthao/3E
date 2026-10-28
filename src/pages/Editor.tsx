@@ -257,8 +257,8 @@ export default function Editor() {
         </div>
       </section>
       <div className="flex flex-wrap gap-2" role="group" aria-label="Editor actions">
-        <Button onClick={() => setTab('scenes')} aria-pressed={tab === 'scenes'} className={tab === 'scenes' ? 'bg-stone-900 text-white border-stone-900' : ''}>Scenes</Button>
-        <Button onClick={() => setTab('cast')} aria-pressed={tab === 'cast'} className={tab === 'cast' ? 'bg-stone-900 text-white border-stone-900' : ''}>Cast</Button>
+        <Button onClick={() => setTab('scenes')} aria-pressed={tab === 'scenes'} pressed={tab === 'scenes'}>Scenes</Button>
+        <Button onClick={() => setTab('cast')} aria-pressed={tab === 'cast'} pressed={tab === 'cast'}>Cast</Button>
         <Button onClick={() => void finish()} variant="primary">3E Finish</Button>
         <Button onClick={() => void publish()} disabled={publishBusy}>
           {publishBusy ? 'Publishing…' : 'Publish'}

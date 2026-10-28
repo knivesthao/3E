@@ -24,7 +24,11 @@ to re-read the marketing wrappers.
 6. **Use only good fonts** (Part 2) — one strong pairing beats five fonts.
 7. **Steal like an artist** (Part 2) — copy patterns that work.
 
-Still to pull: Part 2 full text (rules 4–7 detail).
+Part 2 pulled 2026-10-28: text-on-image methods (overlay/scrim — relevant
+if Reader ever labels art), text pop/un-pop (page titles up-pop fully;
+everything else balances up- and down-pop), good-fonts pairing, steal
+patterns. Applied: solid + outline active tabs, down-popped meta text
+(stone-600, never 400/500), top-light button edges, roomy select arrows.
 
 ## 2. The Skins Factory — Definitive UI/UX Design Guide
 
@@ -37,6 +41,5 @@ craft advice. Skim for process; prefer Kennedy for screen-level decisions.
 
 Already applied: grayscale-first palette, system serif/sans pairing,
 44px targets, visible focus, aria-pressed tabs, bottom-sheet dialogs.
-Next candidates from the guides: top-light borders on primary buttons
-(rule 1), more whitespace rhythm on Editor (rule 3), scrim treatment for
-text over panel art in Reader (rule 4, needs Part 2 detail).
+Still open: scrim treatment for text over panel art in Reader (rule 4),
+and a pass over Editor density now that Page spacing loosened (rule 3).
