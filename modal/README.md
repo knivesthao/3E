@@ -19,14 +19,13 @@ modal deploy modal/sam.py        # prints the web endpoint URL
 modal workspace proxy-tokens create   # join as <id>.ws-<secret>
 ```
 
-Fill `SAM_MODEL_ID` in [sam.py](/Users/yeethao/dev/ADMAIS/3E/modal/sam.py) with the
-text-promptable SAM 3.1 weights repo before deploying — the app sends
-free-text character descriptions, not points/boxes.
+`SAM_MODEL_ID` defaults to `facebook/sam3` (open-vocabulary text prompts —
+exactly what the app sends). Override only for a mirror or fine-tune.
 
 ## Link it
 
 ```bash
-MODAL_PROXY_TOKEN='<id>.ws-<secret>' ./modal/link.sh <endpoint-url>
+./modal/link.sh <endpoint-url>   # creates APP_KEY, stores it, links it
 npm run modal:check
 ./run.sh dev
 ```

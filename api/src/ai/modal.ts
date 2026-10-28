@@ -23,7 +23,9 @@ export async function modalMask(
     res = await fetch(cfg.apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.proxyToken}` },
-      body: JSON.stringify({ image_b64: bytesToB64(imageBytes), prompt: textPrompt }),
+      // Key travels in the body too: Modal web endpoints don't expose
+      // duplication is intentional.
+      body: JSON.stringify({ image_b64: bytesToB64(imageBytes), prompt: textPrompt, auth: cfg.proxyToken }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch {
@@ -37,7 +39,8 @@ export async function modalMask(
   } catch {
     throw new AiError('model bad reply', false);
   }
-  const r = data as { mask_b64?: unknown; content_type?: unknown };
+  const r = data as { mask_b64?: unknown; content_type?: unknown; error?: unknown };
+  if (typeof r.error === 'string') throw new AiError(`model error: ${r.error}`, false);
   if (typeof r.mask_b64 !== 'string') throw new AiError('model bad reply', false);
   return {
     bytes: b64ToBytes(r.mask_b64),
