@@ -257,8 +257,8 @@ export default function Editor() {
         </div>
       </section>
       <div className="flex flex-wrap gap-2" role="group" aria-label="Editor actions">
-        <Button onClick={() => setTab('scenes')} aria-pressed={tab === 'scenes'}>Scenes</Button>
-        <Button onClick={() => setTab('cast')} aria-pressed={tab === 'cast'}>Cast</Button>
+        <Button onClick={() => setTab('scenes')} aria-pressed={tab === 'scenes'} className={tab === 'scenes' ? 'bg-stone-900 text-white border-stone-900' : ''}>Scenes</Button>
+        <Button onClick={() => setTab('cast')} aria-pressed={tab === 'cast'} className={tab === 'cast' ? 'bg-stone-900 text-white border-stone-900' : ''}>Cast</Button>
         <Button onClick={() => void finish()} variant="primary">3E Finish</Button>
         <Button onClick={() => void publish()} disabled={publishBusy}>
           {publishBusy ? 'Publishing…' : 'Publish'}
@@ -309,8 +309,13 @@ export default function Editor() {
           {scenes.map((s, i) => {
             const d = drafts[s.id] ?? blank;
             return (
-              <section key={s.id} aria-label={`Scene ${s.scene_number}`} className="flex flex-col gap-2 rounded-md border border-stone-200 p-3">
-                <h2 className="text-xl font-bold">Scene {s.scene_number}</h2>
+              <section key={s.id} aria-label={`Scene ${s.scene_number}`} className="flex flex-col gap-2 rounded-md border border-stone-300 bg-white p-3">
+                <h2 className="flex items-center gap-2 font-display text-xl font-bold">
+                  <span aria-hidden="true" className="inline-flex h-7 min-h-0 w-7 items-center justify-center rounded-full bg-accent-900 text-sm text-white">
+                    {s.scene_number}
+                  </span>
+                  Scene {s.scene_number}
+                </h2>
                 <Field label="Narration">
                   <textarea
                     maxLength={2000}

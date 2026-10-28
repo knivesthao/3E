@@ -192,7 +192,7 @@ export default function Reader() {
 
   return (
     <main className="mx-auto w-full max-w-xl px-4 py-6">
-      <h1 className="mb-1 text-3xl font-bold">{book.manifest.title}</h1>
+      <h1 className="mb-1 font-display text-4xl font-bold">{book.manifest.title}</h1>
       <p className="mb-4 text-base">
         Level {book.level} · {book.reading_level}
         {offline && ' · Offline copy'}

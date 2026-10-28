@@ -134,7 +134,7 @@ if (flag('--clean')) {
   console.log('\n--- review ---');
   console.log(`editor:  ${FRONTEND}/editor/${project.id}`);
   console.log(`library: ${FRONTEND}/library`);
-  console.log(`costs:   ${FRONTEND}/costs?projectId=${project.id}`);
+  console.log(`admin:   ${FRONTEND}/admin`);
   if (book) {
     console.log(`reader:  ${FRONTEND}/reader/${project.id}`);
     console.log(`share:   ${API}/api/share/${book.id}  (append position routes in the reader)`);

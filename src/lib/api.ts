@@ -186,6 +186,20 @@ export interface BookCosts {
   }[];
 }
 
+export interface AdminSpecs {
+  models: { text: string; hard: string; image: string; segment: string; glimmer: string };
+  basetenTasks: string[];
+  basetenConfigured: boolean;
+  dailyAiLimit: number;
+}
+
+export interface AdminStats {
+  counts: Record<string, number>;
+}
+
+export const getAdminSpecs = () => api<AdminSpecs>('/api/admin/specs');
+export const getAdminStats = () => api<AdminStats>('/api/admin/stats');
+
 export const getBookCosts = (projectId: string) =>
   api<BookCosts>(`/api/admin/costs/book?projectId=${encodeURIComponent(projectId)}`);
 

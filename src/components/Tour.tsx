@@ -31,7 +31,7 @@ export default function Tour({ onClose }: { onClose: () => void }) {
       className="fixed inset-0 flex items-center justify-center bg-black/60 p-4"
     >
       <div className="w-full max-w-sm rounded-md border border-stone-300 bg-white p-5">
-        <h2 className="mb-2 text-xl font-bold">{STEPS[i].title}</h2>
+        <h2 className="mb-2 font-display text-2xl font-bold">{STEPS[i].title}</h2>
         <p className="mb-2">{STEPS[i].body}</p>
         <p className="mb-4 text-sm">
           Step {i + 1} of {STEPS.length}

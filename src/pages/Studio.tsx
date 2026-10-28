@@ -82,7 +82,7 @@ export default function Studio() {
         {projects.map((p) => (
           <li
             key={p.id}
-            className="flex flex-wrap items-center gap-2 rounded-md border border-stone-200 px-3 py-2"
+            className="flex flex-wrap items-center gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 transition-colors hover:border-accent-800"
           >
             <Link to={`/studio/${p.id}`} className="font-medium underline underline-offset-2">
               {p.title}

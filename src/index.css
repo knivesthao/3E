@@ -7,6 +7,15 @@
 
 @theme {
   --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: Georgia, "Times New Roman", serif;
+  /* Single muted accent, AAA-safe on white (teal-900 ≈ 9:1) and with white
+     text on solid fills. Muted enough for color sensitivity; meaning is
+     always carried by text labels, never by this hue alone. */
+  --color-accent-950: #123f3c;
+  --color-accent-900: #134e4a;
+  --color-accent-800: #115e59;
+  --color-accent-100: #ccfbf1;
+  --color-accent-50: #f0fdfa;
 }
 
 html {

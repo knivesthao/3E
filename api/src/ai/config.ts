@@ -10,16 +10,17 @@ export const PRICES: Record<string, { in: number; out: number }> = {
   'muse-image-1.0': { in: 0, out: 0 },
   'sam-3.1': { in: 0, out: 0 },
   // Self-hosted Glimmer via Baseten (own credits) — fill when known.
-  'Muse-Glimmer': { in: 0, out: 0 },
+  'meta-models/Muse-Glimmer-30B': { in: 0, out: 0 },
 };
 
 export const TEXT_MODEL = 'muse-spark-1.3';
 export const HARD_MODEL = 'muse-wonder-1.0';
 export const IMAGE_MODEL = 'muse-image-1.0';
 export const SEGMENT_MODEL = 'sam-3.1';
-// Open-weight text model served on Baseten. Must match the deployment's
-// model name; override without a code change via BASETEN_MODEL.
-export const GLIMMER_MODEL = 'Muse-Glimmer';
+// Open-weight text model served on Baseten (slug verified against
+// baseten.co/library/muse-glimmer-30b). Override without a code change via
+// BASETEN_MODEL if the deployment uses another name.
+export const GLIMMER_MODEL = 'meta-models/Muse-Glimmer-30B';
 
 // Text tasks served by Glimmer when Baseten is configured (PLAN
 // §Self-hosting). Art/segment stay on the Meta Model API.

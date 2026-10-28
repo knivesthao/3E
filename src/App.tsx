@@ -5,7 +5,7 @@ import Library from './pages/Library';
 import Studio from './pages/Studio';
 import Editor from './pages/Editor';
 import Reader from './pages/Reader';
-import Costs from './pages/Costs';
+import Admin from './pages/Admin';
 import SignIn from './pages/SignIn';
 import { getMe, logout } from './lib/api';
 
@@ -41,25 +41,26 @@ export default function App() {
     <>
       <nav
         aria-label="Main"
-        className="border-b border-stone-200 bg-white"
+        className="bg-stone-900 text-white"
       >
         <div className="mx-auto flex w-full max-w-2xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 sm:px-6">
-          <Link to="/" className="underline underline-offset-2">Library</Link>
-          <Link to="/studio" className="underline underline-offset-2">Studio</Link>
-          <Link to="/admin/costs" className="underline underline-offset-2">Costs</Link>
+          <span className="font-display text-lg font-bold">3E</span>
+          <Link to="/" className="underline underline-offset-4">Library</Link>
+          <Link to="/studio" className="underline underline-offset-4">Studio</Link>
+          <Link to="/admin" className="underline underline-offset-4">Admin</Link>
           <span className="ms-auto flex flex-wrap items-center gap-2 text-sm">
             {email ? (
               <>
-                <span className="break-all">{email}</span>
+                <span className="break-all text-stone-200">{email}</span>
                 <button
                   onClick={signOut}
-                  className="rounded-md border border-stone-300 px-3 text-sm underline underline-offset-2"
+                  className="rounded-md border border-stone-400 px-3 text-sm underline underline-offset-2"
                 >
                   Sign out
                 </button>
               </>
             ) : (
-              <Link to="/signin" className="underline underline-offset-2">Sign in</Link>
+              <Link to="/signin" className="underline underline-offset-4">Sign in</Link>
             )}
           </span>
         </div>
@@ -100,13 +101,14 @@ export default function App() {
         />
         <Route path="/s/:bookId" element={<Reader />} />
         <Route
-          path="/admin/costs"
+          path="/admin"
           element={
             <Guard email={email}>
-              <Costs />
+              <Admin />
             </Guard>
           }
         />
+        <Route path="/admin/costs" element={<Navigate to="/admin" replace />} />
       </Routes>
     </>
   );
