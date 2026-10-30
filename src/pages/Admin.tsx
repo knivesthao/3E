@@ -9,8 +9,10 @@ import {
 } from '../lib/api';
 import type { AdminSpecs, AdminStats, BookCosts, ExamItemStat, Project } from '../lib/api';
 import { Alert, Button, Field, Page, inputClass } from '../components/ui';
+import { DetailsDeck } from './Details';
+import { DesignSection } from './Design';
 
-type Tab = 'costs' | 'specs' | 'content' | 'exam';
+type Tab = 'costs' | 'specs' | 'content' | 'exam' | 'details' | 'design';
 
 function CostsSection() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -201,6 +203,8 @@ const TAB_LABEL: Record<Tab, string> = {
   specs: 'Tech specs',
   content: 'Content',
   exam: 'Exam items',
+  details: 'Details',
+  design: 'Design',
 };
 
 export default function Admin() {
@@ -220,8 +224,12 @@ export default function Admin() {
         <SpecsSection />
       ) : tab === 'content' ? (
         <ContentSection />
-      ) : (
+      ) : tab === 'exam' ? (
         <ExamItemsSection />
+      ) : tab === 'details' ? (
+        <DetailsDeck />
+      ) : (
+        <DesignSection />
       )}
     </Page>
   );

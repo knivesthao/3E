@@ -63,6 +63,7 @@ export async function generateArt(
     projectId: string | null;
     opId: string;
     prompt: string;
+    task?: 'art' | 'portrait';
     size?: { width: number; height: number };
     referenceImage?: string;
     apiUrl?: string;
@@ -79,15 +80,15 @@ export async function generateArt(
       });
       const ms = Date.now() - start;
       if (out.bytes.byteLength === 0 || !out.contentType.startsWith('image/')) {
-        await logAttempt(db, { ...opts, task: 'art' }, model, 'image', attempt, out.inputTokens, out.outputTokens, false, 'invalid shape', ms);
+        await logAttempt(db, { ...opts, task: opts.task ?? 'art' }, model, 'image', attempt, out.inputTokens, out.outputTokens, false, 'invalid shape', ms);
         if (attempt === 2) break;
         continue;
       }
-      await logAttempt(db, { ...opts, task: 'art' }, model, 'image', attempt, out.inputTokens, out.outputTokens, true, null, ms);
+      await logAttempt(db, { ...opts, task: opts.task ?? 'art' }, model, 'image', attempt, out.inputTokens, out.outputTokens, true, null, ms);
       return { bytes: out.bytes, contentType: out.contentType, attempts: attempt };
     } catch (e) {
       const retryable = e instanceof AiError && e.retryable;
-      await logAttempt(db, { ...opts, task: 'art' }, model, 'image', attempt, 0, 0, false, e instanceof Error ? e.message : 'failed', Date.now() - start);
+      await logAttempt(db, { ...opts, task: opts.task ?? 'art' }, model, 'image', attempt, 0, 0, false, e instanceof Error ? e.message : 'failed', Date.now() - start);
       if (!retryable || attempt === 2) break;
     }
   }

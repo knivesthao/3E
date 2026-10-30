@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import {
   aiArt,
   aiFinish,
+  aiPortrait,
   aiSimplify,
   createScene,
   deleteScene,
@@ -14,7 +15,7 @@ import {
   updateScene,
 } from '../lib/api';
 import { LEVELS } from '../lib/api';
-import type { Book, Panel, Project, Scene, SceneData } from '../lib/api';
+import type { Book, Cast, CastKind, Panel, Project, Scene, SceneData } from '../lib/api';
 import { Alert, Badge, Button, Field, Page, inputClass } from '../components/ui';
 import { useConfirm } from '../components/Dialog';
 
@@ -28,13 +29,22 @@ export default function Editor() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [level, setLevel] = useState('A1');
-  const [cast, setCast] = useState<{
-    characters: { name: string; description?: string }[];
-    places: { name: string; description?: string }[];
-  }>({
-    characters: [],
-    places: [],
-  });
+  const [cast, setCast] = useState<Cast>({ characters: [], places: [] });
+  const [portraitBusy, setPortraitBusy] = useState<Record<string, boolean>>({});
+
+  async function drawPortrait(kind: CastKind, index: number) {
+    const key = `${kind}:${index}`;
+    setPortraitBusy((b) => ({ ...b, [key]: true }));
+    setError(null);
+    try {
+      const res = await aiPortrait(id, kind, index);
+      setCast(res.cast);
+    } catch {
+      setError('Could not draw the portrait. Save the cast first, then try again.');
+    } finally {
+      setPortraitBusy((b) => ({ ...b, [key]: false }));
+    }
+  }
   const [tab, setTab] = useState<'scenes' | 'cast'>('scenes');
   const [newNarration, setNewNarration] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -145,8 +155,7 @@ export default function Editor() {
   async function saveCast() {
     setError(null);
     try {
-      const clean = (list: { name: string; description?: string }[]) =>
-        list.filter((e) => e.name.trim() !== '');
+      const clean = (list: Cast['characters']) => list.filter((e) => e.name.trim() !== '');
       const res = await updateProject(id, {
         cast_json: { characters: clean(cast.characters), places: clean(cast.places) },
       });
@@ -403,6 +412,14 @@ export default function Editor() {
               <ul className="flex flex-col gap-2">
                 {cast[kind].map((c, ci) => (
                   <li key={ci} className="flex flex-col gap-2 rounded-md bg-stone-100 p-2 sm:flex-row sm:items-end">
+                    {c.image_url ? (
+                      <img
+                        src={c.image_url}
+                        alt={c.name ? `Portrait of ${c.name}` : 'Cast portrait'}
+                        className="h-24 w-20 shrink-0 rounded object-cover"
+                        loading="lazy"
+                      />
+                    ) : null}
                     <div className="sm:w-48">
                       <Field label="Name">
                         <input
@@ -441,6 +458,17 @@ export default function Editor() {
                         />
                       </Field>
                     </div>
+                    <Button
+                      onClick={() => void drawPortrait(kind, ci)}
+                      disabled={portraitBusy[`${kind}:${ci}`] === true || c.name.trim() === ''}
+                      title={c.name.trim() === '' ? 'Name the entry before drawing its portrait' : 'Draw with AI (1 image call)'}
+                    >
+                      {portraitBusy[`${kind}:${ci}`] === true
+                        ? 'Drawing…'
+                        : c.image_url
+                          ? 'Redraw'
+                          : 'Draw'}
+                    </Button>
                     <Button
                       variant="danger"
                       onClick={() =>

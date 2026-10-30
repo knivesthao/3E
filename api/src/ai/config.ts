@@ -57,7 +57,7 @@ export function modalConfig(env: {
   return { apiUrl: env.MODAL_API_URL, proxyToken: env.MODAL_PROXY_TOKEN };
 }
 
-export type AiTask = 'draft' | 'check' | 'idea' | 'meanings' | 'simplify' | 'safety' | 'art' | 'isolate';
+export type AiTask = 'draft' | 'check' | 'idea' | 'meanings' | 'simplify' | 'safety' | 'art' | 'isolate' | 'portrait';
 
 export const TASK_MODEL: Record<AiTask, string> = {
   draft: TEXT_MODEL,
@@ -68,6 +68,7 @@ export const TASK_MODEL: Record<AiTask, string> = {
   safety: TEXT_MODEL,
   art: IMAGE_MODEL,
   isolate: SEGMENT_MODEL,
+  portrait: IMAGE_MODEL,
 };
 
 // Per-user daily cap across AI endpoints (Step 3 + secure-coding rules).

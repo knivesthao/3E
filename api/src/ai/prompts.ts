@@ -125,3 +125,26 @@ ${corner} corner for a speech bubble.`;
 export function isolateText(character: string): string {
   return `Extract the main character: ${character}`;
 }
+
+// Cast portrait prompt: one reusable character or place card in the same flat
+// webcomic style as scene panels. Lean on purpose — just the details the user
+// gave, no extra props or background clutter, so each call stays one image.
+export function castPortraitPrompt(input: {
+  kind: 'characters' | 'places';
+  name: string;
+  look: string;
+}): string {
+  const subject =
+    input.kind === 'characters'
+      ? `Single character portrait, waist-up, facing the viewer: ${input.look}`
+      : `Single story place, no people, simple shapes: ${input.look}`;
+  return `[STYLE GUIDE]
+2D children's comic-book illustration for early readers. Clean bold outlines, cel shading with two
+or three flat tones, simple shapes, warm friendly palette (cream, terracotta, leaf green, sky blue).
+Expressive and friendly, minimal detail. One clear subject, plain solid-cream background.
+Bright, even lighting. No text, no letters, no speech bubbles, no watermark, no logos.
+Not photorealistic, not 3D, not a photograph.
+
+Name: ${input.name}
+Subject: ${subject}`;
+}

@@ -99,6 +99,10 @@ function makeDb() {
               } else if (q.startsWith('INSERT INTO jobs')) {
                 const [id, user_id, project_id, payload, status, created_at, updated_at] = params as string[];
                 jobs.set(id, { id, user_id, project_id, kind: 'scene', payload, status, created_at, updated_at });
+              } else if (q.startsWith('UPDATE projects SET cast_json')) {
+                const [cast_json, pid2] = params as [string, string];
+                const row = projects.get(pid2);
+                if (row) row.cast_json = cast_json;
               } else if (q.startsWith('UPDATE jobs SET')) {
                 const [status, result, error, updated_at, id] = params as [string, string | null, string | null, string, string];
                 const row = jobs.get(id);
@@ -310,6 +314,96 @@ describe('Scene art endpoints', () => {
     const missing = `/api/ai/art/${crypto.randomUUID()}-9.png`;
     expect((await app.request(missing, { headers: { cookie } }, env)).status).toBe(404);
     expect((await app.request('/api/ai/art/nope.png', { headers: { cookie } }, env)).status).toBe(404);
+  });
+
+  it('draws a cast portrait, stores it, and persists image_url into cast_json', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const env = ENV(db);
+    const uid = await userIdOf(cookie, env);
+    const pid = seedBook(db, uid);
+    stubFetch((body) => {
+      const b = body as { prompt?: unknown };
+      if (typeof b.prompt === 'string' && b.prompt.includes('[STYLE GUIDE]')) {
+        if (!b.prompt.includes('Noy')) throw new Error('portrait prompt missing name');
+        if (!b.prompt.includes('short black hair')) throw new Error('portrait prompt missing look');
+        return { data: [{ b64_json: b64('PORTRAIT') }], usage: { prompt_tokens: 5, completion_tokens: 0 } };
+      }
+      return artReply(body);
+    });
+
+    const res = await app.request(
+      '/api/ai/art/portrait',
+      json('POST', { projectId: pid, kind: 'characters', index: 0 }, cookie),
+      env,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { image_url: string; cast: { characters: { name: string; image_url?: string }[] } };
+    const key = `${pid}-cast-characters-0.png`;
+    expect(body.image_url).toBe(`/api/ai/art/${key}`);
+    expect(body.cast.characters[0].image_url).toBe(`/api/ai/art/${key}`);
+
+    const bucket = env.ART as unknown as { store: Map<string, { bytes: ArrayBuffer }> };
+    expect(bucket.store.has(key)).toBe(true);
+
+    const tasks = db.usage.map((u) => ({ task: u.task, kind: u.kind, ok: u.ok }));
+    expect(tasks).toContainEqual({ task: 'portrait', kind: 'image', ok: 1 });
+
+    const img = await app.request(body.image_url, { headers: { cookie } }, env);
+    expect(img.status).toBe(200);
+    expect(await img.text()).toBe('PORTRAIT');
+  });
+
+  it('portrait rejects bad kind/index, anon users, missing key/bucket, strangers, spent quota', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    stubFetch(artReply);
+    const env = ENV(db);
+    const uid = await userIdOf(cookie, env);
+    const pid = seedBook(db, uid);
+    const good = { projectId: pid, kind: 'characters', index: 0 };
+
+    expect((await app.request('/api/ai/art/portrait', json('POST', { ...good, kind: 'pets' }, cookie), env)).status).toBe(400);
+    expect((await app.request('/api/ai/art/portrait', json('POST', { ...good, index: 5 }, cookie), env)).status).toBe(400);
+    expect((await app.request('/api/ai/art/portrait', json('POST', { ...good, index: -1 }, cookie), env)).status).toBe(400);
+    expect((await app.request('/api/ai/art/portrait', json('POST', good), env)).status).toBe(401);
+    expect(
+      (await app.request('/api/ai/art/portrait', json('POST', good, cookie), ENV(db, { key: false }))).status,
+    ).toBe(503);
+    expect(
+      (await app.request('/api/ai/art/portrait', json('POST', good, cookie), ENV(db, { bucket: false }))).status,
+    ).toBe(503);
+    expect(
+      (await app.request('/api/ai/art/portrait', json('POST', { ...good, projectId: 'missing' }, cookie), env)).status,
+    ).toBe(404);
+    db.seedUsage(uid, 50);
+    expect((await app.request('/api/ai/art/portrait', json('POST', good, cookie), env)).status).toBe(429);
+  });
+
+  it('portrait draws places too and keeps other cast entries untouched', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const env = ENV(db);
+    const uid = await userIdOf(cookie, env);
+    const pid = seedBook(db, uid);
+    stubFetch((body) => {
+      const b = body as { prompt?: unknown };
+      if (typeof b.prompt === 'string' && b.prompt.includes('[STYLE GUIDE]')) {
+        if (!b.prompt.includes('no people')) throw new Error('place portrait should exclude people');
+        return { data: [{ b64_json: b64('PLACE') }], usage: { prompt_tokens: 5, completion_tokens: 0 } };
+      }
+      return artReply(body);
+    });
+
+    const res = await app.request(
+      '/api/ai/art/portrait',
+      json('POST', { projectId: pid, kind: 'places', index: 0 }, cookie),
+      env,
+    );
+    expect(res.status).toBe(200);
+    const cast = ((await res.json()) as { cast: { characters: { image_url?: string }[]; places: { name: string; image_url?: string }[] } }).cast;
+    expect(cast.places[0].image_url).toBe(`/api/ai/art/${pid}-cast-places-0.png`);
+    expect(cast.characters[0].image_url).toBeUndefined();
   });
 
   it('failed isolate marks the job failed with 502', async () => {

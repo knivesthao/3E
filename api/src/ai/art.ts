@@ -5,7 +5,7 @@ import { AiError } from './meta';
 import { generateArt, generateMask } from './client';
 import { FAILED, INVALID, finishJob, modelKey, overLimit, readJson } from './http';
 import { modalConfig } from './config';
-import { isolateText, sceneArtPrompt } from './prompts';
+import { castPortraitPrompt, isolateText, sceneArtPrompt } from './prompts';
 import { ownProject } from '../projects';
 import { isRecord, validateSceneData } from '../validate';
 
@@ -17,9 +17,9 @@ export const art = new Hono<{ Bindings: Bindings; Variables: Variables }>({ stri
 const panelKey = (projectId: string, sceneNumber: number): string => `${projectId}-${sceneNumber}.png`;
 const maskKey = (projectId: string, sceneNumber: number): string => `${projectId}-${sceneNumber}-mask.png`;
 
-// Flat keys only (uuid + scene + optional -mask): no slashes, no traversal.
+// Flat keys only (uuid + scene/cast suffix): no slashes, no traversal.
 const KEY_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-\d{1,3}(-mask)?\.png$/;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-(\d{1,3}(-mask)?|cast-(characters|places)-\d{1,2})\.png$/;
 
 function castEntries(castJson: string, list: 'characters' | 'places'): Record<string, unknown>[] {
   try {
@@ -143,6 +143,75 @@ art.post('/', async (c) => {
       await finishJob(db, jobId, 'failed', null, 'ai failed');
       return c.json(FAILED, 502);
     }
+    throw e;
+  }
+});
+
+// Cast portrait (costly-lean): one flat-style card per character/place,
+// persisted into cast_json so panels and future scenes reuse it.
+art.post('/portrait', async (c) => {
+  const body = await readJson(c);
+  if (!isRecord(body) || typeof body.projectId !== 'string' || body.projectId === '') {
+    return c.json(INVALID, 400);
+  }
+  const kind = body.kind;
+  if (kind !== 'characters' && kind !== 'places') return c.json(INVALID, 400);
+  const index = body.index;
+  if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index > 99) {
+    return c.json(INVALID, 400);
+  }
+  const project = await ownProject(c.env.DB, body.projectId, c.get('userId'));
+  if (!project) return c.json({ error: 'not found' }, 404);
+  const apiKey = modelKey(c.env);
+  if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
+  if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+  const store: R2Bucket | undefined = c.env.ART;
+  if (!store) return c.json({ error: 'art unavailable' }, 503);
+
+  const db = c.env.DB;
+  const entries = castEntries(project.cast_json, kind);
+  const entry = entries[index];
+  const name = entry && typeof entry.name === 'string' ? entry.name.trim() : '';
+  if (!entry || name === '') return c.json(INVALID, 400);
+  const look =
+    typeof entry.description === 'string' && entry.description.trim() !== ''
+      ? entry.description.trim()
+      : name;
+  const prompt = castPortraitPrompt({ kind, name, look });
+  try {
+    const card = await generateArt(db, {
+      apiKey,
+      userId: c.get('userId'),
+      projectId: project.id,
+      opId: crypto.randomUUID(),
+      prompt,
+      task: 'portrait',
+      size: { width: 512, height: 640 },
+      apiUrl: c.env.AI_API_URL,
+    });
+    const imageKey = `${project.id}-cast-${kind}-${index}.png`;
+    await store.put(imageKey, card.bytes, { httpMetadata: { contentType: card.contentType } });
+    const imageUrl = `/api/ai/art/${imageKey}`;
+    entry.image_url = imageUrl;
+    let castJson = project.cast_json;
+    try {
+      const parsed = JSON.parse(project.cast_json) as unknown;
+      if (isRecord(parsed)) {
+        parsed[kind] = entries;
+        castJson = JSON.stringify(parsed);
+      }
+    } catch {
+      // keep original cast_json on parse surprise (entries came from it, so unreachable)
+    }
+    if (castJson !== project.cast_json) {
+      await db
+        .prepare('UPDATE projects SET cast_json = ? WHERE id = ?')
+        .bind(castJson, project.id)
+        .run();
+    }
+    return c.json({ image_url: imageUrl, cast: JSON.parse(castJson) as unknown });
+  } catch (e) {
+    if (e instanceof AiError) return c.json(FAILED, 502);
     throw e;
   }
 });

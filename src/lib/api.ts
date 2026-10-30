@@ -110,6 +110,25 @@ export const aiArt = (projectId: string, sceneNumber: number) =>
     body: JSON.stringify({ projectId, sceneNumber }),
   });
 
+export type CastKind = 'characters' | 'places';
+
+export interface CastEntry {
+  name: string;
+  description?: string;
+  image_url?: string;
+}
+
+export interface Cast {
+  characters: CastEntry[];
+  places: CastEntry[];
+}
+
+export const aiPortrait = (projectId: string, kind: CastKind, index: number) =>
+  api<{ image_url: string; cast: Cast }>('/api/ai/art/portrait', {
+    method: 'POST',
+    body: JSON.stringify({ projectId, kind, index }),
+  });
+
 export interface ManifestScene {
   scene_number: number;
   narration: string;
