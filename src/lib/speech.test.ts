@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   READ_ALOUD_PASS,
   cleanWord,
+  listenUntilStopped,
   scoreReading,
   speak,
   speechRecognitionSupported,
@@ -55,5 +56,81 @@ describe('device speech availability (node has neither)', () => {
 
   it('speak rejects when unsupported', async () => {
     await expect(speak('hello')).rejects.toThrow('unsupported');
+  });
+});
+
+// User-paced listening: continuous recognition accumulates finals across
+// pauses until the learner presses Stop — single-utterance mode cut slow
+// readers off after the first pause.
+describe('listenUntilStopped', () => {
+  type Handler = ((e: unknown) => void) | null;
+  class FakeRec {
+    static last: FakeRec | null = null;
+    lang = '';
+    continuous = false;
+    interimResults = false;
+    maxAlternatives = 1;
+    onresult: Handler = null;
+    onerror: Handler = null;
+    onend: Handler = null;
+    started = false;
+    constructor() {
+      FakeRec.last = this;
+    }
+    start() {
+      this.started = true;
+    }
+    stop() {
+      this.onend?.({});
+    }
+    emitResult(transcripts: { text: string; final: boolean }[]) {
+      this.onresult?.({
+        resultIndex: 0,
+        results: transcripts.map((t) => {
+          const alt = { transcript: t.text };
+          return { 0: alt, isFinal: t.final, length: 1 };
+        }),
+      });
+    }
+  }
+
+  afterEach(() => {
+    delete (globalThis as Record<string, unknown>).window;
+    FakeRec.last = null;
+  });
+
+  function install() {
+    (globalThis as Record<string, unknown>).window = {
+      SpeechRecognition: FakeRec,
+      setTimeout: () => 0 as unknown,
+      clearTimeout: () => {},
+    };
+  }
+
+  it('rejects when unsupported', async () => {
+    await expect(listenUntilStopped().done).rejects.toThrow('unsupported');
+  });
+
+  it('accumulates finals across pauses until stop', async () => {
+    install();
+    const seen: string[] = [];
+    const listener = listenUntilStopped('en-US', (t) => seen.push(t));
+    const rec = FakeRec.last;
+    expect(rec?.started).toBe(true);
+    expect(rec?.continuous).toBe(true);
+    rec?.emitResult([{ text: 'the sun is', final: false }]);
+    rec?.emitResult([{ text: 'the sun is up', final: true }]);
+    rec?.emitResult([{ text: 'it is a hot', final: true }]);
+    listener.stop();
+    await expect(listener.done).resolves.toBe('the sun is up it is a hot');
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen[seen.length - 1]).toContain('hot');
+  });
+
+  it('rejects when stopped with nothing heard', async () => {
+    install();
+    const listener = listenUntilStopped();
+    FakeRec.last?.stop();
+    await expect(listener.done).rejects.toThrow('no-speech');
   });
 });

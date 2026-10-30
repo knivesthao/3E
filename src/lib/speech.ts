@@ -105,6 +105,98 @@ export function listenOnce(lang = 'en-US', timeoutMs = 20000): Promise<string> {
   });
 }
 
+export interface Listener {
+  /** End listening; `done` settles with everything heard so far (or rejects if nothing). */
+  stop: () => void;
+  done: Promise<string>;
+}
+
+/**
+ * User-paced listening: continuous recognition accumulates final transcripts
+ * across pauses until `stop()` is called. Single-utterance mode cut slow
+ * readers off after the first pause; this leaves the pacing to the learner.
+ * Interim results stream through `onUpdate` for a live transcript.
+ */
+export function listenUntilStopped(
+  lang = 'en-US',
+  onUpdate?: (text: string) => void,
+  timeoutMs = 120000,
+): Listener {
+  const Ctor =
+    typeof window === 'undefined' ? undefined : (window.SpeechRecognition ?? window.webkitSpeechRecognition);
+  if (!Ctor) {
+    return { stop: () => {}, done: Promise.reject(new Error('unsupported')) };
+  }
+  let settle!: (text: string | null, err: string) => void;
+  const done = new Promise<string>((resolve, reject) => {
+    settle = (text, err) => {
+      if (text !== null && text.trim() !== '') resolve(text);
+      else reject(new Error(err));
+    };
+  });
+  let settled = false;
+  const finals: string[] = [];
+  let timer = 0;
+  const finish = (text: string | null, err: string) => {
+    if (settled) return;
+    settled = true;
+    window.clearTimeout(timer);
+    settle(text, err);
+  };
+  const current = (interim: string) => [...finals, interim].join(' ').replace(/\s+/g, ' ').trim();
+
+  const rec = new Ctor();
+  rec.lang = lang;
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
+  rec.onresult = (e: SREvent) => {
+    const from = (e as { resultIndex?: number }).resultIndex ?? 0;
+    let interim = '';
+    for (let i = from; i < e.results.length; i++) {
+      const text = e.results[i]?.[0]?.transcript ?? '';
+      if (e.results[i]?.isFinal) {
+        if (text.trim() !== '') finals.push(text.trim());
+      } else {
+        interim = text;
+      }
+    }
+    onUpdate?.(current(interim));
+  };
+  rec.onerror = () => {
+    try {
+      rec.stop();
+    } catch {
+      /* already stopped */
+    }
+    finish(finals.join(' ') || null, 'recognition-error');
+  };
+  rec.onend = () => {
+    finish(finals.join(' ') || null, 'no-speech');
+  };
+  timer = window.setTimeout(() => {
+    try {
+      rec.stop();
+    } catch {
+      /* already stopped */
+    }
+    finish(finals.join(' ') || null, 'timeout');
+  }, timeoutMs);
+  const stop = () => {
+    try {
+      rec.stop();
+    } catch {
+      /* onend settles */
+    }
+  };
+  try {
+    rec.start();
+  } catch {
+    finish(null, 'start-failed');
+  }
+  return { stop, done };
+}
+
 export interface ReadingScore {
   pct: number;
   matched: number;

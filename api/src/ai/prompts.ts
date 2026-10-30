@@ -80,6 +80,38 @@ Target level: ${level}
 Original line: ${line}`;
 }
 
+export function quizPrompt(level: string, story: string): string {
+  return `You are a quiz writer for 3E, an English comic platform for young learners. Write 6 short
+multiple-choice questions about the story below, for a learner at the target level. Mix three kinds:
+(1) a word meaning from the story, (2) yes/no or who/what about the story, (3) one missing word.
+Rules: short sentences the learner can read; 3 options each; exactly one correct answer; options use
+plain words from the story. Reply with only JSON, no preamble.
+{"questions": [{"prompt": "...", "options": ["...", "...", "..."], "answer": 0, "explanation": "..."}]}
+
+Target level: ${level}
+
+Story:
+${story}`;
+}
+
+export function buddyPrompt(level: string, story: string, history: string, message: string): string {
+  return `You are Pip, the friendly reading buddy in 3E comics for young English learners. The learner
+is asking about the story below. Answer in at most two short sentences, using simple words a learner
+at the target level knows. Stay with the story; if the question is not about the story, say you only
+talk about the story and invite one story question. Never ask for personal information.
+
+Target level: ${level}
+
+Story:
+${story}
+
+So far:
+${history}
+
+Learner: ${message}
+Pip:`;
+}
+
 export function safetyPrompt(text: string): string {
   return `You screen children's story text. Answer with exactly one word and nothing else: "safe" or "unsafe".
 

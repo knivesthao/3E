@@ -11,6 +11,17 @@ export const share = new Hono<{ Bindings: Bindings; Variables: Variables }>({ st
 const NOT_FOUND = { error: 'not found' } as const;
 const INVALID = { error: 'invalid request' } as const;
 
+// Public catalog for the Library page. Same gate as reading: only published
+// books exist in `books`, newest first. Cover + level, no manifest payload.
+share.get('/books', async (c) => {
+  const { results } = await c.env.DB.prepare(
+    'SELECT id, title, level, cover_url, published_at FROM books ORDER BY published_at DESC',
+  )
+    .bind()
+    .all<{ id: string; title: string; level: string; cover_url: string | null; published_at: string }>();
+  return c.json({ books: results });
+});
+
 share.get('/:bookId', async (c) => {
   const book = await c.env.DB.prepare('SELECT * FROM books WHERE id = ?')
     .bind(c.req.param('bookId'))

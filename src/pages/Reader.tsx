@@ -7,6 +7,8 @@ import { cleanWord, stopSpeaking } from '../lib/speech';
 import { Button } from '../components/ui';
 import { ReadAloudPanel } from '../components/ReadAloud';
 import { ListenPanel } from '../components/ListenPanel';
+import { QuizPanel } from '../components/Quiz';
+import { BuddyPanel } from '../components/Buddy';
 
 const CHUNK = 2;
 
@@ -60,6 +62,8 @@ export default function Reader() {
   const [followed, setFollowed] = useState<number | null>(null);
   const [aloud, setAloud] = useState(false);
   const [listen, setListen] = useState(false);
+  const [quiz, setQuiz] = useState(false);
+  const [buddy, setBuddy] = useState(false);
   const [passed, setPassed] = useState<Set<number>>(new Set());
 
   useEffect(() => stopSpeaking, []);
@@ -220,6 +224,16 @@ export default function Reader() {
         <Button onClick={() => setAloud((a) => !a)} aria-pressed={aloud} pressed={aloud}>
           {aloud ? 'Reading silently' : 'Practice reading aloud'}
         </Button>
+        {!shareMode && (
+          <>
+            <Button onClick={() => setQuiz((q) => !q)} aria-pressed={quiz} pressed={quiz}>
+              {quiz ? 'Hide quiz' : 'Quiz me on this book'}
+            </Button>
+            <Button onClick={() => setBuddy((b) => !b)} aria-pressed={buddy} pressed={buddy}>
+              {buddy ? 'Hide Pip' : 'Ask Pip'}
+            </Button>
+          </>
+        )}
         {aloud && passed.size > 0 && (
           <p className="text-sm text-stone-600" aria-live="polite">
             {passed.size} of {book.manifest.scenes.length} scenes read aloud
@@ -228,6 +242,16 @@ export default function Reader() {
       </div>
       {followed != null && (
         <p className="mb-4 rounded-md bg-stone-100 px-3 py-2">Following shared position · Scene {followed}</p>
+      )}
+      {!shareMode && quiz && (
+        <div className="mb-4">
+          <QuizPanel projectId={id} />
+        </div>
+      )}
+      {!shareMode && buddy && (
+        <div className="mb-4">
+          <BuddyPanel projectId={id} />
+        </div>
       )}
       {book.manifest.scenes.slice(0, visible).map((s) => (
         <section key={s.scene_number} data-scene={s.scene_number} aria-label={`Scene ${s.scene_number}`} className="mb-8">

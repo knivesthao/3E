@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BASETEN_TASKS, GLIMMER_MODEL, basetenConfig } from './config';
+import { BASETEN_TASKS, GLIMMER_MODEL, basetenConfig, textCost } from './config';
 
 // Dev-only Baseten wiring: the link script writes a development URL into
 // api/.dev.vars; the app must pass it through untouched and fall back to
@@ -32,5 +32,18 @@ describe('basetenConfig (dev wiring)', () => {
     expect(BASETEN_TASKS).toContain('draft');
     expect(BASETEN_TASKS).not.toContain('art');
     expect(BASETEN_TASKS).not.toContain('isolate');
+  });
+});
+
+describe('textCost (Meta list prices)', () => {
+  it('prices Spark tokens and images per call', () => {
+    expect(textCost('muse-spark-1.3', 1_000_000, 1_000_000)).toBeCloseTo(5.5, 6);
+    expect(textCost('muse-image-1.0', 0, 0)).toBeCloseTo(0.01, 6);
+  });
+
+  it('leaves unpublished models at zero', () => {
+    expect(textCost('muse-wonder-1.0', 1000, 1000)).toBe(0);
+    expect(textCost('sam-3.1', 1000, 1000)).toBe(0);
+    expect(textCost('unknown-model', 1000, 1000)).toBe(0);
   });
 });

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Tour from '../components/Tour';
-import { Button, Page } from '../components/ui';
-import { getExamBest } from '../lib/api';
+import { Badge, Button, Page } from '../components/ui';
+import { getExamBest, listBooks } from '../lib/api';
+import type { CatalogBook } from '../lib/api';
 
 const SEEN_KEY = 'e3-tour';
 
@@ -26,6 +27,7 @@ export default function Library() {
   const [tour, setTour] = useState(() => !seen());
   const [best, setBest] = useState<number | null>(null);
   const [total, setTotal] = useState(0);
+  const [books, setBooks] = useState<CatalogBook[] | null>(null);
   useEffect(() => {
     getExamBest()
       .then((res) => {
@@ -33,13 +35,53 @@ export default function Library() {
         setTotal(res.total);
       })
       .catch(() => {});
+    listBooks()
+      .then((res) => setBooks(res.books))
+      .catch(() => setBooks([]));
   }, []);
   return (
     <Page title="Library">
-      <p>
-        Your published books will live here.{' '}
-        <Button onClick={() => setTour(true)}>Replay tour</Button>
-      </p>
+      <section aria-label="Published books">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-display text-xl font-bold">Published books</h2>
+          <Button onClick={() => setTour(true)}>Replay tour</Button>
+        </div>
+        {books === null ? (
+          <p>Loading books…</p>
+        ) : books.length === 0 ? (
+          <p className="text-stone-600">No published books yet — make one in the Studio.</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {books.map((b) => (
+              <li
+                key={b.id}
+                className="flex items-center gap-3 rounded-md border border-stone-200 bg-white p-2"
+              >
+                {b.cover_url ? (
+                  <img
+                    src={b.cover_url}
+                    alt={`Cover of ${b.title}`}
+                    className="h-20 w-16 shrink-0 rounded object-cover"
+                    loading="lazy"
+                  />
+                ) : null}
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="truncate text-base font-bold">{b.title}</span>
+                  <span>
+                    <Badge status={b.level} />
+                  </span>
+                </div>
+                <Link
+                  to={`/s/${b.id}`}
+                  className="shrink-0 rounded-md border border-stone-900 bg-white px-4 py-2 text-base font-medium text-stone-900 underline decoration-stone-300 underline-offset-4"
+                >
+                  Read
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       <section aria-label="Practice test" className="rounded-md border border-stone-300 bg-white p-3">
         <h2 className="font-display text-xl font-bold">Practice test: A1</h2>
         <p className="text-sm text-stone-600">

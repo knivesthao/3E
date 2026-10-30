@@ -115,14 +115,23 @@ art.post('/', async (c) => {
     });
     const imageKey = panelKey(project.id, sceneNumber);
     await store.put(imageKey, panel.bytes, { httpMetadata: { contentType: panel.contentType } });
-    const mask = await generateMask(db, {
-      ...ctx,
-      opId: crypto.randomUUID(),
-      imageBytes: panel.bytes,
-      textPrompt: isolateText(character),
-    });
-    const mKey = maskKey(project.id, sceneNumber);
-    await store.put(mKey, mask.bytes, { httpMetadata: { contentType: mask.contentType } });
+    // Cutouts are stored but never read by any client; a dead isolate step
+    // must not discard the paid panel. The failed attempt stays in ai_usage.
+    let maskUrl: string | null = null;
+    let mKey: string | null = null;
+    try {
+      const mask = await generateMask(db, {
+        ...ctx,
+        opId: crypto.randomUUID(),
+        imageBytes: panel.bytes,
+        textPrompt: isolateText(character),
+      });
+      mKey = maskKey(project.id, sceneNumber);
+      await store.put(mKey, mask.bytes, { httpMetadata: { contentType: mask.contentType } });
+      maskUrl = `/api/ai/art/${mKey}`;
+    } catch (e) {
+      if (!(e instanceof AiError)) throw e;
+    }
     await db
       .prepare('DELETE FROM panels WHERE project_id = ? AND scene_number = ?')
       .bind(project.id, sceneNumber)
@@ -133,9 +142,7 @@ art.post('/', async (c) => {
       )
       .bind(crypto.randomUUID(), project.id, sceneNumber, imageKey, mKey, new Date().toISOString())
       .run();
-    const panels = [
-      { scene_number: sceneNumber, image_url: `/api/ai/art/${imageKey}`, mask_url: `/api/ai/art/${mKey}` },
-    ];
+    const panels = [{ scene_number: sceneNumber, image_url: `/api/ai/art/${imageKey}`, mask_url: maskUrl }];
     await finishJob(db, jobId, 'complete', { panels }, null);
     return c.json({ job: { id: jobId, status: 'complete' }, panels });
   } catch (e) {

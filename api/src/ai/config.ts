@@ -4,11 +4,14 @@
 
 // Default prices are 0 until confirmed from Meta's pricing page (models.md).
 // Costs log as $0 until then — the ledger shape is what matters now.
-export const PRICES: Record<string, { in: number; out: number }> = {
-  'muse-spark-1.3': { in: 0, out: 0 },
-  'muse-wonder-1.0': { in: 0, out: 0 },
-  'muse-image-1.0': { in: 0, out: 0 },
-  'sam-3.1': { in: 0, out: 0 },
+// Meta Model API Standard-tier list prices (Sep 2026: Spark $1.25/M in,
+// $4.25/M out; Image $0.01 per image). Unpublished models stay 0 until
+// verified — their calls and tokens are still logged for comparison.
+export const PRICES: Record<string, { in: number; out: number; flat?: number }> = {
+  'muse-spark-1.3': { in: 1.25, out: 4.25 },
+  'muse-wonder-1.0': { in: 0, out: 0 }, // unpublished — verify before pricing
+  'muse-image-1.0': { in: 0, out: 0, flat: 0.01 },
+  'sam-3.1': { in: 0, out: 0 }, // unpublished — verify before pricing
   // Self-hosted Glimmer via Baseten (own credits) — fill when known.
   'meta-models/Muse-Glimmer-30B': { in: 0, out: 0 },
 };
@@ -57,7 +60,7 @@ export function modalConfig(env: {
   return { apiUrl: env.MODAL_API_URL, proxyToken: env.MODAL_PROXY_TOKEN };
 }
 
-export type AiTask = 'draft' | 'check' | 'idea' | 'meanings' | 'simplify' | 'safety' | 'art' | 'isolate' | 'portrait';
+export type AiTask = 'draft' | 'check' | 'idea' | 'meanings' | 'simplify' | 'safety' | 'art' | 'isolate' | 'portrait' | 'quiz' | 'buddy';
 
 export const TASK_MODEL: Record<AiTask, string> = {
   draft: TEXT_MODEL,
@@ -69,6 +72,8 @@ export const TASK_MODEL: Record<AiTask, string> = {
   art: IMAGE_MODEL,
   isolate: SEGMENT_MODEL,
   portrait: IMAGE_MODEL,
+  quiz: TEXT_MODEL,
+  buddy: TEXT_MODEL,
 };
 
 // Per-user daily cap across AI endpoints (Step 3 + secure-coding rules).
@@ -76,5 +81,5 @@ export const DAILY_AI_LIMIT = 50;
 
 export function textCost(model: string, inputTokens: number, outputTokens: number): number {
   const p = PRICES[model] ?? { in: 0, out: 0 };
-  return (inputTokens / 1e6) * p.in + (outputTokens / 1e6) * p.out;
+  return (inputTokens / 1e6) * p.in + (outputTokens / 1e6) * p.out + (p.flat ?? 0);
 }

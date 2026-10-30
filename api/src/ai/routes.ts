@@ -6,7 +6,7 @@ import { basetenConfig } from './config';
 import type { BasetenConfig } from './config';
 import { FAILED, INVALID, finishJob, modelKey, overLimit, readJson } from './http';
 import { generate, parseJson } from './client';
-import { checkPrompt, draftPrompt, ideaPrompt, meaningsPrompt, sceneActionText, simplifyPrompt } from './prompts';
+import { buddyPrompt, checkPrompt, draftPrompt, ideaPrompt, meaningsPrompt, quizPrompt, sceneActionText, simplifyPrompt } from './prompts';
 import { art } from './art';
 import { checkLevel } from '../levels';
 import type { Level } from '../levels';
@@ -148,6 +148,177 @@ ai.post('/simplify', async (c) => {
       rewritten: v.rewritten,
       check: { passed: check.passed, coverage: check.coverage, unknown: check.unknown, words: check.words },
     });
+  } catch (e) {
+    if (e instanceof AiError) return c.json(FAILED, 502);
+    throw e;
+  }
+});
+
+// Quiz grounded in the book just read (Step 7): one cheap text call turns
+// the project's scenes into 6 Movers-style questions at the book's level.
+// Answers ship with the questions; scoring happens in the Reader.
+ai.post('/quiz', async (c) => {
+  const body = await readJson(c);
+  if (!isRecord(body) || typeof body.projectId !== 'string' || body.projectId === '') {
+    return c.json(INVALID, 400);
+  }
+  let wanted: number[] | null = null;
+  if (body.sceneNumbers !== undefined) {
+    if (
+      !Array.isArray(body.sceneNumbers) ||
+      body.sceneNumbers.length === 0 ||
+      body.sceneNumbers.length > 6 ||
+      !body.sceneNumbers.every(
+        (n: unknown) => typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= 100,
+      )
+    ) {
+      return c.json(INVALID, 400);
+    }
+    wanted = body.sceneNumbers as number[];
+  }
+  const project = await ownProject(c.env.DB, body.projectId, c.get('userId'));
+  if (!project) return c.json({ error: 'not found' }, 404);
+  if (!isLevel(project.level)) return c.json(INVALID, 400);
+  const apiKey = modelKey(c.env);
+  if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
+  if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+
+  const db = c.env.DB;
+  const { results: rows } = await db
+    .prepare('SELECT * FROM scenes WHERE project_id = ? ORDER BY scene_number ASC')
+    .bind(project.id)
+    .all<{ scene_number: number; data_json: string }>();
+  const scenes = rows
+    .filter((r) => wanted === null || wanted.includes(r.scene_number))
+    .slice(0, 6);
+  if (scenes.length === 0) return c.json(INVALID, 400);
+  const story = scenes
+    .map((r) => {
+      try {
+        const parsed = validateSceneData(JSON.parse(r.data_json) as unknown);
+        if (!parsed.ok) return '';
+        return sceneActionText(parsed.value.narration, parsed.value.bubbles);
+      } catch {
+        return '';
+      }
+    })
+    .filter((s) => s !== '')
+    .join('\n\n')
+    .slice(0, 3000);
+  if (story === '') return c.json(INVALID, 400);
+
+  try {
+    const { text } = await generate(db, {
+      apiKey,
+      userId: c.get('userId'),
+      projectId: project.id,
+      opId: crypto.randomUUID(),
+      task: 'quiz',
+      prompt: quizPrompt(project.level as Level, story),
+      json: true,
+      apiUrl: c.env.AI_API_URL,
+      validate: (t) => {
+        const v = parseJson(t, isRecord);
+        if (!v || !Array.isArray(v.questions)) return false;
+        const qs = v.questions as unknown[];
+        if (qs.length < 4 || qs.length > 8) return false;
+        return qs.every((q) => {
+          if (!isRecord(q)) return false;
+          if (typeof q.prompt !== 'string' || q.prompt === '' || q.prompt.length > 300) return false;
+          if (!Array.isArray(q.options) || q.options.length < 2 || q.options.length > 4) return false;
+          if (!q.options.every((o: unknown) => typeof o === 'string' && o !== '' && o.length <= 100)) return false;
+          if (typeof q.answer !== 'number' || !Number.isInteger(q.answer) || q.answer < 0 || q.answer >= q.options.length) {
+            return false;
+          }
+          return typeof q.explanation === 'string' && q.explanation !== '' && q.explanation.length <= 300;
+        });
+      },
+    });
+    const v = parseJson(text, isRecord) as {
+      questions: { prompt: string; options: string[]; answer: number; explanation: string }[];
+    };
+    return c.json({ questions: v.questions });
+  } catch (e) {
+    if (e instanceof AiError) return c.json(FAILED, 502);
+    throw e;
+  }
+});
+
+// Reading buddy (Step 7): Pip answers one learner question about the story.
+// History rides along from the client (capped), the story comes from the DB,
+// and the reply is sliced short so a chatty model cannot flood a child.
+ai.post('/buddy', async (c) => {
+  const body = await readJson(c);
+  if (!isRecord(body) || typeof body.projectId !== 'string' || body.projectId === '') {
+    return c.json(INVALID, 400);
+  }
+  const sceneNumber = body.sceneNumber ?? null;
+  if (sceneNumber !== null && (typeof sceneNumber !== 'number' || !Number.isInteger(sceneNumber) || sceneNumber < 1 || sceneNumber > 100)) {
+    return c.json(INVALID, 400);
+  }
+  if (typeof body.message !== 'string' || body.message.trim() === '' || body.message.length > 500) {
+    return c.json(INVALID, 400);
+  }
+  const history = body.history ?? [];
+  if (
+    !Array.isArray(history) ||
+    history.length > 10 ||
+    !history.every(
+      (t: unknown) =>
+        isRecord(t) &&
+        (t.role === 'learner' || t.role === 'pip') &&
+        typeof t.text === 'string' &&
+        t.text !== '' &&
+        t.text.length <= 500,
+    )
+  ) {
+    return c.json(INVALID, 400);
+  }
+  const project = await ownProject(c.env.DB, body.projectId, c.get('userId'));
+  if (!project) return c.json({ error: 'not found' }, 404);
+  if (!isLevel(project.level)) return c.json(INVALID, 400);
+  const apiKey = modelKey(c.env);
+  if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
+  if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+
+  const db = c.env.DB;
+  const { results: rows } = await db
+    .prepare('SELECT * FROM scenes WHERE project_id = ? ORDER BY scene_number ASC')
+    .bind(project.id)
+    .all<{ scene_number: number; data_json: string }>();
+  const scenes = rows.filter((r) => sceneNumber === null || r.scene_number === sceneNumber).slice(0, 6);
+  if (scenes.length === 0) return c.json(INVALID, 400);
+  const story = scenes
+    .map((r) => {
+      try {
+        const parsed = validateSceneData(JSON.parse(r.data_json) as unknown);
+        if (!parsed.ok) return '';
+        return `Scene ${r.scene_number}: ${sceneActionText(parsed.value.narration, parsed.value.bubbles)}`;
+      } catch {
+        return '';
+      }
+    })
+    .filter((s) => s !== '')
+    .join('\n\n')
+    .slice(0, 3000);
+  if (story === '') return c.json(INVALID, 400);
+  const historyText =
+    (history as { role: string; text: string }[])
+      .map((t) => `${t.role === 'pip' ? 'Pip' : 'Learner'}: ${t.text}`)
+      .join('\n') || '(nothing yet)';
+
+  try {
+    const { text } = await generate(db, {
+      apiKey,
+      userId: c.get('userId'),
+      projectId: project.id,
+      opId: crypto.randomUUID(),
+      task: 'buddy',
+      prompt: buddyPrompt(project.level as Level, story, historyText, body.message.trim()),
+      json: false,
+      apiUrl: c.env.AI_API_URL,
+    });
+    return c.json({ reply: text.slice(0, 500) });
   } catch (e) {
     if (e instanceof AiError) return c.json(FAILED, 502);
     throw e;

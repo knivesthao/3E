@@ -98,6 +98,30 @@ export const aiSimplify = (text: string, level: string) =>
     { method: 'POST', body: JSON.stringify({ text, level }) },
   );
 
+export interface QuizQuestion {
+  prompt: string;
+  options: string[];
+  answer: number;
+  explanation: string;
+}
+
+export const aiQuiz = (projectId: string, sceneNumbers?: number[]) =>
+  api<{ questions: QuizQuestion[] }>('/api/ai/quiz', {
+    method: 'POST',
+    body: JSON.stringify(sceneNumbers ? { projectId, sceneNumbers } : { projectId }),
+  });
+
+export interface BuddyTurn {
+  role: 'learner' | 'pip';
+  text: string;
+}
+
+export const aiBuddy = (projectId: string, sceneNumber: number | null, message: string, history: BuddyTurn[]) =>
+  api<{ reply: string }>('/api/ai/buddy', {
+    method: 'POST',
+    body: JSON.stringify({ projectId, sceneNumber, message, history }),
+  });
+
 export interface Panel {
   scene_number: number;
   image_url: string;
@@ -169,6 +193,16 @@ export const publishProject = (id: string) =>
 export const getBook = (projectId: string) => api<{ book: Book }>(`/api/projects/${projectId}/book`);
 
 export const getSharedBook = (bookId: string) => api<{ book: Book }>(`/api/share/${bookId}`);
+
+export interface CatalogBook {
+  id: string;
+  title: string;
+  level: string;
+  cover_url: string | null;
+  published_at: string;
+}
+
+export const listBooks = () => api<{ books: CatalogBook[] }>('/api/share/books');
 
 export const getPosition = (bookId: string) =>
   api<{ scene_number: number; updated_at: string | null }>(`/api/share/${bookId}/position`);

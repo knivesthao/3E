@@ -82,6 +82,13 @@ function makeDb() {
               if (q.startsWith('SELECT scene_number, image_key, mask_key FROM panels WHERE project_id')) {
                 return { results: panels.filter((x) => x.project_id === params[0]) };
               }
+              if (q.startsWith('SELECT id, title, level, cover_url, published_at FROM books ORDER BY')) {
+                return {
+                  results: [...books.values()]
+                    .map((b) => ({ id: b.id, title: b.title, level: b.level, cover_url: b.cover_url, published_at: b.published_at }))
+                    .sort((a, b) => ((a.published_at as string) < (b.published_at as string) ? 1 : -1)),
+                };
+              }
               return { results: [] };
             },
             run: async () => {
@@ -344,5 +351,29 @@ describe('Publish endpoint', () => {
     expect(db.books.size).toBe(1);
     expect(second.book.manifest.title).toBe('T2');
     expect(second.book.published_at).toBe(first.book.published_at);
+  });
+
+  it('catalog lists published books newest-first without auth or manifest', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const env = ENV(db);
+    const uid = await userIdOf(cookie, env);
+    const pid = seedBook(db, uid);
+    stubSafety('safe');
+
+    // Empty catalog before anything is published.
+    expect(((await (await app.request('/api/share/books', {}, env)).json()) as { books: unknown[] }).books).toEqual(
+      [],
+    );
+
+    await app.request(`/api/projects/${pid}/publish`, json('POST', {}, cookie), env);
+    const catalog = (await (await app.request('/api/share/books', {}, env)).json()) as {
+      books: { id: string; title: string; level: string; cover_url: string | null; published_at: string }[];
+    };
+    expect(catalog.books).toHaveLength(1);
+    expect(catalog.books[0].title).toBe('T');
+    expect(catalog.books[0].level).toBe('A1');
+    expect(catalog.books[0]).not.toHaveProperty('manifest_json');
+    expect(catalog.books[0]).not.toHaveProperty('manifest');
   });
 });

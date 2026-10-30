@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from './ui';
-import { READ_ALOUD_PASS, listenOnce, scoreReading, speechRecognitionSupported } from '../lib/speech';
-import type { ReadingScore } from '../lib/speech';
+import { READ_ALOUD_PASS, listenUntilStopped, scoreReading, speechRecognitionSupported } from '../lib/speech';
+import type { Listener, ReadingScore } from '../lib/speech';
 
 // Per-scene read-aloud practice: the learner reads the scene text aloud,
 // the device transcribes, and we score word recall locally. Missed words
@@ -19,27 +19,43 @@ export function ReadAloudPanel({
 }) {
   const [state, setState] = useState<'idle' | 'listening' | 'done'>('idle');
   const [score, setScore] = useState<ReadingScore | null>(null);
+  const [heard, setHeard] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const listener = useRef<Listener | null>(null);
   const supported = speechRecognitionSupported();
 
-  async function listen() {
+  function start() {
     setError(null);
     setScore(null);
+    setHeard('');
     setState('listening');
     try {
-      const heard = await listenOnce('en-US');
-      const s = scoreReading(text, heard);
-      setScore(s);
-      setState('done');
-      if (s.pct >= READ_ALOUD_PASS) onPass(sceneNumber);
-    } catch (e) {
-      setState('idle');
-      setError(
-        e instanceof Error && e.message === 'unsupported'
-          ? 'Speech recognition is not available in this browser. Try Chrome or Edge.'
-          : 'Did not catch that — check the microphone and try again.',
+      const l = listenUntilStopped('en-US', (t) => setHeard(t));
+      listener.current = l;
+      l.done.then(
+        (heard) => {
+          const s = scoreReading(text, heard);
+          setScore(s);
+          setState('done');
+          if (s.pct >= READ_ALOUD_PASS) onPass(sceneNumber);
+        },
+        (e: unknown) => {
+          setState('idle');
+          setError(
+            e instanceof Error && e.message === 'unsupported'
+              ? 'Speech recognition is not available in this browser. Try Chrome or Edge.'
+              : 'Did not catch that — check the microphone and try again.',
+          );
+        },
       );
+    } catch {
+      setState('idle');
+      setError('Did not catch that — check the microphone and try again.');
     }
+  }
+
+  function stop() {
+    listener.current?.stop();
   }
 
   if (!supported) {
@@ -53,11 +69,23 @@ export function ReadAloudPanel({
   return (
     <div className="rounded-md border border-accent-900 bg-accent-50 p-3">
       {state === 'listening' ? (
-        <p aria-live="polite">
-          <strong>Listening…</strong> read scene {sceneNumber} aloud.
-        </p>
+        <>
+          <p aria-live="polite">
+            <strong>Listening…</strong> read at your own pace, then press Stop.
+          </p>
+          {heard !== '' ? (
+            <p aria-live="polite" className="mt-2 rounded bg-white px-2 py-1 text-sm">
+              Heard so far: {heard}
+            </p>
+          ) : null}
+          <div className="mt-2">
+            <Button onClick={stop} variant="primary">
+              Stop & score
+            </Button>
+          </div>
+        </>
       ) : (
-        <Button onClick={() => void listen()} variant={score ? 'secondary' : 'primary'}>
+        <Button onClick={start} variant={score ? 'secondary' : 'primary'}>
           {score ? 'Try again' : `Read scene ${sceneNumber} aloud`}
         </Button>
       )}
@@ -93,7 +121,7 @@ export function ReadAloudPanel({
         </div>
       )}
       <p className="mt-2 text-xs text-stone-600">
-        Transcription happens on your device; audio is not sent to our servers.
+        Transcription is done by your browser; audio is not sent to our servers.
       </p>
     </div>
   );

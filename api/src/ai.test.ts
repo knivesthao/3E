@@ -185,6 +185,9 @@ function modelReply(prompt: string): unknown {
   if (prompt.includes('rough idea')) {
     return { description: 'A comic about a boy and a bird.', level: 'A2' };
   }
+  if (prompt.includes('You are Pip')) {
+    return 'The cat is happy because Ana plays with it in the sun.';
+  }
   if (prompt.includes('young English learners')) {
     // The first item shares its line with a "Words: " prefix
     // ("Words: 1. field"), so accept a leading space as well as ^.
@@ -193,6 +196,16 @@ function modelReply(prompt: string): unknown {
   }
   if (prompt.includes('makes English easier')) {
     return { rewritten: 'A boy is happy.' };
+  }
+  if (prompt.includes('quiz writer')) {
+    return {
+      questions: [1, 2, 3, 4, 5, 6].map((n) => ({
+        prompt: `Question ${n} about the story?`,
+        options: ['A cat', 'A dog', 'A bird'],
+        answer: n % 3,
+        explanation: `Because of question ${n}.`,
+      })),
+    };
   }
   throw new Error(`unexpected prompt: ${prompt.slice(0, 60)}`);
 }
@@ -286,5 +299,106 @@ describe('AI endpoints', () => {
     const sb = (await s.json()) as { rewritten: string; check: { passed: boolean } };
     expect(sb.rewritten).toBe('A boy is happy.');
     expect(sb.check.passed).toBe(true);
+  });
+
+  async function makeScene(db: Db, cookie: string, pid: string, narration: string) {
+    const env = ENV(db);
+    const res = await app.request(
+      `/api/projects/${pid}/scenes`,
+      json('POST', { data_json: { narration, bubbles: [{ speaker: 'Ana', text: 'Look!' }] } }, cookie),
+      env,
+    );
+    expect(res.status).toBe(201);
+  }
+
+  it('quiz turns the book scenes into six validated questions', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    stubFetch(modelReply);
+    const env = ENV(db);
+    const pid = await makeProject(db, cookie);
+    await makeScene(db, cookie, pid, 'Ana has a small red cat.');
+    await makeScene(db, cookie, pid, 'The cat drinks water in the sun.');
+    const res = await app.request('/api/ai/quiz', json('POST', { projectId: pid }, cookie), env);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      questions: { prompt: string; options: string[]; answer: number; explanation: string }[];
+    };
+    expect(body.questions).toHaveLength(6);
+    expect(body.questions[0].options).toHaveLength(3);
+    const tasks = db.usage.map((u) => u.task);
+    expect(tasks).toContain('quiz');
+  });
+
+  it('quiz rejects bad input, strangers, and invalid model JSON', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    stubFetch(modelReply);
+    const env = ENV(db);
+    const pid = await makeProject(db, cookie);
+    await makeScene(db, cookie, pid, 'Ana has a small red cat.');
+    expect((await app.request('/api/ai/quiz', json('POST', { projectId: pid }, cookie), env)).status).toBe(200);
+    expect((await app.request('/api/ai/quiz', json('POST', { projectId: '' }, cookie), env)).status).toBe(400);
+    expect((await app.request('/api/ai/quiz', json('POST', { projectId: pid, sceneNumbers: [0] }, cookie), env)).status).toBe(400);
+    expect((await app.request('/api/ai/quiz', json('POST', { projectId: pid }, cookie), ENV(db, false))).status).toBe(503);
+    expect((await app.request('/api/ai/quiz', json('POST', { projectId: pid }), env)).status).toBe(401);
+    expect((await app.request('/api/ai/quiz', json('POST', { projectId: 'missing' }, cookie), env)).status).toBe(404);
+    const empty = await makeProject(db, cookie);
+    expect((await app.request('/api/ai/quiz', json('POST', { projectId: empty }, cookie), env)).status).toBe(400);
+    stubFetch(() => ({ questions: [{ prompt: 'Bad', options: ['only-one'], answer: 5, explanation: '' }] }));
+    expect((await app.request('/api/ai/quiz', json('POST', { projectId: pid }, cookie), env)).status).toBe(502);
+  });
+
+  it('buddy answers about the story and stays short', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    stubFetch(modelReply);
+    const env = ENV(db);
+    const pid = await makeProject(db, cookie);
+    await makeScene(db, cookie, pid, 'Ana has a small red cat.');
+    const res = await app.request(
+      '/api/ai/buddy',
+      json('POST', { projectId: pid, message: 'Why is the cat happy?' }, cookie),
+      env,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { reply: string };
+    expect(body.reply).toContain('Ana');
+    const tasks = db.usage.map((u) => u.task);
+    expect(tasks).toContain('buddy');
+  });
+
+  it('buddy rejects bad input, strangers, and overlong replies', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const env = ENV(db);
+    const pid = await makeProject(db, cookie);
+    await makeScene(db, cookie, pid, 'Ana has a small red cat.');
+    expect(
+      (await app.request('/api/ai/buddy', json('POST', { projectId: pid, message: '' }, cookie), env)).status,
+    ).toBe(400);
+    expect(
+      (
+        await app.request(
+          '/api/ai/buddy',
+          json('POST', { projectId: pid, message: 'Hi?', history: [{ role: 'alien', text: 'x' }] }, cookie),
+          env,
+        )
+      ).status,
+    ).toBe(400);
+    expect((await app.request('/api/ai/buddy', json('POST', { projectId: pid, message: 'Hi?' }), env)).status).toBe(
+      401,
+    );
+    expect(
+      (await app.request('/api/ai/buddy', json('POST', { projectId: 'missing', message: 'Hi?' }, cookie), env)).status,
+    ).toBe(404);
+    stubFetch(() => 'x'.repeat(600));
+    const res = await app.request(
+      '/api/ai/buddy',
+      json('POST', { projectId: pid, message: 'Hi?' }, cookie),
+      env,
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { reply: string }).reply).toHaveLength(500);
   });
 });

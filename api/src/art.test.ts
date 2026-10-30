@@ -406,7 +406,7 @@ describe('Scene art endpoints', () => {
     expect(cast.characters[0].image_url).toBeUndefined();
   });
 
-  it('failed isolate marks the job failed with 502', async () => {
+  it('failed isolate keeps the paid panel with a null mask and completes the job', async () => {
     const db = makeDb();
     const cookie = await signIn(db);
     const env = ENV(db);
@@ -421,10 +421,11 @@ describe('Scene art endpoints', () => {
     });
 
     const res = await app.request('/api/ai/art', json('POST', { projectId: pid, sceneNumber: 1 }, cookie), env);
-    expect(res.status).toBe(502);
-    expect(db.panels).toHaveLength(0);
-    const failed = [...db.jobs.values()].find((j) => j.status === 'failed');
-    expect(failed?.error).toBe('ai failed');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { job: { status: string }; panels: { mask_url: string | null }[] };
+    expect(body.job.status).toBe('complete');
+    expect(body.panels[0].mask_url).toBeNull();
+    expect(db.panels).toHaveLength(1);
     const isolateRows = db.usage.filter((u) => u.task === 'isolate');
     expect(isolateRows).toHaveLength(2);
     expect(isolateRows.every((u) => u.ok === 0)).toBe(true);
