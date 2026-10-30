@@ -73,19 +73,13 @@ export default function App() {
           >
             Studio
           </NavLink>
-          <NavLink
-            to="/admin"
-            className={({ isActive }) =>
-              isActive
-                ? 'border-b-2 border-accent-900 pb-0.5 font-semibold text-stone-900'
-                : 'text-stone-600 underline decoration-stone-300 underline-offset-4 hover:decoration-stone-500'
-            }
-          >
-            Admin
-          </NavLink>
           <span className="ms-auto flex flex-wrap items-center gap-2 text-sm">
             {email ? (
-              <UserMenu email={email} onSignOut={signOut} />
+              <UserMenu
+                email={email}
+                onSignOut={signOut}
+                items={[{ label: 'Admin', onSelect: () => navigate('/admin') }]}
+              />
             ) : (
               <NavLink
                 to="/signin"

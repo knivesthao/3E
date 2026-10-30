@@ -111,6 +111,24 @@ export interface Listener {
   done: Promise<string>;
 }
 
+// One voice mode at a time: starting Listen cuts Read (so the mic never
+// scores the speaker), and starting Read cuts Listen. The side that gets
+// cut settles as 'interrupted' — callers treat that as a silent stop, never
+// a score. Module-level so the two panels coordinate without knowing each
+// other.
+let activeAbort: (() => void) | null = null;
+
+function abortListening(): void {
+  const abort = activeAbort;
+  activeAbort = null;
+  abort?.();
+}
+
+/** Stop recognition now; an in-flight listen settles as 'interrupted'. */
+export function stopListening(): void {
+  abortListening();
+}
+
 /**
  * User-paced listening: continuous recognition accumulates final transcripts
  * across pauses until `stop()` is called. Single-utterance mode cut slow
@@ -135,21 +153,33 @@ export function listenUntilStopped(
     };
   });
   let settled = false;
+  let aborted = false;
   const finals: string[] = [];
   let timer = 0;
   const finish = (text: string | null, err: string) => {
     if (settled) return;
     settled = true;
     window.clearTimeout(timer);
+    activeAbort = null;
     settle(text, err);
   };
   const current = (interim: string) => [...finals, interim].join(' ').replace(/\s+/g, ' ').trim();
 
+  // Claim the mic: cut any TTS and any earlier recognition first.
+  stopSpeaking();
   const rec = new Ctor();
   rec.lang = lang;
   rec.continuous = true;
   rec.interimResults = true;
   rec.maxAlternatives = 1;
+  activeAbort = () => {
+    aborted = true;
+    try {
+      rec.stop();
+    } catch {
+      /* onend settles */
+    }
+  };
   rec.onresult = (e: SREvent) => {
     const from = (e as { resultIndex?: number }).resultIndex ?? 0;
     let interim = '';
@@ -164,6 +194,10 @@ export function listenUntilStopped(
     onUpdate?.(current(interim));
   };
   rec.onerror = () => {
+    if (aborted) {
+      finish(null, 'interrupted');
+      return;
+    }
     try {
       rec.stop();
     } catch {
@@ -172,6 +206,10 @@ export function listenUntilStopped(
     finish(finals.join(' ') || null, 'recognition-error');
   };
   rec.onend = () => {
+    if (aborted) {
+      finish(null, 'interrupted');
+      return;
+    }
     finish(finals.join(' ') || null, 'no-speech');
   };
   timer = window.setTimeout(() => {
@@ -270,8 +308,13 @@ function withVoices(fn: (voices: SpeechSynthesisVoice[]) => void): void {
   }, 1000);
 }
 
-/** Speak text; resolves when finished, rejects on error/cancel. */
-export function speak(text: string, rate = 1): Promise<void> {
+/**
+ * Speak text; resolves when finished, rejects on error/cancel.
+ * onBoundary fires per spoken word (char offset) where the voice supports
+ * it — some device voices never emit boundaries, so callers must treat it
+ * as a progressive enhancement, never the completion signal.
+ */
+export function speak(text: string, rate = 1, onBoundary?: (charIndex: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     if (!speechSynthesisSupported()) {
       reject(new Error('unsupported'));
@@ -279,20 +322,23 @@ export function speak(text: string, rate = 1): Promise<void> {
     }
     const synth = window.speechSynthesis;
     synth.cancel();
+    abortListening();
     withVoices((voices) => {
       const utter = new SpeechSynthesisUtterance(text);
       const voice = pickEnglishVoice(voices);
       if (voice) utter.voice = voice;
       utter.lang = voice?.lang ?? 'en-US';
-      utter.rate = Math.min(2, Math.max(0.5, rate));
+      utter.rate = Math.min(2, Math.max(0.1, rate));
       utter.onend = () => resolve();
       utter.onerror = () => reject(new Error('speak-error'));
+      if (onBoundary) utter.onboundary = (e) => onBoundary(e.charIndex);
       synth.speak(utter);
     });
   });
 }
 
 export function stopSpeaking(): void {
+  abortListening();
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     window.speechSynthesis.cancel();
   }

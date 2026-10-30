@@ -4,13 +4,12 @@ import { aiMeanings, getBook, getPosition, getSharedBook, setPosition } from '..
 import { getCachedBook, putBook } from '../lib/db';
 import type { Book } from '../lib/api';
 import { cleanWord, stopSpeaking } from '../lib/speech';
+import { isContentWord } from '../lib/words';
 import { Button } from '../components/ui';
 import { ReadAloudPanel } from '../components/ReadAloud';
 import { ListenPanel } from '../components/ListenPanel';
 import { QuizPanel } from '../components/Quiz';
 import { BuddyPanel } from '../components/Buddy';
-
-const CHUNK = 2;
 
 const clean = cleanWord;
 
@@ -18,30 +17,51 @@ function Words({
   text,
   onTap,
   tapped,
+  base = 0,
+  heardCount = 0,
 }: {
   text: string;
   onTap: (word: string) => void;
   tapped: string | null;
+  // Position of this segment's first word in page order; words before
+  // base + heardCount were read (in order) and highlight.
+  base?: number;
+  heardCount?: number;
 }) {
+  // Ordinal of the next real word in this segment. Punctuation-only
+  // tokens consume no index, matching the order array (empties filtered).
+  let at = 0;
   return (
     <>
-      {text.split(/(\s+)/).map((part, i) =>
-        /^\s+$/.test(part) || part === '' ? (
-          <span key={i}>{part}</span>
-        ) : (
+      {text.split(/(\s+)/).map((part, i) => {
+        if (/^\s+$/.test(part) || part === '') return <span key={i}>{part}</span>;
+        const w = clean(part);
+        if (w === '') return <span key={i}>{part}</span>;
+        const idx = base + at++;
+        const hl = idx < heardCount ? ' bg-yellow-300' : '';
+        // Only content words invite a lookup; glue words render plainly
+        // (but still highlight when read).
+        if (!isContentWord(w)) {
+          return (
+            <span key={i} className={`rounded-sm px-1 py-0.5${hl}`}>
+              {part}
+            </span>
+          );
+        }
+        return (
           <button
             key={i}
             type="button"
             onClick={() => void onTap(part)}
-            aria-label={`Look up ${clean(part)}`}
-            className={`min-h-0 cursor-pointer rounded-sm px-0.5 text-left underline-offset-4 ${
-              clean(part) === tapped ? 'underline decoration-2' : ''
-            }`}
+            aria-label={`Look up ${w}`}
+            className={`min-h-0 cursor-pointer rounded-sm px-1 py-0.5 text-left underline-offset-4 ${
+              w === tapped ? 'underline decoration-2' : 'underline decoration-dotted decoration-stone-500'
+            }${hl}`}
           >
             {part}
           </button>
-        ),
-      )}
+        );
+      })}
     </>
   );
 }
@@ -54,19 +74,75 @@ export default function Reader() {
   const [error, setError] = useState<string | null>(null);
   const [meanings, setMeanings] = useState<Record<string, string>>({});
   const [active, setActive] = useState<{ word: string; meaning: string } | null>(null);
+  const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
-  const [visible, setVisible] = useState(CHUNK);
-  const moreRef = useRef<HTMLDivElement | null>(null);
-  const currentRef = useRef(1);
+  const [current, setCurrent] = useState(0);
+  // How many page words (in reading order) the mic has heard so far.
+  const [liveCount, setLiveCount] = useState(0);
+  // Set when a lookup gets a 401: the visitor is signed out, so later taps
+  // and prefetches skip the call and show the sign-in prompt directly.
+  const [needsSignIn, setNeedsSignIn] = useState(false);
+  const prefetching = useRef(false);
   const lastMoveRef = useRef(0);
-  const [followed, setFollowed] = useState<number | null>(null);
-  const [aloud, setAloud] = useState(false);
-  const [listen, setListen] = useState(false);
+  const panelRef = useRef<HTMLElement | null>(null);
   const [quiz, setQuiz] = useState(false);
   const [buddy, setBuddy] = useState(false);
-  const [passed, setPassed] = useState<Set<number>>(new Set());
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const buddyRef = useRef<HTMLButtonElement | null>(null);
+  const bubbleRef = useRef<HTMLDivElement | null>(null);
+  const [, setPassed] = useState<Set<number>>(new Set());
 
   useEffect(() => stopSpeaking, []);
+
+  // Tap anywhere outside the open word bubble — another word, the buddy
+  // icon, the Listen/Read buttons, artwork — to dismiss it. A listener (not
+  // an overlay) so the tapped control still receives its own tap.
+  useEffect(() => {
+    if (!active) return;
+    function onDown(e: PointerEvent) {
+      if (bubbleRef.current && !bubbleRef.current.contains(e.target as Node)) setActive(null);
+    }
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [active]);
+
+  // Warm the meaning cache for the whole book on open: unique content
+  // words across all pages, chunked to the server's 20-word cap, so every
+  // tap resolves instantly — even on fast page turns. A 6-page book is
+  // typically 2 calls total, fewer than one call per page turn.
+  useEffect(() => {
+    if (!book || needsSignIn || offline || prefetching.current) return;
+    const fresh = [
+      ...new Set(
+        book.manifest.scenes
+          .flatMap((sc) => [sc.narration, ...sc.bubbles.map((b) => b.text)])
+          .flatMap((t) => t.split(/\s+/).map((w) => clean(w)))
+          .filter((w) => w !== '' && isContentWord(w) && !meanings[w]),
+      ),
+    ];
+    if (fresh.length === 0) return;
+    prefetching.current = true;
+    const chunks: string[][] = [];
+    for (let i = 0; i < fresh.length; i += 20) chunks.push(fresh.slice(i, i + 20));
+    Promise.all(chunks.map((c) => aiMeanings(c, book.level)))
+      .then((all) => {
+        setMeanings((m) => {
+          const next = { ...m };
+          for (const res of all) {
+            for (const e of res.meanings) {
+              if (e?.word && e.meaning && !(e.word in next)) next[e.word] = e.meaning;
+            }
+          }
+          return next;
+        });
+      })
+      .catch((e: unknown) => {
+        if (e instanceof Error && e.message === 'unauthorized') setNeedsSignIn(true);
+      })
+      .finally(() => {
+        prefetching.current = false;
+      });
+  }, [book, meanings, needsSignIn, offline]);
 
   useEffect(() => {
     const key = shareMode ? `s:${bookId}` : `p:${id}`;
@@ -74,20 +150,21 @@ export default function Reader() {
     load
       .then((res) => {
         setBook(res.book);
-        setVisible(CHUNK);
+        setCurrent(0);
         setActive(null);
+        setMeanings({});
+        setNeedsSignIn(false);
+        setPassed(new Set());
         setOffline(false);
         setError(null);
-        currentRef.current = 1;
         lastMoveRef.current = 0;
-        setFollowed(null);
         putBook(key, res.book).catch(() => {});
       })
       .catch(() =>
         getCachedBook(key).then((cached) => {
           if (cached) {
             setBook(cached);
-            setVisible(CHUNK);
+            setCurrent(0);
             setOffline(true);
           } else {
             setError(
@@ -100,86 +177,88 @@ export default function Reader() {
       );
   }, [id, bookId, shareMode]);
 
-  // Live sync (Step 6c): report the scene being read, follow the shared
-  // position when someone else moves it. Polling; 15s grace after a local move.
+  // Live sync: follow someone else reading along; 15s grace after a local move.
   useEffect(() => {
     if (!book) return;
     const t = setInterval(() => {
       getPosition(book.id)
         .then((p) => {
-          if (p.scene_number !== currentRef.current && Date.now() - lastMoveRef.current > 15000) {
-            currentRef.current = p.scene_number;
-            setVisible((v) => Math.max(v, p.scene_number));
-            setFollowed(p.scene_number);
+          // Never yank the reader off the cover; follow only between scenes.
+          if (current > 0 && p.scene_number !== current && Date.now() - lastMoveRef.current > 15000) {
+            go(p.scene_number);
           }
         })
         .catch(() => {});
     }, 3000);
     return () => clearInterval(t);
-  }, [book]);
+  }, [book, current]);
 
-  useEffect(() => {
-    if (followed == null) return;
-    document.querySelector(`[data-scene="${followed}"]`)?.scrollIntoView({ block: 'start' });
-  }, [followed, visible]);
-
-  useEffect(() => {
+  function go(n: number) {
     if (!book) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (!e.isIntersecting) continue;
-          const n = Number((e.target as HTMLElement).dataset.scene);
-          if (n !== currentRef.current) {
-            currentRef.current = n;
-            lastMoveRef.current = Date.now();
-            setFollowed(null);
-            setPosition(book.id, n).catch(() => {});
-          }
-        }
-      },
-      { threshold: 0.5 },
-    );
-    document.querySelectorAll('[data-scene]').forEach((el) => io.observe(el));
-    return () => io.disconnect();
-  }, [book, visible]);
+    const clamped = Math.min(Math.max(0, n), book.manifest.scenes.length);
+    stopSpeaking();
+    setActive(null);
+    setLiveCount(0);
+    // Collapse the buddy menu: each page starts with Pip closed, so the
+    // learner re-taps the buddy icon to show that page's icons.
+    setVoiceOpen(false);
+    setCurrent(clamped);
+    lastMoveRef.current = Date.now();
+    panelRef.current?.scrollIntoView({ block: 'start' });
+    if (!offline) setPosition(book.id, clamped).catch(() => {});
+  }
 
-  useEffect(() => {
-    if (!book || visible >= book.manifest.scenes.length) return;
-    const el = moreRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          setVisible((v) => Math.min(v + CHUNK, book.manifest.scenes.length));
-        }
-      },
-      { rootMargin: '400px' },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [book, visible]);
+  // The meaning bubble always drops from Pip (the buddy button), like Pip
+  // is telling the learner the word — never from the bottom of the screen.
+  function placeFromBuddy() {
+    const btn = buddyRef.current;
+    if (!btn) {
+      setAnchor(null);
+      return;
+    }
+    const r = btn.getBoundingClientRect();
+    const w = 240;
+    const left = Math.min(Math.max(8, r.right - w), window.innerWidth - w - 8);
+    setAnchor({ left, top: r.bottom + 8 + window.scrollY });
+  }
 
   async function tap(raw: string) {
     if (!book || lookingUp) return;
     const word = clean(raw);
     if (!word) return;
-    if (shareMode) {
-      setActive({ word, meaning: 'Sign in to look up words.' });
+    // A word tap owns the buddy corner: tuck the voice menu away so the
+    // bubble never overlaps the Listen/Read buttons.
+    setVoiceOpen(false);
+    placeFromBuddy();
+    if (active?.word === word) {
+      setActive(null);
       return;
     }
     if (meanings[word]) {
       setActive({ word, meaning: meanings[word] });
       return;
     }
+    // Prefetch already learned the visitor is signed out: skip the call.
+    if (needsSignIn) {
+      setActive({ word, meaning: 'Sign in to 3E to look up words.' });
+      return;
+    }
+    // No blanket share-link block: signed-in visitors (session cookie) get
+    // real lookups; only a 401 from the server shows the sign-in prompt.
     setLookingUp(true);
     try {
       const res = await aiMeanings([word], book.level);
       const meaning = res.meanings[0]?.meaning ?? 'No meaning found.';
       setMeanings((m) => ({ ...m, [word]: meaning }));
       setActive({ word, meaning });
-    } catch {
-      setActive({ word, meaning: 'Could not look up this word.' });
+    } catch (e) {
+      setActive({
+        word,
+        meaning:
+          e instanceof Error && e.message === 'unauthorized'
+            ? 'Sign in to 3E to look up words.'
+            : 'Could not look up this word.',
+      });
     } finally {
       setLookingUp(false);
     }
@@ -203,107 +282,200 @@ export default function Reader() {
     );
   }
 
+  const scene = book.manifest.scenes[current - 1];
+  const total = book.manifest.scenes.length;
+  // Page words in reading order (narration, then speaker + text per bubble),
+  // cleaned the same way as speech transcripts for sequential matching.
+  const order: string[] = [];
+  if (scene) {
+    for (const w of scene.narration.split(/\s+/)) {
+      const c = clean(w);
+      if (c !== '') order.push(c);
+    }
+    for (const b of scene.bubbles) {
+      for (const w of `${b.speaker} ${b.text}`.split(/\s+/)) {
+        const c = clean(w);
+        if (c !== '') order.push(c);
+      }
+    }
+  }
+  const countWords = (t: string) => t.split(/\s+/).map((w) => clean(w)).filter((w) => w !== '').length;
+  const narrationCount = scene ? countWords(scene.narration) : 0;
+  const bubbleBase: number[] = [];
+  {
+    let base = narrationCount;
+    for (const b of scene?.bubbles ?? []) {
+      bubbleBase.push(base);
+      base += countWords(`${b.speaker} ${b.text}`);
+    }
+  }
+
   return (
-    <main className="mx-auto w-full max-w-xl px-4 py-6">
-      <h1 className="mb-1 font-display text-4xl font-bold">{book.manifest.title}</h1>
-      <p className="mb-2 text-base">
-        Level {book.level} · {book.reading_level}
-        {offline && ' · Offline copy'}
-      </p>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Button
-          onClick={() => {
-            if (listen) stopSpeaking();
-            setListen((l) => !l);
-          }}
-          aria-pressed={listen}
-          pressed={listen}
-        >
-          {listen ? 'Stop listening' : 'Listen to story'}
-        </Button>
-        <Button onClick={() => setAloud((a) => !a)} aria-pressed={aloud} pressed={aloud}>
-          {aloud ? 'Reading silently' : 'Practice reading aloud'}
-        </Button>
-        {!shareMode && (
-          <>
-            <Button onClick={() => setQuiz((q) => !q)} aria-pressed={quiz} pressed={quiz}>
-              {quiz ? 'Hide quiz' : 'Quiz me on this book'}
-            </Button>
-            <Button onClick={() => setBuddy((b) => !b)} aria-pressed={buddy} pressed={buddy}>
-              {buddy ? 'Hide Pip' : 'Ask Pip'}
-            </Button>
-          </>
-        )}
-        {aloud && passed.size > 0 && (
-          <p className="text-sm text-stone-600" aria-live="polite">
-            {passed.size} of {book.manifest.scenes.length} scenes read aloud
-          </p>
-        )}
-      </div>
-      {followed != null && (
-        <p className="mb-4 rounded-md bg-stone-100 px-3 py-2">Following shared position · Scene {followed}</p>
+    <main className="relative mx-auto w-full max-w-xl px-3 pb-1 pt-2">
+      {current === 0 ? (
+        <section aria-label={`Cover: ${book.manifest.title}`} className="mb-0">
+          {book.manifest.cover ? (
+            <div className="relative">
+              <img
+                src={book.manifest.cover}
+                alt={`Cover of ${book.manifest.title}`}
+                loading="lazy"
+                className="max-h-[calc(100dvh-80px)] w-full rounded-md object-contain"
+              />
+              <div className="absolute inset-x-0 bottom-0 rounded-b-md p-4 font-semibold text-black [-webkit-text-stroke:4px_white] [paint-order:stroke_fill]">
+                <h1 className="font-display text-3xl font-bold">{book.manifest.title}</h1>
+                <p className="text-base">
+                  Level {book.level} · {book.reading_level}
+                  {offline && ' · Offline copy'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <h1 className="font-display text-3xl font-bold">{book.manifest.title}</h1>
+              <p className="mb-2 text-base">
+                Level {book.level} · {book.reading_level}
+                {offline && ' · Offline copy'}
+              </p>
+            </>
+          )}
+        </section>
+      ) : scene ? (
+        <section ref={panelRef} aria-label={`Page ${scene.scene_number} of ${total}`} className="mb-1 scroll-mt-4">
+          <div className="relative overflow-hidden rounded-md bg-stone-200">
+            <button
+              ref={buddyRef}
+              type="button"
+              onClick={() => {
+                // Opening Pip's menu dismisses any open word bubble, and the
+                // bubble's own tap-outside handler re-hides it on later taps.
+                setActive(null);
+                setVoiceOpen((v) => !v);
+              }}
+              aria-expanded={voiceOpen}
+              aria-label={voiceOpen ? 'Hide listen and read aloud options' : 'Show listen and read aloud options'}
+              title="Listen or read aloud"
+              className="absolute right-2 top-2 z-20 flex h-11 w-11 items-center justify-center rounded-full bg-accent-900 text-white shadow-lg"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M4 5h16v11H9l-5 4V5z"
+                  fill="currentColor"
+                  opacity="0.9"
+                />
+                <circle cx="9" cy="10" r="1.2" fill="#0c4a4a" />
+                <circle cx="13" cy="10" r="1.2" fill="#0c4a4a" />
+                <path d="M9.5 13.5c1.5 1 3.5 1 5 0" stroke="#0c4a4a" strokeWidth="1.2" strokeLinecap="round" />
+              </svg>
+            </button>
+            {voiceOpen && (
+              <div className="absolute right-2 top-14 z-20 flex max-w-[calc(100%-1rem)] flex-col items-end gap-1 bg-transparent text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.9)] [&>div]:w-fit [&>div]:max-w-full">
+                <ListenPanel
+                  sceneNumber={scene.scene_number}
+                  text={[scene.narration, ...scene.bubbles.map((b) => `${b.speaker}: ${b.text}`)].join(' ')}
+                />
+                <ReadAloudPanel
+                  sceneNumber={scene.scene_number}
+                  text={[scene.narration, ...scene.bubbles.map((b) => b.text)].join(' ')}
+                  order={order}
+                  onPass={(n) => setPassed((p) => new Set(p).add(n))}
+                  onLookup={(w) => void tap(w)}
+                  onProgress={setLiveCount}
+                />
+              </div>
+            )}
+            {scene.image_url && (
+              <img
+                src={scene.image_url}
+                alt={`Page ${scene.scene_number} art`}
+                loading="lazy"
+                className="w-full"
+              />
+            )}
+            <div className="absolute inset-x-0 bottom-0 p-3 font-semibold text-black [-webkit-text-stroke:4px_white] [paint-order:stroke_fill]">
+              <p className="mb-1 text-lg leading-snug">
+                <Words text={scene.narration} onTap={(w) => void tap(w)} tapped={active?.word ?? null} base={0} heardCount={liveCount} />
+              </p>
+              {scene.bubbles.map((b, bi) => (
+                <p key={bi} className="text-lg leading-snug">
+                  <strong>{b.speaker}: </strong>
+                  <Words text={b.text} onTap={(w) => void tap(w)} tapped={active?.word ?? null} base={(bubbleBase[bi] ?? 0) + countWords(b.speaker)} heardCount={liveCount} />
+                </p>
+              ))}
+            </div>
+          </div>
+          {null}
+        </section>
+      ) : null}
+      {!shareMode && current > 0 && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Button onClick={() => setQuiz((q) => !q)} aria-pressed={quiz} pressed={quiz}>
+            {quiz ? 'Hide quiz' : 'Quiz me on this book'}
+          </Button>
+          <Button onClick={() => setBuddy((b) => !b)} aria-pressed={buddy} pressed={buddy}>
+            {buddy ? 'Hide Pip' : 'Ask Pip'}
+          </Button>
+        </div>
       )}
-      {!shareMode && quiz && (
+      {!shareMode && quiz && current > 0 && (
         <div className="mb-4">
           <QuizPanel projectId={id} />
         </div>
       )}
-      {!shareMode && buddy && (
+      {!shareMode && buddy && current > 0 && (
         <div className="mb-4">
           <BuddyPanel projectId={id} />
         </div>
       )}
-      {book.manifest.scenes.slice(0, visible).map((s) => (
-        <section key={s.scene_number} data-scene={s.scene_number} aria-label={`Scene ${s.scene_number}`} className="mb-8">
-          <h2 className="mb-2 text-xl font-bold">Scene {s.scene_number}</h2>
-          {s.image_url && (
-            <img
-              src={s.image_url}
-              alt={`Scene ${s.scene_number} art`}
-              loading="lazy"
-              className="mb-2 aspect-[4/5] w-full rounded-md object-cover"
-            />
-          )}
-          <p className="mb-2 text-lg leading-relaxed">
-            <Words text={s.narration} onTap={(w) => void tap(w)} tapped={active?.word ?? null} />
+      <nav
+        aria-label="Page navigation"
+        className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-stone-200 bg-white py-2"
+      >
+        <Button onClick={() => go(current - 1)} disabled={current <= 0} aria-label="Previous scene">
+          ← Prev
+        </Button>
+        <p className="text-sm font-medium text-stone-700" aria-live="polite">
+          {current === 0 ? 'Cover' : `Page ${current} of ${total}`}
+        </p>
+        <Button
+          onClick={() => go(current + 1)}
+          disabled={current >= total}
+          variant="primary"
+          aria-label="Next scene"
+        >
+          Next →
+        </Button>
+      </nav>
+      {active && (
+        <div
+          ref={bubbleRef}
+          role="status"
+          aria-live="polite"
+          className="absolute z-50 w-60 max-w-[calc(100vw-1rem)] rounded-lg bg-stone-900 p-3 text-white shadow-lg"
+          style={
+            anchor
+              ? { left: anchor.left, top: anchor.top }
+              : { left: '50%', top: 64, transform: 'translateX(-50%)' }
+          }
+        >
+          <div aria-hidden="true" className="absolute -top-1 right-8 h-4 w-4 rotate-45 bg-stone-900" />
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs uppercase tracking-wide text-stone-300">Pip says</p>
+            <button
+              type="button"
+              onClick={() => setActive(null)}
+              aria-label="Close meaning"
+              className="min-h-[44px] min-w-[44px] rounded text-xl leading-none"
+            >
+              ×
+            </button>
+          </div>
+          <p className="text-lg">
+            <strong>{active.word}</strong>
           </p>
-          {s.bubbles.map((b, bi) => (
-            <p key={bi} className="mb-2 text-lg leading-relaxed">
-              <strong>{b.speaker}: </strong>
-              <Words text={b.text} onTap={(w) => void tap(w)} tapped={active?.word ?? null} />
-            </p>
-          ))}
-          {listen && (
-            <div className="mb-2">
-              <ListenPanel
-                sceneNumber={s.scene_number}
-                text={[s.narration, ...s.bubbles.map((b) => `${b.speaker}: ${b.text}`)].join(' ')}
-              />
-            </div>
-          )}
-          {aloud && (
-            <ReadAloudPanel
-              sceneNumber={s.scene_number}
-              text={[s.narration, ...s.bubbles.map((b) => b.text)].join(' ')}
-              onPass={(n) => setPassed((p) => new Set(p).add(n))}
-              onLookup={(w) => void tap(w)}
-            />
-          )}
-        </section>
-      ))}
-      {visible < book.manifest.scenes.length && <div ref={moreRef}><p>Loading more…</p></div>}
-      <div aria-live="polite" className="rounded-md bg-stone-100 px-3 py-2">
-        {lookingUp ? (
-          <p>Looking up…</p>
-        ) : (
-          active && (
-            <p>
-              <strong>{active.word}:</strong> {active.meaning}
-            </p>
-          )
-        )}
-      </div>
-      <p className="mt-2 text-sm">Tap any word to see its meaning.</p>
+          <p className="text-base">{lookingUp ? 'Looking up…' : active.meaning}</p>
+        </div>
+      )}
     </main>
   );
 }

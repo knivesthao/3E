@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Button } from './ui';
-import { READ_ALOUD_PASS, listenUntilStopped, scoreReading, speechRecognitionSupported } from '../lib/speech';
+import { MicIcon, StopIcon } from './icons';
+import { READ_ALOUD_PASS, cleanWord, listenUntilStopped, scoreReading, speechRecognitionSupported } from '../lib/speech';
 import type { Listener, ReadingScore } from '../lib/speech';
 
 // Per-scene read-aloud practice: the learner reads the scene text aloud,
@@ -9,31 +10,62 @@ import type { Listener, ReadingScore } from '../lib/speech';
 export function ReadAloudPanel({
   sceneNumber,
   text,
+  order,
   onPass,
   onLookup,
+  onProgress,
 }: {
   sceneNumber: number;
   text: string;
+  // Page words in reading order (cleaned), for sequential match + auto-finish.
+  order: string[];
   onPass: (sceneNumber: number) => void;
   onLookup: (word: string) => void;
+  onProgress?: (matched: number) => void;
 }) {
   const [state, setState] = useState<'idle' | 'listening' | 'done'>('idle');
   const [score, setScore] = useState<ReadingScore | null>(null);
   const [heard, setHeard] = useState('');
   const [error, setError] = useState<string | null>(null);
   const listener = useRef<Listener | null>(null);
+  // Set when the stop comes from tapping the button with nothing said:
+  // that is a deliberate cancel, not a microphone failure.
+  const stoppingRef = useRef(false);
   const supported = speechRecognitionSupported();
+  // Greedy in-order match: each transcript word consumes the next
+  // unread page word when equal; stutters and repeats are skipped over.
+  const countMatched = (transcript: string) => {
+    const said = transcript.split(/\s+/).map((w) => cleanWord(w)).filter((w) => w !== '');
+    let i = 0;
+    for (const w of said) {
+      if (i >= order.length) break;
+      if (w === order[i]) i++;
+    }
+    return i;
+  };
 
   function start() {
     setError(null);
     setScore(null);
+    stoppingRef.current = false;
     setHeard('');
+    onProgress?.(0);
     setState('listening');
     try {
-      const l = listenUntilStopped('en-US', (t) => setHeard(t));
+      const l = listenUntilStopped('en-US', (t) => {
+        setHeard(t);
+        const matched = countMatched(t);
+        onProgress?.(matched);
+        // Whole page read in order: end the take; scoring settles at 100%.
+        if (order.length > 0 && matched >= order.length) listener.current?.stop();
+      });
       listener.current = l;
       l.done.then(
         (heard) => {
+          // Sync highlights to the final transcript (interims can drop words
+          // the finals confirm, or vice versa), so the glow and the score
+          // can never disagree about what was read.
+          onProgress?.(countMatched(heard));
           const s = scoreReading(text, heard);
           setScore(s);
           setState('done');
@@ -41,6 +73,10 @@ export function ReadAloudPanel({
         },
         (e: unknown) => {
           setState('idle');
+          // Cut off by Listen (or unmount): a silent stop, never an error.
+          if (e instanceof Error && e.message === 'interrupted') return;
+          // Tapped stop with nothing said: a deliberate cancel, never an error.
+          if (stoppingRef.current) return;
           setError(
             e instanceof Error && e.message === 'unsupported'
               ? 'Speech recognition is not available in this browser. Try Chrome or Edge.'
@@ -55,48 +91,53 @@ export function ReadAloudPanel({
   }
 
   function stop() {
+    stoppingRef.current = true;
     listener.current?.stop();
   }
 
   if (!supported) {
     return (
-      <p className="text-sm text-stone-600">
+      <p className="rounded bg-black/60 px-2 py-1 text-sm">
         Read-aloud practice needs a browser with speech recognition (Chrome or Edge).
       </p>
     );
   }
 
   return (
-    <div className="rounded-md border border-accent-900 bg-accent-50 p-3">
+    <div className="p-1" title="Transcription is done by your browser; audio is not sent to our servers.">
       {state === 'listening' ? (
         <>
-          <p aria-live="polite">
-            <strong>Listening…</strong> read at your own pace, then press Stop.
-          </p>
-          {heard !== '' ? (
-            <p aria-live="polite" className="mt-2 rounded bg-white px-2 py-1 text-sm">
-              Heard so far: {heard}
-            </p>
-          ) : null}
-          <div className="mt-2">
-            <Button onClick={stop} variant="primary">
-              Stop & score
+          <div className="flex justify-end">
+            <Button onClick={stop} variant="primary" size="sm" aria-label="Stop and score reading" title="Stop and score">
+              <StopIcon />
             </Button>
           </div>
+          {/* Hint shows only until the learner starts reading, so it never
+              competes with the story text once they are going. */}
+          {heard === '' ? (
+            <p
+              aria-live="polite"
+              className="mt-2 font-semibold text-black [-webkit-text-stroke:3px_white] [paint-order:stroke_fill] [text-shadow:none]"
+            >
+              <strong>Listening…</strong> read at your own pace, then press Stop.
+            </p>
+          ) : null}
         </>
       ) : (
-        <Button onClick={start} variant={score ? 'secondary' : 'primary'}>
-          {score ? 'Try again' : `Read scene ${sceneNumber} aloud`}
-        </Button>
+        <div className="flex justify-end">
+          <Button onClick={start} variant={score ? 'secondary' : 'primary'} size="sm" aria-label={score ? `Try reading page ${sceneNumber} aloud again` : `Read page ${sceneNumber} aloud`} title="Read aloud">
+            <MicIcon />
+          </Button>
+        </div>
       )}
       {error && (
-        <p role="alert" className="mt-2 text-sm">
+        <p role="alert" className="mt-2 rounded bg-black/60 px-2 py-1 text-sm">
           <strong>Error: </strong>
           {error}
         </p>
       )}
       {score && state === 'done' && (
-        <div aria-live="polite" className="mt-2">
+        <div aria-live="polite" className="mt-2 rounded bg-black/60 px-2 py-1">
           <p>
             You said <strong>{score.pct}%</strong> of the words ({score.matched}/{score.total}).
             {score.pct >= READ_ALOUD_PASS ? ' Nice reading!' : ' Try once more.'}
@@ -120,9 +161,6 @@ export function ReadAloudPanel({
           )}
         </div>
       )}
-      <p className="mt-2 text-xs text-stone-600">
-        Transcription is done by your browser; audio is not sent to our servers.
-      </p>
     </div>
   );
 }

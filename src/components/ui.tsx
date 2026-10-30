@@ -6,9 +6,11 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
 type Variant = 'primary' | 'secondary' | 'danger';
 
-export function buttonClass(variant: Variant = 'secondary'): string {
+export function buttonClass(variant: Variant = 'secondary', size: 'md' | 'sm' = 'md'): string {
   const base =
-    'inline-flex items-center justify-center gap-2 rounded-md px-4 min-h-[44px] text-base font-medium border transition-colors disabled:opacity-60';
+    size === 'sm'
+      ? 'inline-flex items-center justify-center gap-1 rounded-md px-3 min-h-[36px] text-sm font-medium border transition-colors disabled:opacity-60'
+      : 'inline-flex items-center justify-center gap-2 rounded-md px-4 min-h-[44px] text-base font-medium border transition-colors disabled:opacity-60';
   // Rule 1 (light from the sky): bright top edge, shadow below.
   if (variant === 'primary')
     return `${base} bg-accent-900 text-white border-accent-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_1px_2px_rgba(0,0,0,0.2)]`;
@@ -19,13 +21,14 @@ export function buttonClass(variant: Variant = 'secondary'): string {
 
 export function Button({
   variant = 'secondary',
+  size = 'md',
   pressed = false,
   className = '',
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; pressed?: boolean }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: 'md' | 'sm'; pressed?: boolean }) {
   const cls = pressed
     ? 'inline-flex items-center justify-center gap-2 rounded-md px-4 min-h-[44px] text-base font-medium border transition-colors disabled:opacity-60 bg-stone-900 text-white border-stone-900'
-    : buttonClass(variant);
+    : buttonClass(variant, size);
   return <button {...props} className={`${cls} ${className}`} />;
 }
 

@@ -7,6 +7,7 @@ import {
   speak,
   speechRecognitionSupported,
   speechSynthesisSupported,
+  stopListening,
   stopSpeaking,
 } from './speech';
 
@@ -132,5 +133,32 @@ describe('listenUntilStopped', () => {
     const listener = listenUntilStopped();
     FakeRec.last?.stop();
     await expect(listener.done).rejects.toThrow('no-speech');
+  });
+
+  it('stopSpeaking interrupts listening without scoring partial speech', async () => {
+    install();
+    const listener = listenUntilStopped();
+    listener.done.catch(() => {});
+    FakeRec.last?.emitResult([{ text: 'the sun is up', final: true }]);
+    stopSpeaking();
+    await expect(listener.done).rejects.toThrow('interrupted');
+  });
+
+  it('starting a second listener interrupts the first', async () => {
+    install();
+    const first = listenUntilStopped();
+    first.done.catch(() => {});
+    const second = listenUntilStopped();
+    second.done.catch(() => {});
+    await expect(first.done).rejects.toThrow('interrupted');
+    FakeRec.last?.stop();
+    await expect(second.done).rejects.toThrow('no-speech');
+  });
+
+  it('stopListening ends recognition without touching speech synthesis', async () => {
+    install();
+    const listener = listenUntilStopped();
+    stopListening();
+    await expect(listener.done).rejects.toThrow('interrupted');
   });
 });
