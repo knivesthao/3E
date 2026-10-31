@@ -6,9 +6,11 @@ import { basetenConfig } from './config';
 import type { BasetenConfig } from './config';
 import { FAILED, INVALID, finishJob, modelKey, overLimit, readJson } from './http';
 import { generate, parseJson } from './client';
-import { buddyPrompt, checkPrompt, draftPrompt, ideaPrompt, meaningsPrompt, quizPrompt, sceneActionText, simplifyPrompt } from './prompts';
+import { buddyPrompt, checkPrompt, checkPromptZh, draftPrompt, draftPromptZh, ideaPrompt, meaningsPrompt, meaningsPromptZh, quizPrompt, sceneActionText, simplifyPrompt } from './prompts';
 import { easierLevels } from '../levels';
 import { art } from './art';
+import { checkHsk, easierHsk, isHskLevel } from '../hsk';
+import type { HskLevel } from '../hsk';
 import { checkLevel } from '../levels';
 import type { Level } from '../levels';
 import { ownProject } from '../projects';
@@ -85,10 +87,13 @@ ai.post('/meanings', async (c) => {
     return c.json(INVALID, 400);
   }
   const level = body.level === undefined ? 'A1' : body.level;
-  if (!isLevel(level)) return c.json(INVALID, 400);
+  // Mandarin track: HSK levels ride the same endpoint. Glosses are simple
+  // English (the learner's stronger language); the word stays exact Chinese.
+  const zh = isHskLevel(level);
+  if (!zh && !isLevel(level)) return c.json(INVALID, 400);
   const words = body.words as string[];
-  const lang = 'en'; // Phase 5 adds per-book language; the table is ready.
-  const chain = easierLevels(level);
+  const lang = zh ? 'zh' : 'en';
+  const chain: (Level | HskLevel)[] = zh ? easierHsk(level as HskLevel) : easierLevels(level as Level);
   // 1. Dictionary first: exact level preferred, then easier levels.
   const inWords = words.map(() => '?').join(',');
   const inLevels = chain.map(() => '?').join(',');
@@ -125,7 +130,7 @@ ai.post('/meanings', async (c) => {
         projectId: typeof body.projectId === 'string' ? body.projectId : null,
         opId: crypto.randomUUID(),
         task: 'meanings',
-        prompt: meaningsPrompt(level, wordsList),
+        prompt: zh ? meaningsPromptZh(level as HskLevel, wordsList) : meaningsPrompt(level as Level, wordsList),
         json: true,
         apiUrl: c.env.AI_API_URL,
         baseten: basetenConfig(c.env),
@@ -141,10 +146,13 @@ ai.post('/meanings', async (c) => {
       const now = new Date().toISOString();
       for (const m of v.meanings) {
         fresh.set(m.word, m.meaning);
-        // Cache the fallback back into the dictionary. Verified on the
-        // spot with the level gate (the word itself is allowed input), so
-        // good fallback glosses graduate to verified immediately.
-        const verified = checkLevel(m.meaning, level, [m.word]).passed ? 1 : 0;
+        // Cache the fallback back into the dictionary. English glosses are
+        // verified with the level gate (the word itself is allowed input);
+        // Mandarin glosses are English for English speakers, gated at A2 as
+        // the assumed reading floor — adjustable per learner later.
+        const verified = zh
+          ? checkLevel(m.meaning, 'A2', [m.word]).passed ? 1 : 0
+          : checkLevel(m.meaning, level as Level, [m.word]).passed ? 1 : 0;
         await c.env.DB.prepare(
           'INSERT OR IGNORE INTO definitions (word, level, lang, gloss, source, verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
         )
@@ -220,7 +228,7 @@ ai.post('/quiz', async (c) => {
   }
   const project = await ownProject(c.env.DB, body.projectId, c.get('userId'));
   if (!project) return c.json({ error: 'not found' }, 404);
-  if (!isLevel(project.level)) return c.json(INVALID, 400);
+  if (!isLevel(project.level) && !isHskLevel(project.level)) return c.json(INVALID, 400);
   const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
   if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
@@ -395,17 +403,19 @@ async function draftMissing(
   scenesSoFar: { scene_number: number; narration: string; bubbles: unknown[] }[],
   targetCount: number,
 ): Promise<DraftScene[]> {
+  const zh = isHskLevel(project.level);
+  const draftInput = {
+    title: project.title,
+    level: project.level,
+    targetSceneCount: targetCount,
+    castJson: project.cast_json,
+    scenesJson: JSON.stringify(scenesSoFar),
+    newWordsJson: '[]',
+  };
   const { text } = await generate(db, {
     ...ctx,
     task: 'draft',
-    prompt: draftPrompt({
-      title: project.title,
-      level: project.level,
-      targetSceneCount: targetCount,
-      castJson: project.cast_json,
-      scenesJson: JSON.stringify(scenesSoFar),
-      newWordsJson: '[]',
-    }),
+    prompt: zh ? draftPromptZh(draftInput) : draftPrompt(draftInput),
     json: true,
     validate: (t) => parseJson(t, isDraftReply) !== null,
   });
@@ -417,7 +427,7 @@ ai.post('/finish', async (c) => {
   if (!isRecord(body) || typeof body.projectId !== 'string') return c.json(INVALID, 400);
   const project = await ownProject(c.env.DB, body.projectId, c.get('userId'));
   if (!project) return c.json({ error: 'not found' }, 404);
-  if (!isLevel(project.level)) return c.json(INVALID, 400);
+  if (!isLevel(project.level) && !isHskLevel(project.level)) return c.json(INVALID, 400);
   const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
   if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
@@ -458,7 +468,8 @@ ai.post('/finish', async (c) => {
       };
     });
     const extra = castNames(project.cast_json);
-    const level = project.level as Level;
+    const level = project.level;
+    const zh = isHskLevel(level);
 
     let drafted = await draftMissing(db, ctx, project, scenesSoFar, targetCount);
     const saved: number[] = [];
@@ -481,7 +492,7 @@ ai.post('/finish', async (c) => {
         const out = await generate(db, {
           ...ctx,
           task: 'check',
-          prompt: checkPrompt(level, story),
+          prompt: zh ? checkPromptZh(level as HskLevel, story) : checkPrompt(level as Level, story),
           json: true,
           validate: (t) => parseJson(t, isCheckReply) !== null,
         });
@@ -491,7 +502,9 @@ ai.post('/finish', async (c) => {
         failed.push({ scene_number: n, reason: 'check failed' });
         continue;
       }
-      const gate = checkLevel(story, level, extra);
+      const gate = zh
+        ? checkHsk(story, level as HskLevel, extra)
+        : checkLevel(story, level as Level, extra);
       if (!check.passed || !gate.passed) {
         const reason = !check.passed ? check.reason || 'qa rejected' : `out of level: ${gate.unknown.join(', ')}`;
         failed.push({ scene_number: n, reason });

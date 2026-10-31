@@ -8,6 +8,8 @@ import Editor from './pages/Editor';
 import Reader from './pages/Reader';
 import Admin from './pages/Admin';
 import Exam from './pages/Exam';
+import Privacy from './pages/Privacy';
+import Terms from './pages/Terms';
 import SignIn from './pages/SignIn';
 import { getMe, logout } from './lib/api';
 
@@ -130,6 +132,8 @@ export default function App() {
           }
         />
         <Route path="/s/:bookId" element={<Reader />} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/terms" element={<Terms />} />
         <Route
           path="/admin"
           element={
@@ -148,6 +152,15 @@ export default function App() {
           }
         />
       </Routes>
+      <footer className="mx-auto w-full max-w-2xl px-4 py-6 text-sm text-stone-600 sm:px-6">
+        <NavLink to="/privacy" className="underline decoration-stone-300 underline-offset-4">
+          Privacy
+        </NavLink>{' '}
+        ·{' '}
+        <NavLink to="/terms" className="underline decoration-stone-300 underline-offset-4">
+          Terms
+        </NavLink>
+      </footer>
     </>
   );
 }

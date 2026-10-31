@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Button } from './ui';
-import { MicIcon, StopIcon } from './icons';
+import { MicIcon, PipFace, StopIcon } from './icons';
 import { READ_ALOUD_PASS, cleanWord, listenUntilStopped, scoreReading, speechRecognitionSupported } from '../lib/speech';
 import type { Listener, ReadingScore } from '../lib/speech';
 
@@ -11,6 +11,7 @@ export function ReadAloudPanel({
   sceneNumber,
   text,
   order,
+  recognitionLang = 'en-US',
   onPass,
   onLookup,
   onProgress,
@@ -20,6 +21,8 @@ export function ReadAloudPanel({
   text: string;
   // Page words in reading order (cleaned), for sequential match + auto-finish.
   order: string[];
+  // BCP-47 recognition language: 'en-US' default, 'zh-CN' for Mandarin books.
+  recognitionLang?: string;
   onPass: (sceneNumber: number) => void;
   onLookup: (word: string) => void;
   onProgress?: (matched: number) => void;
@@ -56,7 +59,7 @@ export function ReadAloudPanel({
     onProgress?.(0);
     setState('listening');
     try {
-      const l = listenUntilStopped('en-US', (t) => {
+      const l = listenUntilStopped(recognitionLang, (t) => {
         setHeard(t);
         const matched = countMatched(t);
         onProgress?.(matched);
@@ -142,9 +145,18 @@ export function ReadAloudPanel({
       )}
       {score && state === 'done' && (
         <div aria-live="polite" className="mt-2 rounded bg-black/60 px-2 py-1">
+          <div className="flex items-center gap-2">
+            <PipFace mood={score.pct >= 100 ? 'happy' : score.pct >= READ_ALOUD_PASS ? 'ok' : 'try'} />
+            <p>
+              {score.pct >= 100
+                ? 'Pip is dancing! Perfect reading!'
+                : score.pct >= READ_ALOUD_PASS
+                  ? 'Pip is cheering! Nice reading!'
+                  : 'Pip believes in you — try once more!'}
+            </p>
+          </div>
           <p>
             You said <strong>{score.pct}%</strong> of the words ({score.matched}/{score.total}).
-            {score.pct >= READ_ALOUD_PASS ? ' Nice reading!' : ' Try once more.'}
           </p>
           {score.missed.length > 0 && (
             <p className="mt-1 text-sm">

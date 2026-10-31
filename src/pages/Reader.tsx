@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { aiMeanings, getBook, getPosition, getSharedBook, setPosition } from '../lib/api';
+import { aiMeanings, getBook, getPosition, getSharedBook, setPosition, voiceLang } from '../lib/api';
 import { getCachedBook, putBook } from '../lib/db';
 import type { Book } from '../lib/api';
 import { cleanWord, stopSpeaking } from '../lib/speech';
@@ -10,6 +10,7 @@ import { ReadAloudPanel } from '../components/ReadAloud';
 import { ListenPanel } from '../components/ListenPanel';
 import { QuizPanel } from '../components/Quiz';
 import { BuddyPanel } from '../components/Buddy';
+import { ShareClipPanel } from '../components/ShareClip';
 
 const clean = cleanWord;
 
@@ -92,6 +93,11 @@ export default function Reader() {
   // being spoken right now (null when idle). Display word indices.
   const [listenSet, setListenSet] = useState<Set<number>>(new Set());
   const [listenCur, setListenCur] = useState<number | null>(null);
+  // Karaoke guards: which page the take started on, and where the reader
+  // is now. A natural finish only turns the page when both still agree.
+  const listenSceneRef = useRef(0);
+  const currentRef = useRef(current);
+  currentRef.current = current;
   // Set when a lookup gets a 401: the visitor is signed out, so later taps
   // and prefetches skip the call and show the sign-in prompt directly.
   const [needsSignIn, setNeedsSignIn] = useState(false);
@@ -416,7 +422,9 @@ export default function Reader() {
                   sceneNumber={scene.scene_number}
                   text={listenText}
                   wordMap={wordMap}
-                  onSpeakStart={() => {
+                  speechLang={voiceLang(book.lang)}
+                  onSpeakStart={(scene) => {
+                    listenSceneRef.current = scene;
                     setListenSet(new Set());
                     setListenCur(null);
                     setLiveCount(0);
@@ -429,12 +437,21 @@ export default function Reader() {
                       setListenSet((prev) => new Set(prev).add(idx));
                     }
                   }}
+                  onEnded={(scene) => {
+                    // Turn the page only if the reader never left it: manual
+                    // turns and live-sync follows move current first, and the
+                    // panel unmounts with the menu, so a stale finish dies here.
+                    if (scene === currentRef.current && listenSceneRef.current === currentRef.current && scene < total) {
+                      go(scene + 1);
+                    }
+                  }}
                 />
                 <ReadAloudPanel
                   sceneNumber={scene.scene_number}
                   text={[scene.narration, ...scene.bubbles.map((b) => b.text)].join(' ')}
                   order={order}
                   onPass={(n) => setPassed((p) => new Set(p).add(n))}
+                  recognitionLang={voiceLang(book.lang)}
                   onLookup={(w) => void tap(w)}
                   onProgress={setLiveCount}
                   onStart={() => {
@@ -468,13 +485,20 @@ export default function Reader() {
         </section>
       ) : null}
       {!shareMode && current > 0 && (
-        <div className="mb-4 flex flex-wrap gap-2">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
           <Button onClick={() => setQuiz((q) => !q)} aria-pressed={quiz} pressed={quiz}>
             {quiz ? 'Hide quiz' : 'Quiz me on this book'}
           </Button>
           <Button onClick={() => setBuddy((b) => !b)} aria-pressed={buddy} pressed={buddy}>
             {buddy ? 'Hide Pip' : 'Ask Pip'}
           </Button>
+          {scene?.image_url ? (
+            <ShareClipPanel
+              imageUrl={scene.image_url}
+              title={book.manifest.title}
+              pageLabel={`page-${scene.scene_number}`}
+            />
+          ) : null}
         </div>
       )}
       {!shareMode && quiz && current > 0 && (

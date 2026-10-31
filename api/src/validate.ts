@@ -1,7 +1,11 @@
 // Pure input validation for projects + scenes. No I/O — unit-tested.
+import { isHskLevel } from './hsk';
+import type { HskLevel } from './hsk';
 
 export const LEVELS = ['A1', 'A2', 'B1', 'B2'] as const;
 export type Level = (typeof LEVELS)[number];
+// Project language tracks: CEFR English or HSK Mandarin.
+export type ProjectLevel = Level | HskLevel;
 export const PURPOSES = ['learning', 'reading'] as const;
 export type Purpose = (typeof PURPOSES)[number];
 
@@ -24,7 +28,7 @@ const tryParse = (s: string): unknown => {
 
 export interface ProjectCreate {
   title: string;
-  level: Level;
+  level: ProjectLevel;
   purpose: Purpose;
   description: string;
 }
@@ -36,7 +40,7 @@ export function validateProjectCreate(
   if (typeof body.title !== 'string' || body.title.trim() === '' || body.title.length > 200) {
     return { ok: false };
   }
-  if (!isLevel(body.level)) return { ok: false };
+  if (!isLevel(body.level) && !isHskLevel(body.level)) return { ok: false };
   const purpose = body.purpose === undefined ? 'learning' : body.purpose;
   if (!isPurpose(purpose)) return { ok: false };
   const description = body.description === undefined ? '' : body.description;
@@ -47,7 +51,7 @@ export function validateProjectCreate(
 export interface ProjectPatch {
   title?: string;
   description?: string;
-  level?: Level;
+  level?: ProjectLevel;
   purpose?: Purpose;
   cast_json?: string;
 }
@@ -68,7 +72,7 @@ export function validateProjectPatch(
     patch.description = body.description;
   }
   if (body.level !== undefined) {
-    if (!isLevel(body.level)) return { ok: false };
+    if (!isLevel(body.level) && !isHskLevel(body.level)) return { ok: false };
     patch.level = body.level;
   }
   if (body.purpose !== undefined) {

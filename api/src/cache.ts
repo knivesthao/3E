@@ -7,6 +7,16 @@ import type { Context } from 'hono';
 // busts by exact key, so a book published after a miss appears immediately.
 // Do NOT route pulsing-fresh data here: the position poll bypasses the
 // cache by simply not calling this.
+export interface EdgeCache {
+  match(request: Request): Promise<Response | undefined>;
+  put(request: Request, response: Response): Promise<void>;
+  delete(request: Request | string): Promise<boolean>;
+}
+
+function edgeCache(): EdgeCache | undefined {
+  return (globalThis as { caches?: { default?: EdgeCache } }).caches?.default;
+}
+
 export async function cachedJson(
   c: Context,
   ttlSeconds: number,
@@ -17,7 +27,7 @@ export async function cachedJson(
     'Content-Type': 'application/json',
     'Cache-Control': `public, max-age=${status === 200 ? ttlSeconds : missTtlSeconds}`,
   });
-  const store = (globalThis as { caches?: CacheStorage }).caches?.default;
+  const store = edgeCache();
   if (!store) {
     const { status, body } = await loader();
     return new Response(JSON.stringify(body), { status, headers: headersFor(status) });
@@ -33,7 +43,7 @@ export async function cachedJson(
 // Publish invalidation: exact keys the catalog + book were cached under.
 // Safe to call without a cache (dev/tests): no-op.
 export async function bustShareCache(origin: string, bookId?: string): Promise<void> {
-  const store = (globalThis as { caches?: CacheStorage }).caches?.default;
+  const store = edgeCache();
   if (!store) return;
   await store.delete(new Request(`${origin}/api/share/books`));
   if (bookId) await store.delete(new Request(`${origin}/api/share/${bookId}`));

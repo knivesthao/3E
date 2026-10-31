@@ -5,15 +5,68 @@ import {
   getAdminStats,
   getBookCosts,
   getCostsOverview,
+  getExamBest,
   getExamItems,
+  getMyActivity,
   listProjects,
 } from '../lib/api';
-import type { AdminSpecs, AdminStats, BookCosts, ExamItemStat, Project } from '../lib/api';
+import type { AdminSpecs, AdminStats, BookCosts, ExamItemStat, MyActivity, Project } from '../lib/api';
 import { Alert, Button, Field, Page, inputClass } from '../components/ui';
 import { DetailsDeck } from './Details';
 import { DesignSection } from './Design';
 
-type Tab = 'costs' | 'specs' | 'content' | 'exam' | 'details' | 'design';
+type Tab = 'costs' | 'specs' | 'content' | 'exam' | 'guardian' | 'details' | 'design';
+
+function GuardianSection() {
+  const [activity, setActivity] = useState<MyActivity | null>(null);
+  const [best, setBest] = useState<{ attempts: number; best: number | null; total: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getMyActivity()
+      .then(setActivity)
+      .catch(() => setError('Could not load reading progress.'));
+    getExamBest()
+      .then(setBest)
+      .catch(() => {});
+  }, []);
+
+  if (error) return <Alert>{error}</Alert>;
+  if (!activity) return <p>Loading…</p>;
+  return (
+    <>
+      <section aria-label="Reading progress">
+        <h3 className="mb-1 text-lg font-bold">Reading</h3>
+        <p className="rounded-md bg-stone-100 px-3 py-2">
+          {activity.streak > 0 ? `🔥 ${activity.streak}-day streak · ` : ''}
+          {activity.totalDays} days active · {activity.finished.length} books finished
+        </p>
+        {activity.finished.length > 0 ? (
+          <ul className="mt-1 flex flex-col gap-1">
+            {activity.finished.map((b) => (
+              <li key={b.id} className="rounded-md border border-stone-200 px-3 py-2">
+                {b.title} ✓
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-1 text-sm text-stone-600">No finished books yet — finish a book to shelve it here.</p>
+        )}
+      </section>
+      <section aria-label="Practice test progress" className="mt-3">
+        <h3 className="mb-1 text-lg font-bold">Practice test</h3>
+        <p className="rounded-md bg-stone-100 px-3 py-2">
+          {best && best.attempts > 0
+            ? `${best.attempts} attempts · best ${best.best}/${best.total}`
+            : 'Not taken yet.'}
+        </p>
+      </section>
+      <p className="mt-3 text-sm text-stone-600">
+        Own data only: guardians see the signed-in learner's progress. Family sharing comes later.
+      </p>
+    </>
+  );
+}
 
 function CostsSection() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -204,6 +257,7 @@ const TAB_LABEL: Record<Tab, string> = {
   specs: 'Tech specs',
   content: 'Content',
   exam: 'Exam items',
+  guardian: 'Guardian',
   details: 'Details',
   design: 'Design',
 };
@@ -227,6 +281,8 @@ export default function Admin() {
         <ContentSection />
       ) : tab === 'exam' ? (
         <ExamItemsSection />
+      ) : tab === 'guardian' ? (
+        <GuardianSection />
       ) : tab === 'details' ? (
         <DetailsDeck />
       ) : (

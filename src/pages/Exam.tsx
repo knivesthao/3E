@@ -2,7 +2,17 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getExam, getExamBest, submitExam } from '../lib/api';
 import type { ExamQuestion, ExamResult } from '../lib/api';
+import { BELT_LABEL, BELT_STYLE, beltFor } from '../lib/belts';
+import type { Belt } from '../lib/belts';
 import { Alert, Button, Page } from '../components/ui';
+
+function BeltChip({ belt }: { belt: Exclude<Belt, 'none'> }) {
+  return (
+    <span className={`inline-block rounded-full border px-2 py-0.5 text-sm font-bold ${BELT_STYLE[belt]}`}>
+      🥋 {BELT_LABEL[belt]}
+    </span>
+  );
+}
 
 const SECTION_LABEL: Record<ExamQuestion['section'], string> = {
   words: 'Words',
@@ -13,6 +23,7 @@ const SECTION_LABEL: Record<ExamQuestion['section'], string> = {
 export default function Exam() {
   const [questions, setQuestions] = useState<ExamQuestion[] | null>(null);
   const [passMark, setPassMark] = useState(0);
+  const [total, setTotal] = useState(0);
   const [best, setBest] = useState<number | null>(null);
   const [index, setIndex] = useState(0);
   const [choices, setChoices] = useState<Record<string, number>>({});
@@ -25,6 +36,7 @@ export default function Exam() {
       .then((res) => {
         setQuestions(res.questions);
         setPassMark(res.passMark);
+        setTotal(res.total);
       })
       .catch(() => setError('Could not load the practice test.'));
     getExamBest()
@@ -68,6 +80,7 @@ export default function Exam() {
 
   if (result) {
     const byId = new Map(questions.map((q) => [q.id, q]));
+    const earned = beltFor(result.score, passMark, result.total);
     return (
       <Page title={result.passed ? 'You passed!' : 'Keep practicing'}>
         <p className="rounded-md bg-stone-100 px-3 py-2 text-lg">
@@ -76,6 +89,11 @@ export default function Exam() {
             <> · your best: {best}</>
           )}
         </p>
+        {earned !== 'none' ? (
+          <p aria-live="polite">
+            <BeltChip belt={earned} />
+          </p>
+        ) : null}
         <p>{result.message}</p>
         {error && <Alert>{error}</Alert>}
         <section aria-label="Answer review">
@@ -122,12 +140,18 @@ export default function Exam() {
 
   const q = questions[index];
   const answered = questions.filter((x) => choices[x.id] !== undefined).length;
+  const current = beltFor(best, passMark, total);
   return (
     <Page title="Practice test: A1">
       <p className="text-sm text-stone-600">
         Question {index + 1} of {questions.length} · pass mark {passMark}
         {best !== null && <> · your best: {best}</>}
       </p>
+      {current !== 'none' ? (
+        <p>
+          <BeltChip belt={current} />
+        </p>
+      ) : null}
       {q.passage && (
         <p className="rounded-md bg-stone-100 px-3 py-2">Read: {q.passage}</p>
       )}

@@ -80,8 +80,8 @@ function makeDb() {
                 return { results: [...scenes.values()].filter((x) => x.project_id === params[0]).map((x) => ({ id: x.id })) };
               }
               if (q.startsWith('SELECT word, level, gloss FROM definitions')) {
-                // Params are [lang, ...words, ...levels]; levels match A1/A2/B1/B2.
-                const levels = (params as unknown[]).filter((p) => /^(A1|A2|B1|B2)$/.test(p as string));
+                // Params are [lang, ...words, ...levels]; levels match A1-B2 or HSK1-6.
+                const levels = (params as unknown[]).filter((p) => /^(A1|A2|B1|B2|HSK[1-6])$/.test(p as string));
                 const words = (params as unknown[]).slice(1).filter((p) => !levels.includes(p));
                 const lang = params[0];
                 return {
@@ -210,7 +210,7 @@ function modelReply(prompt: string): unknown {
   if (prompt.includes('You are Pip')) {
     return 'The cat is happy because Ana plays with it in the sun.';
   }
-  if (prompt.includes('young English learners')) {
+  if (prompt.includes('young English learners') || prompt.includes('bilingual dictionary')) {
     // The first item shares its line with a "Words: " prefix
     // ("Words: 1. field"), so accept a leading space as well as ^.
     const words = [...prompt.matchAll(/(?:^| )(\d+)\. (.+)$/gm)].map((m) => m[2]);
@@ -287,6 +287,78 @@ describe('AI endpoints', () => {
     expect(proj.scenes).toHaveLength(6);
     expect(db.usage.length).toBeGreaterThan(0);
     expect(db.usage.every((u) => u.op_id !== undefined && (u.attempt as number) >= 1)).toBe(true);
+  });
+
+  it('finish fills six HSK1 scenes through the Mandarin track', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    stubFetch((prompt) => {
+      if (prompt.includes('Simplified Chinese ONLY')) {
+        const target = Number(/Target scene count: (\d+)/.exec(prompt)?.[1] ?? 6);
+        const soFar = JSON.parse(/Scenes so far: (\[[^\n]*\])/.exec(prompt)?.[1] ?? '[]') as { scene_number: number }[];
+        const have = new Set(soFar.map((s) => s.scene_number));
+        return {
+          scenes: Array.from({ length: target }, (_, i) => i + 1)
+            .filter((n) => !have.has(n))
+            .map((n) => ({
+              scene_number: n,
+              narration: '我爱妈妈',
+              bubbles: [{ speaker: '妈妈', text: '你好' }],
+              new_words: [],
+            })),
+        };
+      }
+      return modelReply(prompt);
+    });
+    const env = ENV(db);
+    const created = await app.request('/api/projects', json('POST', { title: 'T', level: 'HSK1' }, cookie), env);
+    expect(created.status).toBe(201);
+    const pid = ((await created.json()) as { project: { id: string } }).project.id;
+    const res = await app.request('/api/ai/finish', json('POST', { projectId: pid }, cookie), env);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { job: { status: string }; saved: number[]; failed: unknown[] };
+    expect(body.job.status).toBe('complete');
+    expect(body.saved).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(body.failed).toEqual([]);
+    const proj = (await (await app.request(`/api/projects/${pid}`, { headers: { cookie } }, env)).json()) as {
+      scenes: { data_json: string }[];
+    };
+    expect(proj.scenes).toHaveLength(6);
+  });
+
+  it('finish enforces the HSK gate on out-of-level Mandarin scenes', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    stubFetch((prompt) => {
+      if (prompt.includes('Simplified Chinese ONLY')) {
+        const target = Number(/Target scene count: (\d+)/.exec(prompt)?.[1] ?? 6);
+        const soFar = JSON.parse(/Scenes so far: (\[[^\n]*\])/.exec(prompt)?.[1] ?? '[]') as { scene_number: number }[];
+        const have = new Set(soFar.map((s) => s.scene_number));
+        return {
+          scenes: Array.from({ length: target }, (_, i) => i + 1)
+            .filter((n) => !have.has(n))
+            .map((n) => ({
+              scene_number: n,
+              // 龘 is outside every HSK list, so the gate must reject every scene.
+              narration: '龘龘龘龘龘',
+              bubbles: [{ speaker: '妈妈', text: '你好' }],
+              new_words: [],
+            })),
+        };
+      }
+      return modelReply(prompt);
+    });
+    const env = ENV(db);
+    const created = await app.request('/api/projects', json('POST', { title: 'T', level: 'HSK1' }, cookie), env);
+    expect(created.status).toBe(201);
+    const pid = ((await created.json()) as { project: { id: string } }).project.id;
+    const res = await app.request('/api/ai/finish', json('POST', { projectId: pid }, cookie), env);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { job: { status: string }; saved: number[]; failed: { scene_number: number; reason: string }[] };
+    expect(body.job.status).toBe('complete');
+    expect(body.saved).toEqual([]);
+    expect(body.failed).toHaveLength(6);
+    expect(body.failed.every((f) => f.reason.startsWith('out of level'))).toBe(true);
   });
 
   it('retries once on invalid JSON then succeeds', async () => {
@@ -378,6 +450,43 @@ describe('AI endpoints', () => {
       ],
     });
     expect(db.usage.filter((u) => u.task === 'meanings' && u.ok === 1)).toHaveLength(1);
+  });
+
+  it('meanings serves Mandarin glosses from the zh dictionary with no model call', async () => {
+    const db = makeDb();
+    db.seedDefinitions([
+      { word: '猫', level: 'HSK1', lang: 'zh', gloss: 'a small pet cat', source: 'baseten', verified: 1 },
+    ]);
+    const cookie = await signIn(db);
+    stubFetch(() => {
+      throw new Error('model must not be called');
+    });
+    const res = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['猫'], level: 'HSK1' }, cookie), ENV(db));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ meanings: [{ word: '猫', meaning: 'a small pet cat' }] });
+    expect(db.usage.filter((u) => u.task === 'meanings')).toHaveLength(0);
+  });
+
+  it('meanings generates Mandarin misses, caches them under zh, and rejects bad levels', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    stubFetch(modelReply);
+    const env = ENV(db);
+    const res = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['狗'], level: 'HSK1' }, cookie), env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ meanings: [{ word: '狗', meaning: 'simple 狗' }] });
+    // Second identical call is cached under lang=zh: the model stays silent.
+    stubFetch(() => {
+      throw new Error('model must not be called');
+    });
+    const res2 = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['狗'], level: 'HSK1' }, cookie), env);
+    expect(res2.status).toBe(200);
+    expect(await res2.json()).toEqual({ meanings: [{ word: '狗', meaning: 'simple 狗' }] });
+    expect((await app.request(
+      '/api/ai/meanings', json('POST', { words: ['狗'], level: 'HSK9' }, cookie), env)).status).toBe(400);
   });
 
   async function makeScene(db: Db, cookie: string, pid: string, narration: string) {

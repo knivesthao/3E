@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
-import type { D1Database } from '@cloudflare/workers/types';
 import { bustShareCache, cachedJson } from './cache';
 import type { Bindings, Variables } from './types';
 
@@ -12,7 +11,7 @@ function stubCaches() {
   const deleted: string[] = [];
   (globalThis as { caches?: unknown }).caches = {
     default: {
-      match: async (r: Request) => store.get(key(r))?.clone() ?? undefined,
+      match: async (r: Request) => (store.get(key(r))?.clone() ?? undefined),
       put: async (r: Request, res: Response) => {
         store.set(key(r), res.clone());
       },
@@ -50,13 +49,13 @@ function build() {
   return { app, calls: () => ({ hits, misses }) };
 }
 
-const get = (app: App, path: string) => app.request(path, {}, { DB: {} as unknown as D1Database });
+const get = (app: App, path: string) => app.request(path, {}, {} as Bindings);
 
 describe('cachedJson', () => {
   it('loads directly on every request without a cache', async () => {
     const { app } = build();
-    expect(((await (await get(app, '/thing')).json()) as { n: number }).toEqual({ n: 1 });
-    expect(((await (await get(app, '/thing')).json()) as { n: number }).toEqual({ n: 2 });
+    expect(await (await get(app, '/thing')).json()).toEqual({ n: 1 });
+    expect(await (await get(app, '/thing')).json()).toEqual({ n: 2 });
   });
 
   it('serves hits with zero loader calls and a public TTL', async () => {

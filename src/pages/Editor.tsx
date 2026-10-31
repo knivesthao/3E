@@ -14,7 +14,7 @@ import {
   updateProject,
   updateScene,
 } from '../lib/api';
-import { LEVELS } from '../lib/api';
+import { ALL_LEVELS } from '../lib/api';
 import type { Book, Cast, CastKind, Panel, Project, Scene, SceneData } from '../lib/api';
 import { Alert, Badge, Button, Field, Page, inputClass } from '../components/ui';
 import { Dialog, useConfirm } from '../components/Dialog';
@@ -308,7 +308,7 @@ export default function Editor() {
           <div className="sm:w-32">
             <Field label="Level">
               <select value={level} onChange={(e) => setLevel(e.target.value)} className={inputClass}>
-                {LEVELS.map((l) => (
+                {ALL_LEVELS.map((l) => (
                   <option key={l} value={l}>{l}</option>
                 ))}
               </select>

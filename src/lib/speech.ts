@@ -278,14 +278,15 @@ export function speechSynthesisSupported(): boolean {
   return 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
 }
 
-function pickEnglishVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
-  const en = voices.filter((v) => v.lang.toLowerCase().startsWith('en'));
-  if (en.length === 0) return voices[0] ?? null;
+function pickVoice(voices: SpeechSynthesisVoice[], prefix: string): SpeechSynthesisVoice | null {
+  const matching = voices.filter((v) => v.lang.toLowerCase().startsWith(prefix));
+  if (matching.length === 0) return voices[0] ?? null;
+  const exact = `${prefix}-${prefix === 'zh' ? 'cn' : 'us'}`;
   return (
-    en.find((v) => v.lang.toLowerCase() === 'en-us' && v.localService) ??
-    en.find((v) => v.lang.toLowerCase() === 'en-us') ??
-    en.find((v) => v.localService) ??
-    en[0]
+    matching.find((v) => v.lang.toLowerCase() === exact && v.localService) ??
+    matching.find((v) => v.lang.toLowerCase() === exact) ??
+    matching.find((v) => v.localService) ??
+    matching[0]
   );
 }
 
@@ -312,9 +313,15 @@ function withVoices(fn: (voices: SpeechSynthesisVoice[]) => void): void {
  * Speak text; resolves when finished, rejects on error/cancel.
  * onBoundary fires per spoken word (char offset) where the voice supports
  * it — some device voices never emit boundaries, so callers must treat it
- * as a progressive enhancement, never the completion signal.
+ * as a progressive enhancement, never the completion signal. `lang` picks
+ * the voice family ('en-US' default, 'zh-CN' for Mandarin books).
  */
-export function speak(text: string, rate = 1, onBoundary?: (charIndex: number) => void): Promise<void> {
+export function speak(
+  text: string,
+  rate = 1,
+  onBoundary?: (charIndex: number) => void,
+  lang = 'en-US',
+): Promise<void> {
   return new Promise((resolve, reject) => {
     if (!speechSynthesisSupported()) {
       reject(new Error('unsupported'));
@@ -325,9 +332,9 @@ export function speak(text: string, rate = 1, onBoundary?: (charIndex: number) =
     abortListening();
     withVoices((voices) => {
       const utter = new SpeechSynthesisUtterance(text);
-      const voice = pickEnglishVoice(voices);
+      const voice = pickVoice(voices, lang.slice(0, 2).toLowerCase());
       if (voice) utter.voice = voice;
-      utter.lang = voice?.lang ?? 'en-US';
+      utter.lang = voice?.lang ?? lang;
       utter.rate = Math.min(2, Math.max(0.1, rate));
       utter.onend = () => resolve();
       utter.onerror = () => reject(new Error('speak-error'));

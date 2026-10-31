@@ -9,9 +9,12 @@ import {
   SEGMENT_MODEL,
   TEXT_MODEL,
 } from './ai/config';
-import { isLevel } from './levels';
 import type { Level } from './levels';
 import { isRecord } from './validate';
+
+// Local narrow guard (routes.ts and validate.ts each carry their own).
+const isLevel = (v: unknown): v is Level =>
+  v === 'A1' || v === 'A2' || v === 'B1' || v === 'B2';
 
 // Admin overview (Specs + Content tabs). Session-gated by index.ts like
 // every other /api/* route. Aggregate counts only — no PII, and never

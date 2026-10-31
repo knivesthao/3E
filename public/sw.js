@@ -1,61 +1,88 @@
-// 3E service worker (Step 5b): app shell + published books + panels cached
-// for offline reading. Bump V to invalidate.
-const V = 'e3-v1';
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
+// 3E offline worker (Phase 4.4): runtime caching only, no build step.
+// - Book catalog + manifests (/api/share/* JSON): stale-while-revalidate.
+// - Panel art (/api/ai/art/*, immutable R2 bytes): cache-first.
+// - Page navigations: network-first, falling back to the last cached shell.
+// - Everything else (writes, exam, AI, positions): network only, untouched.
+// Version the cache name to invalidate everything on the next strategy change.
+const VERSION = 'e3-v1';
+const SHELL_KEY = '/__e3-shell__';
 
-self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches
-      .open(V)
-      .then((c) => c.addAll(SHELL))
-      .then(() => self.skipWaiting()),
-  );
+self.addEventListener('install', (event) => {
+  event.waitUntil(self.skipWaiting());
 });
 
-self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches
-      .keys()
-      .then((ks) => Promise.all(ks.filter((k) => k !== V).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim()),
-  );
-});
-
-const cacheFirst = (req) =>
-  caches.open(V).then((c) =>
-    c.match(req).then(
-      (hit) =>
-        hit ??
-        fetch(req).then((res) => {
-          if (res.ok) c.put(req, res.clone());
-          return res;
-        }),
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)))).then(
+      () => self.clients.claim(),
     ),
   );
+});
 
-const netFirst = (req) =>
-  caches.open(V).then((c) =>
-    fetch(req)
-      .then((res) => {
-        if (res.ok) c.put(req, res.clone());
+function isArt(url) {
+  return url.pathname.startsWith('/api/ai/art/');
+}
+
+function isShareJson(url) {
+  return url.pathname === '/api/share/books' || /^\/api\/share\/[^/]+$/.test(url.pathname);
+}
+
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  if (request.method !== 'GET') return;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+
+  if (isArt(url)) {
+    event.respondWith(
+      caches.open(VERSION).then(async (cache) => {
+        const hit = await cache.match(request);
+        if (hit) return hit;
+        const res = await fetch(request);
+        if (res.ok) cache.put(request, res.clone());
         return res;
-      })
-      .catch(() => c.match(req)),
-  );
-
-self.addEventListener('fetch', (e) => {
-  const u = new URL(e.request.url);
-  if (e.request.method !== 'GET' || u.origin !== location.origin) return;
-  const p = u.pathname;
-  if (
-    p.startsWith('/api/share/') ||
-    p.startsWith('/api/ai/art/') ||
-    p.startsWith('/assets/') ||
-    p === '/icon.svg' ||
-    p === '/manifest.webmanifest'
-  ) {
-    e.respondWith(cacheFirst(e.request));
+      }),
+    );
     return;
   }
-  e.respondWith(netFirst(e.request));
+
+  if (isShareJson(url)) {
+    event.respondWith(
+      caches.open(VERSION).then(async (cache) => {
+        const hit = await cache.match(request);
+        const network = fetch(request)
+          .then((res) => {
+            if (res.ok) cache.put(request, res.clone());
+            return res;
+          })
+          .catch(() => null);
+        return hit ?? network.then((res) => res ?? new Response('{"error":"offline"}', {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      }),
+    );
+    return;
+  }
+
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      caches.open(VERSION).then(async (cache) => {
+        try {
+          const res = await fetch(request);
+          if (res.ok) cache.put(SHELL_KEY, res.clone());
+          return res;
+        } catch {
+          const shell = await cache.match(SHELL_KEY);
+          return (
+            shell ??
+            new Response('3E needs a connection for this page.', {
+              status: 503,
+              headers: { 'Content-Type': 'text/plain' },
+            })
+          );
+        }
+      }),
+    );
+  }
 });

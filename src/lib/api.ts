@@ -22,7 +22,11 @@ export const requestLink = (email: string) =>
 
 export const logout = () => api<{ ok: true }>('/api/auth/logout', { method: 'POST' });
 
-export const LEVELS = ['A1', 'A2', 'B1', 'B2'];
+const LEVELS = ['A1', 'A2', 'B1', 'B2'];
+// Mandarin track: HSK 2.0 bands. Offered alongside CEFR wherever a level is
+// picked; the server gates each track with its own word list.
+export const HSK_LEVELS = ['HSK1', 'HSK2', 'HSK3', 'HSK4', 'HSK5', 'HSK6'];
+export const ALL_LEVELS = [...LEVELS, ...HSK_LEVELS];
 
 export interface Project {
   id: string;
@@ -185,7 +189,15 @@ export interface Book {
   manifest_json: string;
   published_at: string;
   updated_at: string;
+  // Language track: 'en' default, 'zh' for Mandarin books (migration 0007).
+  // Optional so books cached before the column existed still load.
+  lang?: string;
   manifest: Manifest;
+}
+
+// BCP-47 voice for a book language. Unknown tracks default to US English.
+export function voiceLang(lang: string | undefined): string {
+  return lang === 'zh' ? 'zh-CN' : 'en-US';
 }
 
 export const publishProject = (id: string) =>

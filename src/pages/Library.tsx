@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Tour from '../components/Tour';
+import type { TourTrack } from '../components/Tour';
 import { Badge, Button, Page } from '../components/ui';
 import { getExamBest, getMyActivity, listBooks } from '../lib/api';
 import type { CatalogBook, MyActivity } from '../lib/api';
+import { BELT_LABEL, beltFor } from '../lib/belts';
 
 const SEEN_KEY = 'e3-tour';
 const CATALOG_KEY = 'e3-catalog';
@@ -22,33 +24,43 @@ function cachedCatalog(): CatalogBook[] | null {
   }
 }
 
-function seen(): boolean {
+function seen(): TourTrack | 'skip' | null {
   try {
-    return window.localStorage.getItem(SEEN_KEY) === 'done';
+    const v = window.localStorage.getItem(SEEN_KEY);
+    // Legacy 'done' marks and fresh visits both start the reader track once.
+    return v === 'read' || v === 'create' ? v : null;
   } catch {
-    return true;
+    return 'skip';
   }
 }
 
-function markSeen(): void {
+function markSeen(track: TourTrack): void {
   try {
-    window.localStorage.setItem(SEEN_KEY, 'done');
+    window.localStorage.setItem(SEEN_KEY, track);
   } catch {
     /* private mode: tour simply shows again next visit */
   }
 }
 
 export default function Library() {
-  const [tour, setTour] = useState(() => !seen());
+  // First visit ever: the reader track. Old 'done' marks replay it once so
+  // existing users meet Pip too; afterwards each track remembers itself.
+  const [tour, setTour] = useState<TourTrack | null>(() => {
+    const s = seen();
+    return s === null ? 'read' : null;
+  });
   const [best, setBest] = useState<number | null>(null);
   const [total, setTotal] = useState(0);
+  const [passMark, setPassMark] = useState(0);
   const [books, setBooks] = useState<CatalogBook[] | null>(() => cachedCatalog());
   const [activity, setActivity] = useState<MyActivity | null>(null);
+  const belt = beltFor(best, passMark, total);
   useEffect(() => {
     getExamBest()
       .then((res) => {
         setBest(res.best);
         setTotal(res.total);
+        setPassMark(res.passMark);
       })
       .catch(() => {});
     // Anonymous visitors get a 401 here: shelf simply stays hidden.
@@ -107,7 +119,8 @@ export default function Library() {
       <section aria-label="Published books">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-display text-xl font-bold">Published books</h2>
-          <Button onClick={() => setTour(true)}>Replay tour</Button>
+          <Button onClick={() => setTour('read')}>Reader tour</Button>
+          <Button onClick={() => setTour('create')}>Creator tour</Button>
         </div>
         {books === null ? (
           <p>Loading books…</p>
@@ -150,6 +163,7 @@ export default function Library() {
         <p className="text-sm text-stone-600">
           {total > 0 ? `${total} questions` : 'Sample questions at A1 level'}
           {best !== null ? ` · your best: ${best}/${total}` : ' · not taken yet'}
+          {belt !== 'none' ? ` · 🥋 ${BELT_LABEL[belt]}` : ''}
         </p>
         <p>
           <Link to="/exam" className="underline underline-offset-4">
@@ -159,9 +173,10 @@ export default function Library() {
       </section>
       {tour && (
         <Tour
+          track={tour}
           onClose={() => {
-            markSeen();
-            setTour(false);
+            markSeen(tour);
+            setTour(null);
           }}
         />
       )}

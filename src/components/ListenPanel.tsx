@@ -13,14 +13,21 @@ export function ListenPanel({
   sceneNumber,
   text,
   wordMap,
+  speechLang = 'en-US',
   onSpeakStart,
   onSpeakProgress,
+  onEnded,
 }: {
   sceneNumber: number;
   text: string;
   wordMap: number[];
-  onSpeakStart?: () => void;
+  // BCP-47 voice family: 'en-US' default, 'zh-CN' for Mandarin books.
+  speechLang?: string;
+  onSpeakStart?: (sceneNumber: number) => void;
   onSpeakProgress?: (displayIndex: number | null) => void;
+  // Fired only when the utterance finishes on its own (not on stop,
+  // error, or page turn): the page may auto-advance the reader.
+  onEnded?: (sceneNumber: number) => void;
 }) {
   const [state, setState] = useState<'idle' | 'playing'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -34,20 +41,30 @@ export function ListenPanel({
     setError(null);
     stoppingRef.current = false;
     setState('playing');
-    onSpeakStart?.();
+    onSpeakStart?.(sceneNumber);
+    let finished = false;
     try {
       // Quarter speed for new learners; boundary events drive the
       // word-by-word highlight where the voice supports them.
-      await speak(text, 0.25, (charIndex) => {
-        const ordinal = text.slice(0, charIndex).split(/\s+/).filter((w) => w !== '').length;
-        const displayIndex = wordMap[ordinal];
-        if (displayIndex !== undefined) onSpeakProgress?.(displayIndex);
-      });
+      await speak(
+        text,
+        0.25,
+        (charIndex) => {
+          const ordinal = text.slice(0, charIndex).split(/\s+/).filter((w) => w !== '').length;
+          const displayIndex = wordMap[ordinal];
+          if (displayIndex !== undefined) onSpeakProgress?.(displayIndex);
+        },
+        speechLang,
+      );
+      finished = true;
     } catch {
       if (!stoppingRef.current) setError('Could not play audio on this device.');
     } finally {
       onSpeakProgress?.(null);
       setState('idle');
+      // Natural finish only: manual stops, errors, and page-turn aborts
+      // (which unmount this panel) must never advance the reader.
+      if (finished && !stoppingRef.current) onEnded?.(sceneNumber);
     }
   }
 

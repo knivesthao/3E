@@ -69,6 +69,9 @@ function makeDb() {
                 const r = [...books.values()].find((x) => x.project_id === params[0]);
                 return r ? { id: r.id, published_at: r.published_at } : null;
               }
+              if (q.startsWith('SELECT * FROM books WHERE id = ?')) {
+                return books.get(params[0] as string) ?? null;
+              }
               return null;
             },
             all: async () => {
@@ -382,7 +385,7 @@ describe('Publish endpoint', () => {
     const key = (r: Request | string) => (typeof r === 'string' ? r : r.url);
     (globalThis as { caches?: unknown }).caches = {
       default: {
-        match: async (r: Request) => store.get(key(r))?.clone() ?? undefined,
+        match: async (r: Request) => (store.get(key(r))?.clone() ?? undefined),
         put: async (r: Request, res: Response) => {
           store.set(key(r), res.clone());
         },

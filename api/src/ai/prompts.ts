@@ -34,6 +34,62 @@ Scenes so far: ${input.scenesJson}
 New words so far: ${input.newWordsJson}`;
 }
 
+// Mandarin track: same shape, HSK-graded Han output. The learner reads
+// Chinese through English, so new_words carry short ENGLISH glosses (and
+// model-supplied pinyin, display-only). Narration and bubble text are Han
+// only — no pinyin inline, no English inline.
+export function draftPromptZh(input: {
+  title: string;
+  level: string;
+  targetSceneCount: number;
+  castJson: string;
+  scenesJson: string;
+  newWordsJson: string;
+}): string {
+  return `You are 3E, a children's comics writer who writes simple, HSK-graded Mandarin for an
+English-speaking child learning Chinese. Finish a comic the writer started, writing the remaining
+scenes so the story reaches its target scene count and ends properly.
+
+Input: title, target HSK level, target scene count, the cast (characters + places),
+the scenes written so far, and the new words already introduced.
+
+Rules:
+- Vocabulary must come from the target HSK level or easier. Short sentences, one clause where possible.
+- Narration and bubble text are Simplified Chinese ONLY. No pinyin, no English inline.
+- Each scene has 1 to 3 speech bubbles and 10 to 40 Chinese words total.
+- Keep the same characters and places; do not invent new ones unless the story needs it.
+- Introduce only 1 to 3 new words per scene, and only if genuinely new.
+- End with a clear, satisfying ending.
+
+Reply with only JSON, in this shape:
+{"scenes":[{"scene_number":3,"narration":"北京很大。","bubbles":[{"speaker":"小明","text":"你好！"}],"new_words":[{"word":"北京","level":"HSK1","pinyin":"Běijīng","meaning":"the capital of China"}]}]}
+
+Title: ${input.title}
+HSK level: ${input.level}
+Target scene count: ${input.targetSceneCount}
+Cast: ${input.castJson}
+Scenes so far: ${input.scenesJson}
+New words so far: ${input.newWordsJson}`;
+}
+
+// HSK QA editor: same JSON contract as checkPrompt so the pipeline is
+// unchanged. Keeps the internal 'QA editor' marker the test stub keys on.
+export function checkPromptZh(hsk: string, story: string): string {
+  return `You are the QA editor for 3E. Check whether the Chinese story matches the target HSK level.
+
+Target HSK level: ${hsk}
+
+Rules:
+1. Every word must come from the target HSK level or easier. Flag the rest.
+2. Flag any sentence over 15 Chinese words.
+3. Extract exactly 3 key vocabulary words with short ENGLISH definitions.
+4. Output strictly JSON, no preamble.
+
+{"passed": true/false, "reason": "...", "simplified": "...", "vocabulary":[{"word":"...","definition":"..."}]}
+Story:
+${story}`;
+}
+
 export function checkPrompt(level: string, story: string): string {
   return `You are the QA editor for 3E. Check whether the story matches the target CEFR level.
 
@@ -67,6 +123,20 @@ short, simple definition (under 10 words), using words a learner at the target l
 Reply with only JSON: {"meanings": [{"word": "field", "meaning": "an open area of land"}]}
 
 Level: ${level}
+Words: ${wordsList}`;
+}
+
+// Mandarin track: the learner reads Chinese (HSK-graded) through English.
+// Glosses are short SIMPLE ENGLISH (the learner's stronger language), so an
+// HSK1 reader can understand every definition. Word stays exact Chinese.
+export function meaningsPromptZh(hsk: string, wordsList: string): string {
+  return `You are a bilingual dictionary for a young English speaker learning Mandarin. For each Chinese
+word in the numbered list, write one short definition in VERY simple English (under 10 words,
+only everyday words). Keep the Chinese word exact and keep order.
+
+Reply with only JSON: {"meanings": [{"word": "猫", "meaning": "a small pet cat"}]}
+
+HSK level: ${hsk}
 Words: ${wordsList}`;
 }
 
