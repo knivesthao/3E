@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Bindings, Variables } from './types';
 import type { BookRow } from './projects';
 import { readJson } from './ai/http';
+import { cachedJson } from './cache';
 
 // Public read route for published books (Step 5a). No session gate —
 // index.ts exempts /api/share/*. Only published books exist in `books`,
@@ -13,26 +14,37 @@ const INVALID = { error: 'invalid request' } as const;
 
 // Public catalog for the Library page. Same gate as reading: only published
 // books exist in `books`, newest first. Cover + level, no manifest payload.
+// Edge-cached (busted on publish): hits cost zero D1 reads.
 share.get('/books', async (c) => {
-  const { results } = await c.env.DB.prepare(
-    'SELECT id, title, level, cover_url, published_at FROM books ORDER BY published_at DESC',
-  )
-    .bind()
-    .all<{ id: string; title: string; level: string; cover_url: string | null; published_at: string }>();
-  return c.json({ books: results });
+  return cachedJson(c, 3600, async () => {
+    const { results } = await c.env.DB.prepare(
+      'SELECT id, title, level, cover_url, published_at FROM books ORDER BY published_at DESC',
+    )
+      .bind()
+      .all<{ id: string; title: string; level: string; cover_url: string | null; published_at: string }>();
+    return { status: 200, body: { books: results } };
+  });
 });
 
 share.get('/:bookId', async (c) => {
-  const book = await c.env.DB.prepare('SELECT * FROM books WHERE id = ?')
-    .bind(c.req.param('bookId'))
-    .first<BookRow>();
-  if (!book) return c.json(NOT_FOUND, 404);
-  return c.json({ book: { ...book, manifest: JSON.parse(book.manifest_json) as unknown } });
+  // One read on miss, zero on hit — including 404s, which cache briefly.
+  // Safe: publish busts the exact key, so a late-published book appears.
+  return cachedJson(c, 3600, async () => {
+    const book = await c.env.DB.prepare('SELECT * FROM books WHERE id = ?')
+      .bind(c.req.param('bookId'))
+      .first<BookRow>();
+    if (!book) return { status: 404, body: NOT_FOUND };
+    return {
+      status: 200,
+      body: { book: { ...book, manifest: JSON.parse(book.manifest_json) as unknown } },
+    };
+  });
 });
 
 // Dual reading (Step 6a): one shared scene position per book, polling.
 // Same public gate as the share route so a second device on the link stays
-// in sync. First scene is the default until someone moves.
+// in sync. First scene is the default until someone moves. Deliberately
+// NEVER edge-cached: polled every few seconds, freshness beats speed here.
 share.get('/:bookId/position', async (c) => {
   const book = await c.env.DB.prepare('SELECT id FROM books WHERE id = ?')
     .bind(c.req.param('bookId'))

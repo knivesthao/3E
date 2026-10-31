@@ -1402,6 +1402,17 @@ export interface LevelResult {
   unknown: string[];
 }
 
+// Dictionary fallback chain: exact level first, then easier levels.
+// A1 -> [A1]; B2 -> [B2, B1, A2, A1]. A simpler gloss beats no gloss.
+export function easierLevels(level: Level): Level[] {
+  const out: Level[] = [];
+  for (const l of ORDER) {
+    out.push(l);
+    if (l === level) break;
+  }
+  return out.reverse();
+}
+
 export function checkLevel(text: string, level: Level, extraWords: string[] = []): LevelResult {
   const tokens = tokenize(text);
   const allowed = allowedSet(level, extraWords);

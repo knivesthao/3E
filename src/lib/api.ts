@@ -15,7 +15,7 @@ export const getMe = () =>
   api<{ user: { id: string; email: string } }>('/api/auth/me');
 
 export const requestLink = (email: string) =>
-  api<{ ok: true; devLink?: string }>('/api/auth/request-link', {
+  api<{ ok: true; devLink?: string; emailed?: boolean }>('/api/auth/request-link', {
     method: 'POST',
     body: JSON.stringify({ email }),
   });
@@ -222,8 +222,8 @@ export interface CostTotals {
 
 export interface BookCosts {
   totals: CostTotals;
-  by_task: { task: string; cost: number; calls: number; tokens_in: number; tokens_out: number }[];
-  by_model: { model: string; cost: number; calls: number; tokens_in: number; tokens_out: number }[];
+  by_task: { task: string; cost: number; calls: number; tokens_in: number; tokens_out: number; avg_ms: number | null; max_ms: number | null }[];
+  by_model: { model: string; cost: number; calls: number; tokens_in: number; tokens_out: number; avg_ms: number | null; max_ms: number | null }[];
   retries: { model: string; task: string; retries: number; max_attempt: number }[];
   attempts: {
     op_id: string;
@@ -234,10 +234,18 @@ export interface BookCosts {
     input_tokens: number | null;
     output_tokens: number | null;
     cost_usd: number;
+    ms: number | null;
     ok: number;
     error: string | null;
     created_at: string;
   }[];
+}
+
+// Human latency: 850 -> "850ms", 2300 -> "2.3s".
+export function fmtMs(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined) return '—';
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 export interface AdminSpecs {

@@ -376,4 +376,52 @@ describe('Publish endpoint', () => {
     expect(catalog.books[0]).not.toHaveProperty('manifest_json');
     expect(catalog.books[0]).not.toHaveProperty('manifest');
   });
+
+  it('serves catalog + manifest from edge cache and busts both on publish', async () => {
+    const store = new Map<string, Response>();
+    const key = (r: Request | string) => (typeof r === 'string' ? r : r.url);
+    (globalThis as { caches?: unknown }).caches = {
+      default: {
+        match: async (r: Request) => store.get(key(r))?.clone() ?? undefined,
+        put: async (r: Request, res: Response) => {
+          store.set(key(r), res.clone());
+        },
+        delete: async (r: Request | string) => store.delete(key(r)),
+      },
+    };
+    try {
+      const db = makeDb();
+      const cookie = await signIn(db);
+      const env = ENV(db);
+      const uid = await userIdOf(cookie, env);
+      const pid = seedBook(db, uid);
+      stubSafety('safe');
+
+      // Empty catalog warms the cache…
+      expect(
+        ((await (await app.request('/api/share/books', {}, env)).json()) as { books: unknown[] }).books,
+      ).toEqual([]);
+      expect(store.size).toBe(1);
+      // …and stays empty until publish busts it.
+      const pub = await app.request(`/api/projects/${pid}/publish`, json('POST', {}, cookie), env);
+      expect(pub.status).toBe(200);
+      expect(store.size).toBe(0);
+      const bookId = ((await pub.json()) as { book: { id: string } }).book.id;
+      const catalog = (await (await app.request('/api/share/books', {}, env)).json()) as {
+        books: { id: string }[];
+      };
+      expect(catalog.books).toHaveLength(1);
+
+      // Manifest is cached too: wiping the DB row still serves the page.
+      const first = await app.request(`/api/share/${bookId}`, {}, env);
+      expect(first.status).toBe(200);
+      expect(((await first.json()) as { book: { id: string } }).book.id).toBe(bookId);
+      db.books.clear();
+      const cached = await app.request(`/api/share/${bookId}`, {}, env);
+      expect(cached.status).toBe(200);
+      expect(((await cached.json()) as { book: { id: string } }).book.id).toBe(bookId);
+    } finally {
+      delete (globalThis as { caches?: unknown }).caches;
+    }
+  });
 });

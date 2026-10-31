@@ -7,6 +7,7 @@ import type { BasetenConfig } from './config';
 import { FAILED, INVALID, finishJob, modelKey, overLimit, readJson } from './http';
 import { generate, parseJson } from './client';
 import { buddyPrompt, checkPrompt, draftPrompt, ideaPrompt, meaningsPrompt, quizPrompt, sceneActionText, simplifyPrompt } from './prompts';
+import { easierLevels } from '../levels';
 import { art } from './art';
 import { checkLevel } from '../levels';
 import type { Level } from '../levels';
@@ -86,36 +87,75 @@ ai.post('/meanings', async (c) => {
   const level = body.level === undefined ? 'A1' : body.level;
   if (!isLevel(level)) return c.json(INVALID, 400);
   const words = body.words as string[];
-  const apiKey = modelKey(c.env);
-  if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
-  if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
-  const wordsList = words.map((w, i) => `${i + 1}. ${w}`).join('\n');
-  try {
-    const { text } = await generate(c.env.DB, {
-      apiKey,
-      userId: c.get('userId'),
-      projectId: typeof body.projectId === 'string' ? body.projectId : null,
-      opId: crypto.randomUUID(),
-      task: 'meanings',
-      prompt: meaningsPrompt(level, wordsList),
-      json: true,
-      apiUrl: c.env.AI_API_URL,
-      baseten: basetenConfig(c.env),
-      validate: (t) => {
-        const v = parseJson(t, isRecord);
-        if (!v || !Array.isArray(v.meanings) || v.meanings.length !== words.length) return false;
-        return (v.meanings as unknown[]).every(
-          (m, i) => isRecord(m) && m.word === words[i] && typeof m.meaning === 'string',
-        );
-      },
-    });
-    const v = parseJson(text, isRecord) as { meanings: { word: string; meaning: string }[] };
-    return c.json({ meanings: v.meanings });
-  } catch (e) {
-    if (e instanceof AiError) return c.json(FAILED, 502);
-    throw e;
+  const lang = 'en'; // Phase 5 adds per-book language; the table is ready.
+  const chain = easierLevels(level);
+  // 1. Dictionary first: exact level preferred, then easier levels.
+  const inWords = words.map(() => '?').join(',');
+  const inLevels = chain.map(() => '?').join(',');
+  const rows = await c.env.DB.prepare(
+    `SELECT word, level, gloss FROM definitions WHERE lang = ? AND word IN (${inWords}) AND level IN (${inLevels})`,
+  )
+    .bind(lang, ...words.map((w) => w.toLowerCase()), ...chain)
+    .all<{ word: string; level: string; gloss: string }>();
+  const rank = new Map(chain.map((l, i) => [l, i]));
+  const cached = new Map<string, string>();
+  for (const w of words) {
+    const key = w.toLowerCase();
+    let best: { level: string; gloss: string } | null = null;
+    for (const r of rows.results ?? []) {
+      if (r.word !== key) continue;
+      if (best === null || (rank.get(r.level) ?? 99) < (rank.get(best.level) ?? 99)) best = r;
+    }
+    if (best) cached.set(w, best.gloss);
   }
-});
+  // 2. AI only for misses; quota and key checks apply to generation alone,
+  // so fully cached reads cost no quota and need no model key.
+  const missing = words.filter((w) => !cached.has(w));
+  const fresh = new Map<string, string>();
+  if (missing.length > 0) {
+    const apiKey = modelKey(c.env);
+    if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
+    if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+    const wordsList = missing.map((w, i) => `${i + 1}. ${w}`).join('\n');
+    try {
+      const { text } = await generate(c.env.DB, {
+        apiKey,
+        userId: c.get('userId'),
+        projectId: typeof body.projectId === 'string' ? body.projectId : null,
+        opId: crypto.randomUUID(),
+        task: 'meanings',
+        prompt: meaningsPrompt(level, wordsList),
+        json: true,
+        apiUrl: c.env.AI_API_URL,
+        baseten: basetenConfig(c.env),
+        validate: (t) => {
+          const v = parseJson(t, isRecord);
+          if (!v || !Array.isArray(v.meanings) || v.meanings.length !== missing.length) return false;
+          return (v.meanings as unknown[]).every(
+            (m, i) => isRecord(m) && m.word === missing[i] && typeof m.meaning === 'string',
+          );
+        },
+      });
+      const v = parseJson(text, isRecord) as { meanings: { word: string; meaning: string }[] };
+      const now = new Date().toISOString();
+      for (const m of v.meanings) {
+        fresh.set(m.word, m.meaning);
+        // Cache the fallback back into the dictionary. Verified on the
+        // spot with the level gate (the word itself is allowed input), so
+        // good fallback glosses graduate to verified immediately.
+        const verified = checkLevel(m.meaning, level, [m.word]).passed ? 1 : 0;
+        await c.env.DB.prepare(
+          'INSERT OR IGNORE INTO definitions (word, level, lang, gloss, source, verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        )
+          .bind(m.word.toLowerCase(), level, lang, m.meaning, 'ai-fallback', verified, now)
+          .run();
+      }
+    } catch (e) {
+      if (e instanceof AiError) return c.json(FAILED, 502);
+      throw e;
+    }
+  }
+  return c.json({ meanings: words.map((w) => ({ word: w, meaning: cached.get(w) ?? fresh.get(w) ?? '' })) });
 
 ai.post('/simplify', async (c) => {
   const body = await readJson(c);

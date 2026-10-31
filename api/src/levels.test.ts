@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { checkLevel, stem, tokenize } from './levels';
+import { checkLevel, easierLevels, stem, tokenize } from './levels';
+
+describe('easierLevels', () => {
+  it('chains exact-first down to A1', () => {
+    expect(easierLevels('A1')).toEqual(['A1']);
+    expect(easierLevels('B1')).toEqual(['B1', 'A2', 'A1']);
+    expect(easierLevels('B2')).toEqual(['B2', 'B1', 'A2', 'A1']);
+  });
+});
 
 describe('tokenize', () => {
   it('lowercases and keeps words only', () => {

@@ -8,7 +8,9 @@ import app from './index';
 function makeDb(counts: Record<string, number>, examRows: string[] = []) {
   const users = new Map<string, { id: string; email: string }>();
   const sessions = new Map<string, { user_id: string; expires_at: number }>();
+  const defs = new Map<string, Record<string, unknown>>();
   return {
+    defs,
     prepare(sql: string) {
       const q = sql.replace(/\s+/g, ' ').trim();
       const all = async () => {
@@ -38,7 +40,11 @@ function makeDb(counts: Record<string, number>, examRows: string[] = []) {
               return null;
             };
       const run = async (params: unknown[]) => {
-        if (q.startsWith('INSERT INTO users')) {
+        if (q.startsWith('INSERT OR IGNORE INTO definitions')) {
+          const [word, level, lang] = params as [string, string, string, ...unknown[]];
+          const k = `${word}|${level}|${lang}`;
+          if (!defs.has(k)) defs.set(k, { word, level, lang });
+        } else if (q.startsWith('INSERT INTO users')) {
           const [id, email] = params as [string, string, ...unknown[]];
           users.set(id, { id, email });
         } else if (q.startsWith('INSERT INTO sessions')) {
@@ -148,5 +154,49 @@ describe('GET /api/admin/exam-items', () => {
     expect(byId.get('p2a')).toMatchObject({ attempts: 2, correct: 0, pct: 0 });
     // Legacy answers-only row: exposure counted, correctness unknown.
     expect(byId.get('p3a')).toMatchObject({ attempts: 1, correct: 0, pct: 0 });
+  });
+});
+
+describe('POST /api/admin/definitions', () => {
+  const post = (db: Db, body: unknown, cookie?: string, devLinks = true) =>
+    app.request('/api/admin/definitions', {
+      method: 'POST',
+      headers: { ...(cookie ? { cookie } : {}), 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }, { DB: db as unknown as D1Database, DEV_LINKS: devLinks ? 'true' : 'false', MODEL_API_KEY: 'test-key' });
+
+  it('requires a session and dev mode', async () => {
+    const db = makeDb({});
+    expect((await post(db, { rows: [] })).status).toBe(401);
+    const cookie = await signIn(db);
+    expect((await post(db, { rows: [] }, cookie, false)).status).toBe(404);
+  });
+
+  it('stores valid rows, skips invalid ones, and reseeds idempotently', async () => {
+    const db = makeDb({});
+    const cookie = await signIn(db);
+    const rows = [
+      { word: 'Cat', level: 'A1', gloss: 'a small pet', verified: 1 },
+      { word: 'x'.repeat(51), level: 'A1', gloss: 'too long a word' },
+      { word: 'dog', level: 'Z9', gloss: 'bad level' },
+      { word: 'fish', level: 'A1', gloss: '' },
+    ];
+    const res = await post(db, { rows }, cookie);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, received: 1 });
+    expect(db.defs.size).toBe(1);
+    expect(db.defs.get('cat|A1|en')).toMatchObject({ word: 'cat', level: 'A1', lang: 'en' });
+    // Reseed: same row accepted again but never duplicated.
+    const res2 = await post(db, { rows: [rows[0]] }, cookie);
+    expect(res2.status).toBe(200);
+    expect(db.defs.size).toBe(1);
+  });
+
+  it('rejects empty and oversized batches', async () => {
+    const db = makeDb({});
+    const cookie = await signIn(db);
+    expect((await post(db, { rows: [] }, cookie)).status).toBe(400);
+    const big = Array.from({ length: 201 }, (_, i) => ({ word: `w${i}`, level: 'A1', gloss: 'g' }));
+    expect((await post(db, { rows: big }, cookie)).status).toBe(400);
   });
 });

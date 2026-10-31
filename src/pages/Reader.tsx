@@ -107,6 +107,17 @@ export default function Reader() {
 
   useEffect(() => stopSpeaking, []);
 
+  // Felt-speed: warm the next page's art while reading this one, so page
+  // turns never wait on the image. scenes[current] is the page after the
+  // current 1-based page (cover 0 warms page 1); past the end there is none.
+  useEffect(() => {
+    const next = book?.manifest.scenes[current];
+    const url = next?.image_url;
+    if (typeof url !== 'string' || url === '') return;
+    const img = new Image();
+    img.src = url;
+  }, [book, current]);
+
   // Tap anywhere outside the open word bubble — another word, the buddy
   // icon, the Listen/Read buttons, artwork — to dismiss it. A listener (not
   // an overlay) so the tapped control still receives its own tap.

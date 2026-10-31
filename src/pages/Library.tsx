@@ -6,6 +6,21 @@ import { getExamBest, listBooks } from '../lib/api';
 import type { CatalogBook } from '../lib/api';
 
 const SEEN_KEY = 'e3-tour';
+const CATALOG_KEY = 'e3-catalog';
+const CATALOG_TTL = 24 * 3600 * 1000;
+
+// Stale-while-revalidate: paint the last catalog instantly, refresh behind it.
+function cachedCatalog(): CatalogBook[] | null {
+  try {
+    const raw = window.localStorage.getItem(CATALOG_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { at: number; books: CatalogBook[] };
+    if (!Array.isArray(parsed.books) || Date.now() - parsed.at > CATALOG_TTL) return null;
+    return parsed.books;
+  } catch {
+    return null;
+  }
+}
 
 function seen(): boolean {
   try {
@@ -27,7 +42,7 @@ export default function Library() {
   const [tour, setTour] = useState(() => !seen());
   const [best, setBest] = useState<number | null>(null);
   const [total, setTotal] = useState(0);
-  const [books, setBooks] = useState<CatalogBook[] | null>(null);
+  const [books, setBooks] = useState<CatalogBook[] | null>(() => cachedCatalog());
   useEffect(() => {
     getExamBest()
       .then((res) => {
@@ -36,8 +51,15 @@ export default function Library() {
       })
       .catch(() => {});
     listBooks()
-      .then((res) => setBooks(res.books))
-      .catch(() => setBooks([]));
+      .then((res) => {
+        setBooks(res.books);
+        try {
+          window.localStorage.setItem(CATALOG_KEY, JSON.stringify({ at: Date.now(), books: res.books }));
+        } catch {
+          /* private mode: fresh fetch every visit */
+        }
+      })
+      .catch(() => setBooks((b) => b ?? []));
   }, []);
   return (
     <Page title="Library">

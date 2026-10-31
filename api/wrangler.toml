@@ -20,6 +20,12 @@ migrations_dir = "migrations"
 
 [vars]
 # DEV ONLY: request-link responses include the clickable magic link so you can
-# sign in without an email sender. Set to "false" (or delete) before any
-# production deploy — see README pre-prod checklist.
+# sign in without an email sender. Production overrides below — see README
+# pre-prod checklist.
 DEV_LINKS = "true"
+
+# Production: dev magic links die here even if forgotten elsewhere.
+# Secrets (MODEL_API_KEY, RESEND_API_KEY, EMAIL_FROM, Baseten/Modal keys) are
+# NEVER in this file — set with `wrangler secret put <NAME> --env production`.
+[env.production.vars]
+DEV_LINKS = "false"

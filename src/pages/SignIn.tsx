@@ -14,6 +14,10 @@ export default function SignIn() {
     setError(null);
     try {
       const res = await requestLink(email);
+      if (!res.devLink && !res.emailed) {
+        setError('Email sign-in is not set up yet. Try again later.');
+        return;
+      }
       setSent(true);
       setDevLink(res.devLink ?? null);
     } catch {
@@ -40,7 +44,8 @@ export default function SignIn() {
         </div>
       </form>
       {error && <Alert>{error}</Alert>}
-      {sent && <p>Link sent. Check your inbox (dev: click below).</p>}
+      {sent && devLink && <p>Link sent. Check your inbox (dev: click below).</p>}
+      {sent && !devLink && <p>Link sent. Check your inbox.</p>}
       {devLink && (
         <p>
           <a href={devLink} className="underline underline-offset-2">

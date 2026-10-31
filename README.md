@@ -55,6 +55,13 @@ npm run build
 
 ## Pre-prod checklist (before anything beyond local dev)
 
-- [ ] Set `DEV_LINKS = "false"` in `api/wrangler.toml` (dev magic links must die).
-- [ ] Add a real email sender for magic links (currently dev-links only).
+- [x] Add a real email sender for magic links (Resend via `api/src/email.ts`).
+- [ ] `wrangler login`, then set prod secrets (never in files):
+  `wrangler secret put MODEL_API_KEY --env production` (+ `RESEND_API_KEY`,
+  `EMAIL_FROM`, and the Baseten/Modal keys you actually use).
+- [ ] Deploy: `wrangler deploy --env production` (`[env.production]` forces
+  `DEV_LINKS=false`, so dev magic links die even if forgotten).
+- [ ] Custom domain + route in the Cloudflare dashboard.
+- [ ] Post-deploy smoke: request a magic link → real email arrives → sign-in
+  works; `curl <domain>/api/health` → `{"ok":true}`.
 - [ ] `npm audit` clean.

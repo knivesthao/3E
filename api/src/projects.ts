@@ -8,6 +8,7 @@ import {
   validateSceneOrder,
 } from './validate';
 import { generate } from './ai/client';
+import { bustShareCache } from './cache';
 import { basetenConfig } from './ai/config';
 import { finishJob, modelKey, overLimit } from './ai/http';
 import { AiError } from './ai/meta';
@@ -322,6 +323,8 @@ projects.post('/:id/publish', async (c) => {
       .prepare("UPDATE projects SET status = 'published', updated_at = ? WHERE id = ?")
       .bind(stamp, project.id)
       .run();
+    // Catalog + manifest are edge-cached: bust both so the fresh book shows.
+    await bustShareCache(new URL(c.req.url).origin, bookId);
     const book = {
       id: bookId,
       project_id: project.id,

@@ -9,6 +9,7 @@ import {
   isValidEmail,
   newToken,
 } from './auth';
+import { sendMagicLink } from './email';
 import { projects } from './projects';
 import { admin } from './admin';
 import { exam } from './exam';
@@ -78,11 +79,15 @@ app.post('/api/auth/request-link', async (c) => {
     .bind(await hashToken(token), userId, now + MAGIC_LINK_TTL_MS)
     .run();
 
-  // Dev only: no email sender yet, so hand the link back to the requester.
-  // Never logged (tokens stay out of logs). Disabled via DEV_LINKS=false.
-  const res: { ok: true; devLink?: string } = { ok: true };
+  // Dev: hand the link back so sign-in works without an email sender.
+  // Prod (DEV_LINKS=false): email it via Resend and never return the token.
+  // Either way the token is never logged.
+  const link = `${new URL(c.req.url).origin}/api/auth/verify?token=${token}`;
+  const res: { ok: true; devLink?: string; emailed?: boolean } = { ok: true };
   if (c.env.DEV_LINKS === 'true') {
-    res.devLink = `${new URL(c.req.url).origin}/api/auth/verify?token=${token}`;
+    res.devLink = link;
+  } else {
+    res.emailed = await sendMagicLink(c.env, email, link);
   }
   return c.json(res);
 });

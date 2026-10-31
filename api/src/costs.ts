@@ -30,7 +30,8 @@ costs.get('/book', async (c) => {
   const byTask = await db
     .prepare(
       `SELECT task, SUM(cost_usd) AS cost, COUNT(*) AS calls,
-              SUM(input_tokens) AS tokens_in, SUM(output_tokens) AS tokens_out
+              SUM(input_tokens) AS tokens_in, SUM(output_tokens) AS tokens_out,
+              AVG(ms) AS avg_ms, MAX(ms) AS max_ms
        FROM ai_usage WHERE project_id = ? GROUP BY task ORDER BY cost DESC`,
     )
     .bind(project.id)
@@ -39,7 +40,8 @@ costs.get('/book', async (c) => {
   const byModel = await db
     .prepare(
       `SELECT model, SUM(cost_usd) AS cost, COUNT(*) AS calls,
-              SUM(input_tokens) AS tokens_in, SUM(output_tokens) AS tokens_out
+              SUM(input_tokens) AS tokens_in, SUM(output_tokens) AS tokens_out,
+              AVG(ms) AS avg_ms, MAX(ms) AS max_ms
        FROM ai_usage WHERE project_id = ? GROUP BY model ORDER BY cost DESC`,
     )
     .bind(project.id)
@@ -56,7 +58,7 @@ costs.get('/book', async (c) => {
   const attempts = await db
     .prepare(
       `SELECT op_id, attempt, task, provider, model, input_tokens, output_tokens,
-              cost_usd, ok, error, created_at
+              cost_usd, ms, ok, error, created_at
        FROM ai_usage WHERE project_id = ? ORDER BY created_at`,
     )
     .bind(project.id)

@@ -11,5 +11,7 @@ export type Bindings = {
   BASETEN_MODEL?: string;
   MODAL_API_URL?: string;
   MODAL_PROXY_TOKEN?: string;
+  RESEND_API_KEY?: string;
+  EMAIL_FROM?: string;
 };
 export type Variables = { userId: string; userEmail: string };

@@ -11,6 +11,7 @@ function makeDb() {
   const scenes = new Map<string, Record<string, unknown>>();
   const usage: Record<string, unknown>[] = [];
   const jobs = new Map<string, Record<string, unknown>>();
+  const defs = new Map<string, Record<string, unknown>>();
 
   const db = {
     usage,
@@ -18,6 +19,11 @@ function makeDb() {
       const day = new Date().toISOString();
       for (let i = 0; i < n; i++) {
         usage.push({ user_id: userId, task: 'idea', created_at: day, attempt: 1, ok: 1 });
+      }
+    },
+    seedDefinitions(rows: { word: string; level: string; lang: string; gloss: string; source: string; verified: number }[]) {
+      for (const r of rows) {
+        defs.set(`${r.word}|${r.level}|${r.lang}`, { ...r, created_at: new Date().toISOString() });
       }
     },
     prepare(sql: string) {
@@ -73,6 +79,17 @@ function makeDb() {
               if (q.startsWith('SELECT id FROM scenes WHERE project_id')) {
                 return { results: [...scenes.values()].filter((x) => x.project_id === params[0]).map((x) => ({ id: x.id })) };
               }
+              if (q.startsWith('SELECT word, level, gloss FROM definitions')) {
+                // Params are [lang, ...words, ...levels]; levels match A1/A2/B1/B2.
+                const levels = (params as unknown[]).filter((p) => /^(A1|A2|B1|B2)$/.test(p as string));
+                const words = (params as unknown[]).slice(1).filter((p) => !levels.includes(p));
+                const lang = params[0];
+                return {
+                  results: [...defs.values()].filter(
+                    (d) => d.lang === lang && (words as unknown[]).includes(d.word) && (levels as unknown[]).includes(d.level),
+                  ),
+                };
+              }
               return { results: [] };
             },
             run: async () => {
@@ -95,6 +112,11 @@ function makeDb() {
               } else if (q.startsWith('INSERT INTO scenes')) {
                 const [id, project_id, scene_number, data_json, updated_at] = params as [string, string, number, string, string];
                 scenes.set(id, { id, project_id, scene_number, data_json, updated_at });
+              } else if (q.startsWith('INSERT OR IGNORE INTO definitions')) {
+                const [word, level, lang, gloss, source, verified, created_at] =
+                  params as [string, string, string, string, string, number, string];
+                const k = `${word}|${level}|${lang}`;
+                if (!defs.has(k)) defs.set(k, { word, level, lang, gloss, source, verified, created_at });
               } else if (q.startsWith('INSERT INTO ai_usage')) {
                 const [project_id, user_id, op_id, attempt, task, provider, model, kind, input_tokens, output_tokens, cost_usd, ms, ok, error, created_at] =
                   params as unknown[];
@@ -299,6 +321,63 @@ describe('AI endpoints', () => {
     const sb = (await s.json()) as { rewritten: string; check: { passed: boolean } };
     expect(sb.rewritten).toBe('A boy is happy.');
     expect(sb.check.passed).toBe(true);
+  });
+
+  it('meanings serves cached glosses with no model call and no quota use', async () => {
+    const db = makeDb();
+    db.seedDefinitions([
+      { word: 'field', level: 'A1', lang: 'en', gloss: 'a farm place', source: 'baseten', verified: 1 },
+      { word: 'bird', level: 'A1', lang: 'en', gloss: 'a small animal', source: 'baseten', verified: 1 },
+    ]);
+    const cookie = await signIn(db);
+    stubFetch(() => {
+      throw new Error('model must not be called');
+    });
+    const res = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['field', 'bird'], level: 'A1' }, cookie), ENV(db));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      meanings: [
+        { word: 'field', meaning: 'a farm place' },
+        { word: 'bird', meaning: 'a small animal' },
+      ],
+    });
+    expect(db.usage.filter((u) => u.task === 'meanings')).toHaveLength(0);
+  });
+
+  it('meanings prefers exact level, falls back easier, generates + caches the rest', async () => {
+    const db = makeDb();
+    db.seedDefinitions([
+      { word: 'cat', level: 'A2', lang: 'en', gloss: 'a small pet', source: 'baseten', verified: 1 },
+      { word: 'cat', level: 'B1', lang: 'en', gloss: 'a small furry pet', source: 'baseten', verified: 1 },
+    ]);
+    const cookie = await signIn(db);
+    stubFetch(modelReply);
+    const env = ENV(db);
+    const res = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['cat', 'dog'], level: 'B1' }, cookie), env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      meanings: [
+        { word: 'cat', meaning: 'a small furry pet' },
+        { word: 'dog', meaning: 'simple dog' },
+      ],
+    });
+    expect(db.usage.filter((u) => u.task === 'meanings' && u.ok === 1)).toHaveLength(1);
+    // Second identical call is fully cached: the model must stay silent.
+    stubFetch(() => {
+      throw new Error('model must not be called');
+    });
+    const res2 = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['cat', 'dog'], level: 'B1' }, cookie), env);
+    expect(res2.status).toBe(200);
+    expect(await res2.json()).toEqual({
+      meanings: [
+        { word: 'cat', meaning: 'a small furry pet' },
+        { word: 'dog', meaning: 'simple dog' },
+      ],
+    });
+    expect(db.usage.filter((u) => u.task === 'meanings' && u.ok === 1)).toHaveLength(1);
   });
 
   async function makeScene(db: Db, cookie: string, pid: string, narration: string) {

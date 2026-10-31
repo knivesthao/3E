@@ -15,3 +15,8 @@ BASETEN_MODEL=meta-models/muse-spark-open-1026
 # MODAL_PROXY_TOKEN is "<token-id>.ws-<secret>" (never commit a real one).
 MODAL_API_URL=
 MODAL_PROXY_TOKEN=
+# Magic-link email (Resend free tier: 3,000/mo, 100/day — plenty for sign-ins).
+# Sign up at resend.com, verify a domain, then fill both in. With DEV_LINKS=true
+# (dev default) these stay empty and links come back in the API response.
+RESEND_API_KEY=
+EMAIL_FROM=3E <login@yourdomain.com>

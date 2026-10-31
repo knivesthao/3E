@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  fmtMs,
   getAdminSpecs,
   getAdminStats,
   getBookCosts,
@@ -61,7 +62,7 @@ function CostsSection() {
             <ul className="flex flex-col gap-1">
               {costs.by_task.map((t) => (
                 <li key={t.task} className="rounded-md border border-stone-200 px-3 py-2">
-                  {t.task}: ${t.cost.toFixed(4)} ({t.calls} calls)
+                  {t.task}: ${t.cost.toFixed(4)} ({t.calls} calls · avg {fmtMs(t.avg_ms)} · slowest {fmtMs(t.max_ms)})
                 </li>
               ))}
             </ul>
@@ -71,7 +72,7 @@ function CostsSection() {
             <ul className="flex flex-col gap-1">
               {costs.by_model.map((m) => (
                 <li key={m.model} className="rounded-md border border-stone-200 px-3 py-2">
-                  {m.model}: ${m.cost.toFixed(4)} ({m.calls} calls)
+                  {m.model}: ${m.cost.toFixed(4)} ({m.calls} calls · avg {fmtMs(m.avg_ms)} · slowest {fmtMs(m.max_ms)})
                 </li>
               ))}
             </ul>

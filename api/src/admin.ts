@@ -9,6 +9,9 @@ import {
   SEGMENT_MODEL,
   TEXT_MODEL,
 } from './ai/config';
+import { isLevel } from './levels';
+import type { Level } from './levels';
+import { isRecord } from './validate';
 
 // Admin overview (Specs + Content tabs). Session-gated by index.ts like
 // every other /api/* route. Aggregate counts only — no PII, and never
@@ -93,4 +96,43 @@ admin.get('/stats', async (c) => {
     counts[table] = row?.n ?? 0;
   }
   return c.json({ counts });
+});
+
+// Dictionary seed writes (Phase 1): bulk upsert of generated glosses.
+// DEV ONLY — the seed script runs against the local worker. On any other
+// env this route does not exist (404), so a leaked session can never rewrite
+// the dictionary. INSERT OR IGNORE keeps reseeds idempotent: existing rows
+// (hand-fixed or already verified) always win over the incoming batch.
+admin.post('/definitions', async (c) => {
+  if (c.env.DEV_LINKS !== 'true') return c.json({ error: 'not found' }, 404);
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'invalid request' }, 400);
+  }
+  if (!isRecord(body) || !Array.isArray(body.rows) || body.rows.length === 0 || body.rows.length > 200) {
+    return c.json({ error: 'invalid request' }, 400);
+  }
+  const lang =
+    typeof body.lang === 'string' && /^[a-z]{2,5}$/.test(body.lang) ? body.lang : 'en';
+  const now = new Date().toISOString();
+  let received = 0;
+  for (const r of body.rows as unknown[]) {
+    if (!isRecord(r) || typeof r.word !== 'string' || typeof r.gloss !== 'string') continue;
+    const word = r.word.trim().toLowerCase();
+    const gloss = r.gloss.trim();
+    if (word === '' || word.length > 50 || gloss === '' || gloss.length > 500) continue;
+    if (!isLevel(r.level)) continue;
+    const level = r.level as Level;
+    const verified = r.verified === 1 || r.verified === true ? 1 : 0;
+    const source = typeof r.source === 'string' && r.source !== '' ? r.source.slice(0, 20) : 'baseten';
+    await c.env.DB.prepare(
+      'INSERT OR IGNORE INTO definitions (word, level, lang, gloss, source, verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(word, level, lang, gloss, source, verified, now)
+      .run();
+    received++;
+  }
+  return c.json({ ok: true, received });
 });
