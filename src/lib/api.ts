@@ -294,6 +294,21 @@ export const getExam = () =>
 export const getExamBest = () =>
   api<{ attempts: number; best: number | null; total: number; passMark: number }>('/api/exam/best');
 
+export interface ShelfBook {
+  id: string;
+  title: string;
+  cover_url: string | null;
+}
+
+export interface MyActivity {
+  days: string[];
+  streak: number;
+  totalDays: number;
+  finished: ShelfBook[];
+}
+
+export const getMyActivity = () => api<MyActivity>('/api/me/activity');
+
 export const submitExam = (form: string[], answers: { id: string; choice: number }[]) =>
   api<ExamResult>('/api/exam/submit', { method: 'POST', body: JSON.stringify({ form, answers }) });
 

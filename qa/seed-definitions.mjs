@@ -146,7 +146,9 @@ async function signIn() {
 }
 
 function esc(s) {
-  return s.replace(/'/g, "''");
+  // Single-line the value: newlines inside a SQL string literal would
+  // corrupt the dump file. Glosses are one sentence by construction.
+  return s.replace(/[\r\n]+/g, ' ').replace(/'/g, "''");
 }
 function sqlLine(r, lang) {
   return `INSERT OR IGNORE INTO definitions (word, level, lang, gloss, source, verified, created_at) VALUES ('${esc(r.word)}', '${r.level}', '${lang}', '${esc(r.gloss)}', '${esc(r.source)}', ${r.verified}, datetime('now'));`;
@@ -194,6 +196,7 @@ async function main() {
         continue;
       }
       const rows = [];
+      const succeeded = new Set();
       for (let k = 0; k < words.length; k++) {
         const word = words[k];
         const gloss = meanings?.[k]?.word === word ? String(meanings[k].meaning ?? '') : '';
@@ -212,6 +215,7 @@ async function main() {
         }
         if (!finalGloss) { console.log(`no gloss for ${level}:${word} — skipping`); continue; }
         rows.push({ word, level, gloss: finalGloss, source: 'baseten', verified });
+        succeeded.add(word);
         (sample[level] ??= []).push({ word, gloss: finalGloss, verified, note: v.ok ? '' : v.reason });
         sql.push(sqlLine(rows[rows.length - 1], 'en'));
       }
@@ -223,7 +227,9 @@ async function main() {
         });
         if (!pr.ok) throw new Error(`push failed: ${pr.status} (is DEV_LINKS=true?)`);
       }
-      for (const t of chunk.filter((t) => t.level === level)) done.add(`${level}|${t.word}`);
+      // Only words that actually produced a gloss count as done: failures
+      // stay in the queue so the next run retries them (no wasted tokens).
+      for (const w of succeeded) done.add(`${level}|${w}`);
       generated += rows.length;
       writeFileSync(PROGRESS_FILE, JSON.stringify({ done: [...done] }));
     }

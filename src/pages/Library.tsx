@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Tour from '../components/Tour';
 import { Badge, Button, Page } from '../components/ui';
-import { getExamBest, listBooks } from '../lib/api';
-import type { CatalogBook } from '../lib/api';
+import { getExamBest, getMyActivity, listBooks } from '../lib/api';
+import type { CatalogBook, MyActivity } from '../lib/api';
 
 const SEEN_KEY = 'e3-tour';
 const CATALOG_KEY = 'e3-catalog';
@@ -43,12 +43,17 @@ export default function Library() {
   const [best, setBest] = useState<number | null>(null);
   const [total, setTotal] = useState(0);
   const [books, setBooks] = useState<CatalogBook[] | null>(() => cachedCatalog());
+  const [activity, setActivity] = useState<MyActivity | null>(null);
   useEffect(() => {
     getExamBest()
       .then((res) => {
         setBest(res.best);
         setTotal(res.total);
       })
+      .catch(() => {});
+    // Anonymous visitors get a 401 here: shelf simply stays hidden.
+    getMyActivity()
+      .then(setActivity)
       .catch(() => {});
     listBooks()
       .then((res) => {
@@ -63,6 +68,42 @@ export default function Library() {
   }, []);
   return (
     <Page title="Library">
+      {activity && (activity.streak > 0 || activity.finished.length > 0) ? (
+        <section aria-label="My shelf" className="rounded-md border border-accent-900 bg-accent-50 p-3">
+          <h2 className="font-display text-xl font-bold">My shelf</h2>
+          <p className="text-base" aria-live="polite">
+            {activity.streak > 0 ? (
+              <>🔥 {activity.streak}-day streak · {activity.totalDays} days reading</>
+            ) : (
+              <>Read today to start a streak · {activity.totalDays} days reading</>
+            )}
+          </p>
+          {activity.finished.length > 0 ? (
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {activity.finished.map((b) => (
+                <li key={b.id}>
+                  <Link
+                    to={`/s/${b.id}`}
+                    className="flex items-center gap-2 rounded-md border border-stone-200 bg-white p-1 pr-3"
+                    aria-label={`Re-read ${b.title}`}
+                  >
+                    {b.cover_url ? (
+                      <img
+                        src={b.cover_url}
+                        alt=""
+                        className="h-12 w-10 rounded object-cover"
+                        loading="lazy"
+                      />
+                    ) : null}
+                    <span className="max-w-32 truncate text-sm font-bold">{b.title}</span>
+                    <span aria-hidden="true" title="Finished">✓</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
       <section aria-label="Published books">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-display text-xl font-bold">Published books</h2>

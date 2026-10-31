@@ -6,7 +6,8 @@ human run before it counts as done. Work through top to bottom.
 ## Phase 0 verification (code already written, NEVER verified)
 
 - [ ] `npm run typecheck` clean (new: `api/src/email.ts`, index route, SignIn)
-- [ ] `npm test` green (new: `api/src/email.test.ts`, 3 tests)
+- [ ] `npm test` green (new: `api/src/email.test.ts` 3 tests, `fmt.test.ts` 3 tests, `cache.test.ts` 4 tests, `costs.test.ts` 3 tests, `activity.test.ts` 3 tests, meanings cache 2 tests, admin definitions 3 tests, `easierLevels` 1 test)
+- [ ] Static-audit fixes already applied blind (confirm they hold): missing `});` restored in `ai/routes.ts`, rank-map simplified to chain-order lookup, seed `done`-marking only on produced glosses, seed SQL esc single-lines values, cache test uses full Hono generics
 - [ ] `npm run build` succeeds
 - [ ] Dev sign-in still works (`DEV_LINKS=true`, click dev link)
 - [ ] Prod-path sign-in: set `DEV_LINKS=false` locally, request link, confirm
@@ -46,6 +47,15 @@ human run before it counts as done. Work through top to bottom.
 - [ ] 404-then-publish: GET unknown `/api/share/<uuid>` → 404; publish that book → GET returns 200 (brief miss-cache busted)
 - [ ] Library paints instantly on revisit (SWR from localStorage), Reader turns pages with art already loaded
 - [ ] Positions still poll fresh every few seconds (never cached by design)
+
+## Phase 3 verification (shelf + streaks, code written, NEVER run)
+
+- [ ] `npm run typecheck` clean (new: `/api/me/activity`, shelf UI)
+- [ ] `npm test` green (new: `activity.test.ts` 3 tests)
+- [ ] `npm run build` succeeds
+- [ ] Signed-in Library shows flame + streak after reading a book to its last page; anon Library shows no shelf
+- [ ] Streak survives reload; increments only on a new UTC day with activity
+- [ ] Shared-link caveat confirmed understood: shelf "finished" follows the shared position, so a second reader turning pages can un-shelve the first
 
 ## Later phase gates (master plan order)
 

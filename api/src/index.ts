@@ -119,6 +119,54 @@ app.get('/api/auth/verify', async (c) => {
 
 app.get('/api/auth/me', (c) => c.json({ user: { id: c.get('userId'), email: c.get('userEmail') } }));
 
+// Self activity (shelf + streaks): distinct active days from exam attempts
+// plus page turns the user made, and books whose shared position the user
+// left on the final page. Derived from existing tables — zero extra writes.
+// Streak counts back from today, so reading today already extends it.
+app.get('/api/me/activity', async (c) => {
+  const uid = c.get('userId');
+  const db = c.env.DB;
+  const [examRows, readRows] = await Promise.all([
+    db
+      .prepare('SELECT DISTINCT substr(created_at, 1, 10) AS day FROM exam_attempts WHERE user_id = ?')
+      .bind(uid)
+      .all<{ day: string }>(),
+    db
+      .prepare('SELECT DISTINCT substr(updated_at, 1, 10) AS day FROM reading_sync WHERE updated_by = ?')
+      .bind(uid)
+      .all<{ day: string }>(),
+  ]);
+  const daySet = new Set(
+    [...(examRows.results ?? []), ...(readRows.results ?? [])].map((r) => r.day),
+  );
+  const days = [...daySet].sort();
+  let streak = 0;
+  const cursor = new Date();
+  while (daySet.has(cursor.toISOString().slice(0, 10))) {
+    streak++;
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+  }
+  const { results: atEnd } = await db
+    .prepare(
+      `SELECT b.id, b.title, b.cover_url, b.manifest_json, r.scene_number FROM books b
+       JOIN reading_sync r ON r.book_id = b.id WHERE r.updated_by = ?`,
+    )
+    .bind(uid)
+    .all<{ id: string; title: string; cover_url: string | null; manifest_json: string; scene_number: number }>();
+  const finished = [];
+  for (const f of atEnd ?? []) {
+    try {
+      const m = JSON.parse(f.manifest_json) as { scenes?: unknown[] };
+      if (Array.isArray(m.scenes) && f.scene_number >= m.scenes.length) {
+        finished.push({ id: f.id, title: f.title, cover_url: f.cover_url });
+      }
+    } catch {
+      // Corrupt manifest: not shelf-worthy.
+    }
+  }
+  return c.json({ days, streak, totalDays: days.length, finished });
+});
+
 app.post('/api/auth/logout', async (c) => {
   const raw = getCookie(c, SESSION_COOKIE);
   if (raw) {

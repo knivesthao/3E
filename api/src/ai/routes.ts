@@ -97,16 +97,17 @@ ai.post('/meanings', async (c) => {
   )
     .bind(lang, ...words.map((w) => w.toLowerCase()), ...chain)
     .all<{ word: string; level: string; gloss: string }>();
-  const rank = new Map(chain.map((l, i) => [l, i]));
   const cached = new Map<string, string>();
   for (const w of words) {
     const key = w.toLowerCase();
-    let best: { level: string; gloss: string } | null = null;
-    for (const r of rows.results ?? []) {
-      if (r.word !== key) continue;
-      if (best === null || (rank.get(r.level) ?? 99) < (rank.get(best.level) ?? 99)) best = r;
+    // Chain order is exact-level-first, so the first hit wins.
+    for (const l of chain) {
+      const hit = (rows.results ?? []).find((r) => r.word === key && r.level === l);
+      if (hit) {
+        cached.set(w, hit.gloss);
+        break;
+      }
     }
-    if (best) cached.set(w, best.gloss);
   }
   // 2. AI only for misses; quota and key checks apply to generation alone,
   // so fully cached reads cost no quota and need no model key.
@@ -156,6 +157,7 @@ ai.post('/meanings', async (c) => {
     }
   }
   return c.json({ meanings: words.map((w) => ({ word: w, meaning: cached.get(w) ?? fresh.get(w) ?? '' })) });
+});
 
 ai.post('/simplify', async (c) => {
   const body = await readJson(c);
