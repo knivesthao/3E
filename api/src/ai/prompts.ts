@@ -132,6 +132,9 @@ export function sceneActionText(
 export function sceneArtPrompt(input: {
   place: string;
   character: string;
+  // Page cast: when the author picked characters for the page, these
+  // (name — look each) replace the single-character fallback line.
+  characters?: string[];
   narration: string;
   bubbles: { speaker: string; text: string }[];
   aspect?: string;
@@ -139,6 +142,8 @@ export function sceneArtPrompt(input: {
 }): string {
   const aspect = input.aspect ?? '4:5';
   const corner = input.bubbleCorner ?? 'top-left';
+  const castLine =
+    input.characters && input.characters.length > 0 ? input.characters.join('; ') : input.character;
   return `[STYLE GUIDE]
 2D children's comic-book illustration for early readers. Clean bold outlines, cel shading with two
 or three flat tones, simple shapes, warm friendly palette (cream, terracotta, leaf green, sky blue).
@@ -147,7 +152,7 @@ Bright, even lighting. No text, no letters, no speech bubbles, no watermark, no 
 Not photorealistic, not 3D, not a photograph.
 
 Place: ${input.place}
-Character: ${input.character}
+Character: ${castLine}
 Action: ${sceneActionText(input.narration, input.bubbles)}
 Layout: ${aspect} panel, one clear scene, the character on the right with empty space in the
 ${corner} corner for a speech bubble.`;

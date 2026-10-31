@@ -5,7 +5,23 @@ import { speak, speechSynthesisSupported, stopSpeaking } from '../lib/speech';
 
 // Per-scene listen mode: the device reads the scene text aloud. Free,
 // on-device voices (many work offline), nothing sent anywhere.
-export function ListenPanel({ sceneNumber, text }: { sceneNumber: number; text: string }) {
+// wordMap translates each spoken-word ordinal to the page's display word
+// index (skipping speaker labels, which are shown but not spoken), so the
+// page can light up the word being read. onSpeakStart clears the trail;
+// onSpeakProgress reports the display index being spoken, null when done.
+export function ListenPanel({
+  sceneNumber,
+  text,
+  wordMap,
+  onSpeakStart,
+  onSpeakProgress,
+}: {
+  sceneNumber: number;
+  text: string;
+  wordMap: number[];
+  onSpeakStart?: () => void;
+  onSpeakProgress?: (displayIndex: number | null) => void;
+}) {
   const [state, setState] = useState<'idle' | 'playing'>('idle');
   const [error, setError] = useState<string | null>(null);
   // Set when the stop comes from tapping the button: the utterance's own
@@ -18,11 +34,19 @@ export function ListenPanel({ sceneNumber, text }: { sceneNumber: number; text: 
     setError(null);
     stoppingRef.current = false;
     setState('playing');
+    onSpeakStart?.();
     try {
-      await speak(text, 1);
+      // Quarter speed for new learners; boundary events drive the
+      // word-by-word highlight where the voice supports them.
+      await speak(text, 0.25, (charIndex) => {
+        const ordinal = text.slice(0, charIndex).split(/\s+/).filter((w) => w !== '').length;
+        const displayIndex = wordMap[ordinal];
+        if (displayIndex !== undefined) onSpeakProgress?.(displayIndex);
+      });
     } catch {
       if (!stoppingRef.current) setError('Could not play audio on this device.');
     } finally {
+      onSpeakProgress?.(null);
       setState('idle');
     }
   }
@@ -30,6 +54,7 @@ export function ListenPanel({ sceneNumber, text }: { sceneNumber: number; text: 
   function stop() {
     stoppingRef.current = true;
     stopSpeaking();
+    onSpeakProgress?.(null);
     setState('idle');
   }
 

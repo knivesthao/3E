@@ -51,6 +51,28 @@ describe('validateSceneData', () => {
     expect(validateSceneData({ narration: 'x', bubbles: new Array(11).fill({ speaker: 'A', text: 'B' }) }).ok).toBe(false);
     expect(validateSceneData({ narration: 'x', bubbles: [{ speaker: 'A', text: 'y'.repeat(501) }] }).ok).toBe(false);
   });
+
+  it('defaults missing characters to empty and preserves valid ones', () => {
+    expect(validateSceneData({ narration: 'x', bubbles: [] })).toEqual({
+      ok: true,
+      value: { narration: 'x', bubbles: [], characters: [] },
+    });
+    expect(
+      validateSceneData({ narration: 'x', bubbles: [], characters: ['Mia', 'Cat'] }),
+    ).toEqual({
+      ok: true,
+      value: { narration: 'x', bubbles: [], characters: ['Mia', 'Cat'] },
+    });
+  });
+
+  it('rejects bad characters: non-strings, empties, oversized, too many', () => {
+    expect(validateSceneData({ narration: 'x', bubbles: [], characters: 'Mia' }).ok).toBe(false);
+    expect(validateSceneData({ narration: 'x', bubbles: [], characters: [''] }).ok).toBe(false);
+    expect(validateSceneData({ narration: 'x', bubbles: [], characters: ['M'.repeat(51)] }).ok).toBe(false);
+    expect(
+      validateSceneData({ narration: 'x', bubbles: [], characters: new Array(11).fill('Mia') }).ok,
+    ).toBe(false);
+  });
 });
 
 describe('validateCast', () => {

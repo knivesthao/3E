@@ -201,7 +201,7 @@ projects.post('/:id/publish', async (c) => {
     .bind(project.id)
     .all<SceneRow>();
   if (sceneRows.length === 0) return c.json(INVALID, 400);
-  const scenes: { scene_number: number; narration: string; bubbles: { speaker: string; text: string }[] }[] = [];
+  const scenes: { scene_number: number; narration: string; bubbles: { speaker: string; text: string }[]; characters: string[] }[] = [];
   for (const s of sceneRows) {
     let data: unknown;
     try {
@@ -211,7 +211,7 @@ projects.post('/:id/publish', async (c) => {
     }
     const parsed = validateSceneData(data);
     if (!parsed.ok) return c.json(INVALID, 400);
-    scenes.push({ scene_number: s.scene_number, narration: parsed.value.narration, bubbles: parsed.value.bubbles });
+    scenes.push({ scene_number: s.scene_number, narration: parsed.value.narration, bubbles: parsed.value.bubbles, characters: parsed.value.characters });
   }
 
   const jobId = crypto.randomUUID();

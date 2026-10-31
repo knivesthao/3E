@@ -279,6 +279,42 @@ describe('Scene art endpoints', () => {
     expect(await mask.text()).toBe('MASKDATA');
   });
 
+  it('draws the page cast: known names expand to looks, unknown names pass through', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const env = ENV(db);
+    const uid = await userIdOf(cookie, env);
+    const pid = seedBook(db, uid);
+    db.seedScene(pid, 2, {
+      narration: 'Noy meets Cat.',
+      bubbles: [],
+      characters: ['noy', 'Cat'],
+    });
+    let artPrompt = '';
+    let maskPrompt = '';
+    stubFetch((body: unknown) => {
+      const b = body as { prompt?: unknown; input?: { prompts?: { value?: unknown }[] } };
+      if (typeof b.prompt === 'string') {
+        artPrompt = b.prompt;
+        return { data: [{ b64_json: b64('PNGDATA') }], usage: { prompt_tokens: 5, completion_tokens: 0 } };
+      }
+      const first = Array.isArray(b.input?.prompts) ? b.input.prompts[0]?.value : undefined;
+      if (typeof first === 'string') {
+        maskPrompt = first;
+        return { mask_b64: b64('MASKDATA'), usage: { prompt_tokens: 5, completion_tokens: 0 } };
+      }
+      throw new Error('unexpected model call');
+    });
+
+    const res = await app.request('/api/ai/art', json('POST', { projectId: pid, sceneNumber: 2 }, cookie), env);
+    expect(res.status).toBe(200);
+    // Case-insensitive match expands to the cast look; the unknown name stays raw.
+    expect(artPrompt).toContain('Noy — 8-year-old with short black hair');
+    expect(artPrompt).toContain('Cat');
+    // Cutout follows the page cast, not the global first character.
+    expect(maskPrompt).toContain('Noy — 8-year-old with short black hair');
+  });
+
   it('rejects bad input, anon users, missing key, missing bucket, spent quota', async () => {
     const db = makeDb();
     const cookie = await signIn(db);

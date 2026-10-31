@@ -47,6 +47,7 @@ export interface Scene {
 export interface SceneData {
   narration: string;
   bubbles: { speaker: string; text: string }[];
+  characters: string[];
 }
 
 export const parseScene = (s: Scene): SceneData => JSON.parse(s.data_json) as SceneData;

@@ -49,6 +49,22 @@ function describePlace(castJson: string): string {
   return 'a simple home';
 }
 
+// Resolve the page's character picks against the cast: known names expand
+// to "name — look", unknown names pass through raw so the artist still
+// tries them. Case-insensitive; keeps the author's pick order.
+function describeCast(castJson: string, names: string[]): string[] {
+  const entries = castEntries(castJson, 'characters');
+  return names.map((n) => {
+    const e = entries.find(
+      (x) => typeof x.name === 'string' && x.name.trim().toLowerCase() === n.trim().toLowerCase(),
+    );
+    const name =
+      (e && typeof e.name === 'string' && e.name.trim() !== '' ? e.name.trim() : null) ?? n.trim();
+    const look = e && typeof e.description === 'string' && e.description.trim() !== '' ? e.description.trim() : null;
+    return look ? `${name} — ${look}` : name;
+  });
+}
+
 art.post('/', async (c) => {
   const body = await readJson(c);
   if (!isRecord(body) || typeof body.projectId !== 'string' || body.projectId === '') {
@@ -80,11 +96,13 @@ art.post('/', async (c) => {
   if (!scene) return c.json({ error: 'not found' }, 404);
   let narration = '';
   let bubbles: { speaker: string; text: string }[] = [];
+  let pageCharacters: string[] = [];
   try {
     const parsed = validateSceneData(JSON.parse(scene.data_json) as unknown);
     if (!parsed.ok) return c.json(INVALID, 400);
     narration = parsed.value.narration;
     bubbles = parsed.value.bubbles;
+    pageCharacters = parsed.value.characters;
   } catch {
     return c.json(INVALID, 400);
   }
@@ -100,10 +118,12 @@ art.post('/', async (c) => {
 
   const ctx = { apiKey, userId, projectId: project.id, apiUrl: c.env.AI_API_URL, modal: modalConfig(c.env) };
   const character = describeCharacter(project.cast_json);
+  const resolved = describeCast(project.cast_json, pageCharacters);
   try {
     const prompt = sceneArtPrompt({
       place: describePlace(project.cast_json),
       character,
+      characters: resolved.length > 0 ? resolved : undefined,
       narration,
       bubbles,
     });
@@ -124,7 +144,7 @@ art.post('/', async (c) => {
         ...ctx,
         opId: crypto.randomUUID(),
         imageBytes: panel.bytes,
-        textPrompt: isolateText(character),
+        textPrompt: isolateText(resolved[0] ?? character),
       });
       mKey = maskKey(project.id, sceneNumber);
       await store.put(mKey, mask.bytes, { httpMetadata: { contentType: mask.contentType } });

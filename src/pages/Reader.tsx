@@ -19,6 +19,8 @@ function Words({
   tapped,
   base = 0,
   heardCount = 0,
+  spoken,
+  current = null,
 }: {
   text: string;
   onTap: (word: string) => void;
@@ -27,6 +29,10 @@ function Words({
   // base + heardCount were read (in order) and highlight.
   base?: number;
   heardCount?: number;
+  // Listen mode trail: spoken display indices glow yellow, the word being
+  // spoken right now glows brighter.
+  spoken?: Set<number>;
+  current?: number | null;
 }) {
   // Ordinal of the next real word in this segment. Punctuation-only
   // tokens consume no index, matching the order array (empties filtered).
@@ -38,7 +44,9 @@ function Words({
         const w = clean(part);
         if (w === '') return <span key={i}>{part}</span>;
         const idx = base + at++;
-        const hl = idx < heardCount ? ' bg-yellow-300' : '';
+        const isCur = current !== null && idx === current;
+        const isRead = idx < heardCount || spoken?.has(idx);
+        const hl = isCur ? ' bg-amber-400' : isRead ? ' bg-yellow-300' : '';
         // Only content words invite a lookup; glue words render plainly
         // (but still highlight when read).
         if (!isContentWord(w)) {
@@ -54,6 +62,7 @@ function Words({
             type="button"
             onClick={() => void onTap(part)}
             aria-label={`Look up ${w}`}
+            aria-current={isCur || undefined}
             className={`min-h-0 cursor-pointer rounded-sm px-1 py-0.5 text-left underline-offset-4 ${
               w === tapped ? 'underline decoration-2' : 'underline decoration-dotted decoration-stone-500'
             }${hl}`}
@@ -79,6 +88,10 @@ export default function Reader() {
   const [current, setCurrent] = useState(0);
   // How many page words (in reading order) the mic has heard so far.
   const [liveCount, setLiveCount] = useState(0);
+  // Listen mode trail: words the speaker has already read, plus the one
+  // being spoken right now (null when idle). Display word indices.
+  const [listenSet, setListenSet] = useState<Set<number>>(new Set());
+  const [listenCur, setListenCur] = useState<number | null>(null);
   // Set when a lookup gets a 401: the visitor is signed out, so later taps
   // and prefetches skip the call and show the sign-in prompt directly.
   const [needsSignIn, setNeedsSignIn] = useState(false);
@@ -199,6 +212,8 @@ export default function Reader() {
     stopSpeaking();
     setActive(null);
     setLiveCount(0);
+    setListenSet(new Set());
+    setListenCur(null);
     // Collapse the buddy menu: each page starts with Pip closed, so the
     // learner re-taps the buddy icon to show that page's icons.
     setVoiceOpen(false);
@@ -299,6 +314,22 @@ export default function Reader() {
       }
     }
   }
+  // Exact string the speaker reads (speakers included), plus a map from
+  // each raw spoken token to its display word index. Punctuation-only
+  // tokens map to the following word's index; both sides count raw tokens
+  // identically so boundary ordinals land on the right word.
+  const listenText = scene
+    ? [scene.narration, ...scene.bubbles.map((b) => `${b.speaker}: ${b.text}`)].join(' ')
+    : '';
+  const wordMap: number[] = [];
+  if (scene) {
+    let display = 0;
+    for (const tok of listenText.split(/\s+/)) {
+      if (tok === '') continue;
+      wordMap.push(display);
+      if (clean(tok) !== '') display++;
+    }
+  }
   const countWords = (t: string) => t.split(/\s+/).map((w) => clean(w)).filter((w) => w !== '').length;
   const narrationCount = scene ? countWords(scene.narration) : 0;
   const bubbleBase: number[] = [];
@@ -372,7 +403,20 @@ export default function Reader() {
               <div className="absolute right-2 top-14 z-20 flex max-w-[calc(100%-1rem)] flex-col items-end gap-1 bg-transparent text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.9)] [&>div]:w-fit [&>div]:max-w-full">
                 <ListenPanel
                   sceneNumber={scene.scene_number}
-                  text={[scene.narration, ...scene.bubbles.map((b) => `${b.speaker}: ${b.text}`)].join(' ')}
+                  text={listenText}
+                  wordMap={wordMap}
+                  onSpeakStart={() => {
+                    setListenSet(new Set());
+                    setListenCur(null);
+                  }}
+                  onSpeakProgress={(idx) => {
+                    if (idx === null) {
+                      setListenCur(null);
+                    } else {
+                      setListenCur(idx);
+                      setListenSet((prev) => new Set(prev).add(idx));
+                    }
+                  }}
                 />
                 <ReadAloudPanel
                   sceneNumber={scene.scene_number}
@@ -394,12 +438,12 @@ export default function Reader() {
             )}
             <div className="absolute inset-x-0 bottom-0 p-3 font-semibold text-black [-webkit-text-stroke:4px_white] [paint-order:stroke_fill]">
               <p className="mb-1 text-lg leading-snug">
-                <Words text={scene.narration} onTap={(w) => void tap(w)} tapped={active?.word ?? null} base={0} heardCount={liveCount} />
+                <Words text={scene.narration} onTap={(w) => void tap(w)} tapped={active?.word ?? null} base={0} heardCount={liveCount} spoken={listenSet} current={listenCur} />
               </p>
               {scene.bubbles.map((b, bi) => (
                 <p key={bi} className="text-lg leading-snug">
                   <strong>{b.speaker}: </strong>
-                  <Words text={b.text} onTap={(w) => void tap(w)} tapped={active?.word ?? null} base={(bubbleBase[bi] ?? 0) + countWords(b.speaker)} heardCount={liveCount} />
+                  <Words text={b.text} onTap={(w) => void tap(w)} tapped={active?.word ?? null} base={(bubbleBase[bi] ?? 0) + countWords(b.speaker)} heardCount={liveCount} spoken={listenSet} current={listenCur} />
                 </p>
               ))}
             </div>
@@ -431,7 +475,7 @@ export default function Reader() {
         aria-label="Page navigation"
         className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-stone-200 bg-white py-2"
       >
-        <Button onClick={() => go(current - 1)} disabled={current <= 0} aria-label="Previous scene">
+        <Button onClick={() => go(current - 1)} disabled={current <= 0} aria-label="Previous page">
           ← Prev
         </Button>
         <p className="text-sm font-medium text-stone-700" aria-live="polite">
@@ -441,7 +485,7 @@ export default function Reader() {
           onClick={() => go(current + 1)}
           disabled={current >= total}
           variant="primary"
-          aria-label="Next scene"
+          aria-label="Next page"
         >
           Next →
         </Button>

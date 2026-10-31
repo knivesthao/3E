@@ -17,9 +17,68 @@ import {
 import { LEVELS } from '../lib/api';
 import type { Book, Cast, CastKind, Panel, Project, Scene, SceneData } from '../lib/api';
 import { Alert, Badge, Button, Field, Page, inputClass } from '../components/ui';
-import { useConfirm } from '../components/Dialog';
+import { Dialog, useConfirm } from '../components/Dialog';
 
-const blank: SceneData = { narration: '', bubbles: [] };
+const blank: SceneData = { narration: '', bubbles: [], characters: [] };
+
+// Older scenes predate the characters field; normalize on load so drafts
+// always carry it (bubbles pass through untouched for old dialogue).
+function toDraft(s: Scene): SceneData {
+  const d = parseScene(s);
+  return { narration: d.narration, bubbles: d.bubbles, characters: d.characters ?? [] };
+}
+
+// Dropdown multiselect of cast characters for one page.
+function CharacterPicker({
+  names,
+  value,
+  onChange,
+}: {
+  names: string[];
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  if (names.length === 0) {
+    return <p className="text-sm text-stone-600">Add characters in the Cast tab to feature them here.</p>;
+  }
+  return (
+    <div className="relative">
+      <Button
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-label={`Characters on this page: ${value.length === 0 ? 'none' : value.join(', ')}`}
+      >
+        {value.length === 0 ? 'Choose characters…' : `${value.join(', ')} ▾`}
+      </Button>
+      {open && (
+        <div
+          role="group"
+          aria-label="Characters on this page"
+          className="absolute z-10 mt-1 flex max-h-56 w-64 flex-col gap-1 overflow-y-auto rounded-md border border-stone-300 bg-white p-2 shadow-lg"
+        >
+          {names.map((n) => (
+            <label key={n} className="flex min-h-[44px] cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-stone-100">
+              <input
+                type="checkbox"
+                checked={value.includes(n)}
+                onChange={() =>
+                  onChange(value.includes(n) ? value.filter((x) => x !== n) : [...value, n])
+                }
+                className="h-5 w-5"
+              />
+              <span className="text-base">{n}</span>
+            </label>
+          ))}
+          <Button onClick={() => setOpen(false)} variant="primary">
+            Done
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Editor() {
   const { id = '' } = useParams();
@@ -53,6 +112,7 @@ export default function Editor() {
   const [publishBusy, setPublishBusy] = useState(false);
   const [book, setBook] = useState<Book | null>(null);
   const [shared, setShared] = useState(false);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const { requestConfirm, dialog } = useConfirm();
 
   async function refresh() {
@@ -71,7 +131,7 @@ export default function Editor() {
       setLevel(res.project.level);
       setCast(JSON.parse(res.project.cast_json) as typeof cast);
       const d: Record<string, SceneData> = {};
-      for (const s of res.scenes) d[s.id] = parseScene(s);
+      for (const s of res.scenes) d[s.id] = toDraft(s);
       setDrafts(d);
     } catch {
       setError('Could not load the comic.');
@@ -96,12 +156,12 @@ export default function Editor() {
   async function addScene() {
     setError(null);
     try {
-      const res = await createScene(id, { narration: newNarration, bubbles: [] });
+      const res = await createScene(id, { narration: newNarration, bubbles: [], characters: [] });
       setNewNarration('');
       setScenes((s) => [...s, res.scene]);
-      setDrafts((d) => ({ ...d, [res.scene.id]: parseScene(res.scene) }));
+      setDrafts((d) => ({ ...d, [res.scene.id]: toDraft(res.scene) }));
     } catch {
-      setError('Could not add the scene.');
+      setError('Could not add the page.');
     }
   }
 
@@ -111,14 +171,14 @@ export default function Editor() {
       const res = await updateScene(id, sceneId, drafts[sceneId] ?? blank);
       setScenes((s) => s.map((x) => (x.id === sceneId ? res.scene : x)));
     } catch {
-      setError('Could not save the scene.');
+      setError('Could not save the page.');
     }
   }
 
   async function removeScene(sceneId: string, sceneNumber: number) {
     const ok = await requestConfirm({
-      title: 'Delete scene',
-      message: `Delete scene ${sceneNumber}? This cannot be undone.`,
+      title: 'Delete page',
+      message: `Delete page ${sceneNumber}? This cannot be undone.`,
       confirmLabel: 'Delete',
     });
     if (!ok) return;
@@ -127,7 +187,7 @@ export default function Editor() {
       await deleteScene(id, sceneId);
       setScenes((s) => s.filter((x) => x.id !== sceneId));
     } catch {
-      setError('Could not delete the scene.');
+      setError('Could not delete the page.');
     }
   }
 
@@ -142,14 +202,6 @@ export default function Editor() {
     } catch {
       setError('Could not reorder scenes.');
     }
-  }
-
-  function editBubble(sceneId: string, bi: number, field: 'speaker' | 'text', value: string) {
-    setDrafts((d) => {
-      const cur = d[sceneId] ?? blank;
-      const bubbles = cur.bubbles.map((b, i) => (i === bi ? { ...b, [field]: value } : b));
-      return { ...d, [sceneId]: { ...cur, bubbles } };
-    });
   }
 
   async function saveCast() {
@@ -171,7 +223,7 @@ export default function Editor() {
       const res = await aiFinish(id);
       await refresh();
       if (res.failed.length > 0) {
-        setError(`Some scenes need help: ${res.failed.map((f) => `#${f.scene_number} (${f.reason})`).join(', ')}`);
+        setError(`Some pages need help: ${res.failed.map((f) => `#${f.scene_number} (${f.reason})`).join(', ')}`);
       }
     } catch {
       setError('3E Finish failed. Try again or write the scenes yourself.');
@@ -189,7 +241,7 @@ export default function Editor() {
         return next;
       });
     } catch {
-      setError(`Art failed for scene ${scene.scene_number}.`);
+      setError(`Art failed for page ${scene.scene_number}.`);
     } finally {
       setArtBusy((b) => ({ ...b, [scene.id]: false }));
     }
@@ -217,7 +269,7 @@ export default function Editor() {
       const next = { ...d, narration: res.rewritten };
       const saved = await updateScene(id, sceneId, next);
       setScenes((s) => s.map((x) => (x.id === sceneId ? saved.scene : x)));
-      setDrafts((all) => ({ ...all, [sceneId]: parseScene(saved.scene) }));
+      setDrafts((all) => ({ ...all, [sceneId]: toDraft(saved.scene) }));
       if (!res.check.passed) {
         setError(`Still hard words: ${res.check.unknown.join(', ')}`);
       }
@@ -303,29 +355,30 @@ export default function Editor() {
         <>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
-              <Field label="New scene narration">
+              <Field label="New page text">
                 <input
                   maxLength={2000}
-                  placeholder="New scene narration"
+                  placeholder="New page text"
                   value={newNarration}
                   onChange={(e) => setNewNarration(e.target.value)}
                   className={inputClass}
                 />
               </Field>
             </div>
-            <Button onClick={() => void addScene()}>Add scene</Button>
+            <Button onClick={() => void addScene()}>Add page</Button>
           </div>
           {scenes.map((s, i) => {
             const d = drafts[s.id] ?? blank;
+            const castNames = [...new Set(cast.characters.map((c) => c.name.trim()).filter((n) => n !== ''))];
             return (
-              <section key={s.id} aria-label={`Scene ${s.scene_number}`} className="flex flex-col gap-2 rounded-md border border-stone-300 bg-white p-3">
+              <section key={s.id} aria-label={`Page ${s.scene_number}`} className="flex flex-col gap-2 rounded-md border border-stone-300 bg-white p-3">
                 <h2 className="flex items-center gap-2 font-display text-xl font-bold">
                   <span aria-hidden="true" className="inline-flex h-7 min-h-0 w-7 items-center justify-center rounded-full bg-accent-900 text-sm text-white">
                     {s.scene_number}
                   </span>
-                  Scene {s.scene_number}
+                  Page {s.scene_number}
                 </h2>
-                <Field label="Narration">
+                <Field label="Text">
                   <textarea
                     maxLength={2000}
                     rows={3}
@@ -336,73 +389,81 @@ export default function Editor() {
                     className={inputClass}
                   />
                 </Field>
-                {d.bubbles.map((b, bi) => (
-                  <div key={bi} className="flex flex-col gap-2 rounded-md bg-stone-100 p-2 sm:flex-row sm:items-end">
-                    <div className="sm:w-32">
-                      <Field label="Speaker">
-                        <input
-                          maxLength={50}
-                          placeholder="Speaker"
-                          value={b.speaker}
-                          onChange={(e) => editBubble(s.id, bi, 'speaker', e.target.value)}
-                          className={inputClass}
-                        />
-                      </Field>
-                    </div>
-                    <div className="flex-1">
-                      <Field label="Line">
-                        <input
-                          maxLength={500}
-                          placeholder="Line"
-                          value={b.text}
-                          onChange={(e) => editBubble(s.id, bi, 'text', e.target.value)}
-                          className={inputClass}
-                        />
-                      </Field>
-                    </div>
-                    <Button
-                      variant="danger"
-                      onClick={() =>
-                        setDrafts((all) => ({
-                          ...all,
-                          [s.id]: { ...d, bubbles: d.bubbles.filter((_, k) => k !== bi) },
-                        }))
-                      }
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  onClick={() =>
-                    setDrafts((all) => ({
-                      ...all,
-                      [s.id]: { ...d, bubbles: [...d.bubbles, { speaker: '', text: '' }] },
-                    }))
-                  }
-                >
-                  Add bubble
-                </Button>
+                <Field label="Characters">
+                  <CharacterPicker
+                    names={castNames}
+                    value={d.characters}
+                    onChange={(characters) =>
+                      setDrafts((all) => ({ ...all, [s.id]: { ...d, characters } }))
+                    }
+                  />
+                </Field>
+                {d.bubbles.length > 0 && (
+                  <p className="text-sm text-stone-600">
+                    Keeps {d.bubbles.length} dialogue line{d.bubbles.length === 1 ? '' : 's'} from
+                    before — still shown in the book, edited in earlier versions.
+                  </p>
+                )}
                 {panels[s.scene_number] && (
                   <img
                     src={panels[s.scene_number].image_url}
-                    alt={`Scene ${s.scene_number} art`}
+                    alt={`Page ${s.scene_number} art`}
                     className="h-auto w-48"
                   />
                 )}
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => void saveScene(s.id)} variant="primary">Save scene</Button>
+                  <Button onClick={() => void saveScene(s.id)} variant="primary">Save page</Button>
+                  <Button onClick={() => setPreviewId(s.id)}>Preview</Button>
                   <Button onClick={() => void simplifyScene(s.id)}>Simplify</Button>
                   <Button onClick={() => void generateSceneArt(s)} disabled={!!artBusy[s.id]}>
                     {artBusy[s.id] ? 'Generating…' : 'Generate'}
                   </Button>
-                  <Button onClick={() => void move(i, -1)} aria-label={`Move scene ${s.scene_number} up`}>Up</Button>
-                  <Button onClick={() => void move(i, 1)} aria-label={`Move scene ${s.scene_number} down`}>Down</Button>
+                  <Button onClick={() => void move(i, -1)} aria-label={`Move page ${s.scene_number} up`}>Up</Button>
+                  <Button onClick={() => void move(i, 1)} aria-label={`Move page ${s.scene_number} down`}>Down</Button>
                   <Button onClick={() => void removeScene(s.id, s.scene_number)} variant="danger">Delete</Button>
                 </div>
               </section>
             );
           })}
+          {(() => {
+            const s = scenes.find((x) => x.id === previewId);
+            if (!s) return null;
+            const d = drafts[s.id] ?? blank;
+            return (
+              <Dialog title={`Page ${s.scene_number} preview`} onClose={() => setPreviewId(null)}>
+                <div className="overflow-hidden rounded-md bg-stone-200">
+                  {panels[s.scene_number] ? (
+                    <img
+                      src={panels[s.scene_number].image_url}
+                      alt={`Page ${s.scene_number} art preview`}
+                      className="w-full"
+                    />
+                  ) : (
+                    <p className="p-6 text-center text-sm text-stone-600">
+                      No art yet — Generate to see it here.
+                    </p>
+                  )}
+                  <div className="p-3 font-semibold text-black [-webkit-text-stroke:3px_white] [paint-order:stroke_fill]">
+                    <p className="text-lg leading-snug">{d.narration || <span className="text-stone-500">No text yet.</span>}</p>
+                    {d.bubbles.map((b, bi) => (
+                      <p key={bi} className="text-lg leading-snug">
+                        <strong>{b.speaker}: </strong>
+                        {b.text}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+                {d.characters.length > 0 && (
+                  <p className="mt-2 text-sm text-stone-600">Featuring: {d.characters.join(', ')}</p>
+                )}
+                <div className="mt-4 flex justify-end">
+                  <Button onClick={() => setPreviewId(null)} variant="primary">
+                    Close
+                  </Button>
+                </div>
+              </Dialog>
+            );
+          })()}
         </>
       ) : (
         <>

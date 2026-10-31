@@ -40,7 +40,7 @@ export default function Studio() {
   async function remove(id: string, title: string) {
     const ok = await requestConfirm({
       title: 'Delete comic',
-      message: `Delete "${title}" and all of its scenes? This cannot be undone.`,
+      message: `Delete "${title}" and all of its pages? This cannot be undone.`,
       confirmLabel: 'Delete',
     });
     if (!ok) return;

@@ -91,6 +91,7 @@ export interface SceneBubble {
 export interface SceneData {
   narration: string;
   bubbles: SceneBubble[];
+  characters: string[];
 }
 
 export function validateSceneData(
@@ -106,7 +107,16 @@ export function validateSceneData(
     if (typeof b.text !== 'string' || b.text.length > 500) return { ok: false };
     bubbles.push({ speaker: b.speaker, text: b.text });
   }
-  return { ok: true, value: { narration: data.narration, bubbles } };
+  // Optional cast for the page; older scenes without it default to empty.
+  const characters: string[] = [];
+  if (data.characters !== undefined) {
+    if (!Array.isArray(data.characters) || data.characters.length > 10) return { ok: false };
+    for (const c of data.characters) {
+      if (typeof c !== 'string' || c.length === 0 || c.length > 50) return { ok: false };
+      characters.push(c);
+    }
+  }
+  return { ok: true, value: { narration: data.narration, bubbles, characters } };
 }
 
 export function validateCast(input: unknown): { ok: true; value: string } | { ok: false } {
