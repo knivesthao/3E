@@ -14,6 +14,7 @@ export function ReadAloudPanel({
   onPass,
   onLookup,
   onProgress,
+  onStart,
 }: {
   sceneNumber: number;
   text: string;
@@ -22,6 +23,8 @@ export function ReadAloudPanel({
   onPass: (sceneNumber: number) => void;
   onLookup: (word: string) => void;
   onProgress?: (matched: number) => void;
+  // Fired when a take begins so the page can clear the Listen trail.
+  onStart?: () => void;
 }) {
   const [state, setState] = useState<'idle' | 'listening' | 'done'>('idle');
   const [score, setScore] = useState<ReadingScore | null>(null);
@@ -49,6 +52,7 @@ export function ReadAloudPanel({
     setScore(null);
     stoppingRef.current = false;
     setHeard('');
+    onStart?.();
     onProgress?.(0);
     setState('listening');
     try {

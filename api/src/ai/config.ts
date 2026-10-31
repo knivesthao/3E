@@ -14,6 +14,9 @@ export const PRICES: Record<string, { in: number; out: number; flat?: number }> 
   'sam-3.1': { in: 0, out: 0 }, // unpublished — verify before pricing
   // Self-hosted Glimmer via Baseten (own credits) — fill when known.
   'meta-models/Muse-Glimmer-30B': { in: 0, out: 0 },
+  // Hackathon Model API: free $100 credits tracked by Baseten, $0 to us.
+  // Tokens still land in ai_usage; spend itself shows in Baseten.
+  'meta-models/muse-spark-open-1026': { in: 0, out: 0 },
 };
 
 export const TEXT_MODEL = 'muse-spark-1.3';

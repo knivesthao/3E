@@ -408,6 +408,7 @@ export default function Reader() {
                   onSpeakStart={() => {
                     setListenSet(new Set());
                     setListenCur(null);
+                    setLiveCount(0);
                   }}
                   onSpeakProgress={(idx) => {
                     if (idx === null) {
@@ -425,6 +426,10 @@ export default function Reader() {
                   onPass={(n) => setPassed((p) => new Set(p).add(n))}
                   onLookup={(w) => void tap(w)}
                   onProgress={setLiveCount}
+                  onStart={() => {
+                    setListenSet(new Set());
+                    setListenCur(null);
+                  }}
                 />
               </div>
             )}
