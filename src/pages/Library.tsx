@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Tour from '../components/Tour';
 import type { TourTrack } from '../components/Tour';
-import { Badge, Button, Page } from '../components/ui';
+import { Badge, Button } from '../components/ui';
 import { getExamBest, getMyActivity, listBooks } from '../lib/api';
 import type { CatalogBook, MyActivity } from '../lib/api';
 import { BELT_LABEL, beltFor } from '../lib/belts';
 
-const SEEN_KEY = 'e3-tour';
+const TOUR_KEY = 'e3-tour-library';
 const CATALOG_KEY = 'e3-catalog';
 const CATALOG_TTL = 24 * 3600 * 1000;
 
@@ -24,31 +24,33 @@ function cachedCatalog(): CatalogBook[] | null {
   }
 }
 
-function seen(): TourTrack | 'skip' | null {
+// First-visit tour, tracked per page: the Library offers the reader tour
+// once, the Studio offers the creator tour once. A legacy global mark
+// means the reader already toured, so it migrates without re-prompting.
+function tourSeen(key: string): boolean {
   try {
-    const v = window.localStorage.getItem(SEEN_KEY);
-    // Legacy 'done' marks and fresh visits both start the judge track once.
-    return v === 'read' || v === 'create' || v === 'judge' ? v : null;
+    if (window.localStorage.getItem(key)) return true;
+    if (key === TOUR_KEY && window.localStorage.getItem('e3-tour')) {
+      window.localStorage.setItem(key, 'read');
+      return true;
+    }
+    return false;
   } catch {
-    return 'skip';
+    return true;
   }
 }
 
-function markSeen(track: TourTrack): void {
+function markTourSeen(key: string, track: TourTrack): void {
   try {
-    window.localStorage.setItem(SEEN_KEY, track);
+    window.localStorage.setItem(key, track);
   } catch {
     /* private mode: tour simply shows again next visit */
   }
 }
 
 export default function Library() {
-  // First visit ever: the 30-second judge track. Old 'done' marks replay it
-  // once; afterwards each track remembers itself.
-  const [tour, setTour] = useState<TourTrack | null>(() => {
-    const s = seen();
-    return s === null ? 'judge' : null;
-  });
+  // First visit to the Library: offer the reader tour once.
+  const [tour, setTour] = useState<TourTrack | null>(null);
   const [best, setBest] = useState<number | null>(null);
   const [total, setTotal] = useState(0);
   const [passMark, setPassMark] = useState(0);
@@ -61,6 +63,7 @@ export default function Library() {
   );
   const belt = beltFor(best, passMark, total);
   useEffect(() => {
+    if (!tourSeen(TOUR_KEY)) setTour('read');
     getExamBest()
       .then((res) => {
         setBest(res.best);
@@ -84,7 +87,8 @@ export default function Library() {
       .catch(() => setBooks((b) => b ?? []));
   }, []);
   return (
-    <Page title="Library">
+    <main className="mx-auto w-full max-w-2xl px-4 pb-4 sm:px-6 sm:pb-6">
+      <h1 className="sr-only">Library</h1>
       {activity && (activity.streak > 0 || activity.finished.length > 0) ? (
         <section aria-label="My shelf" className="rounded-md border border-accent-900 bg-accent-50 p-3">
           <h2 className="font-display text-xl font-bold">My shelf</h2>
@@ -121,7 +125,7 @@ export default function Library() {
           ) : null}
         </section>
       ) : null}
-      <div role="tablist" aria-label="Library sections" className="mb-3 flex gap-2">
+      <div role="tablist" aria-label="Library sections" className="sticky top-[69px] z-30 -mx-4 mb-3 flex gap-2 bg-white px-4 py-2 sm:-mx-6 sm:px-6">
         {(['books', 'flashcards', 'exams'] as const).map((t) => (
           <Button
             key={t}
@@ -136,11 +140,8 @@ export default function Library() {
       </div>
       {tab === 'books' && (
       <section aria-label="Published books" role="tabpanel">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="mb-2">
           <h2 className="font-display text-xl font-bold">Published books</h2>
-          <Button onClick={() => setTour('read')}>Reader tour</Button>
-          <Button onClick={() => setTour('create')}>Creator tour</Button>
-          <Button onClick={() => setTour('judge')} variant="primary">30-second tour</Button>
         </div>
         {books === null ? (
           <p>Loading books…</p>
@@ -231,15 +232,24 @@ export default function Library() {
         </p>
       </section>
       )}
+      <p className="mt-4 text-sm text-stone-600">
+        <button
+          type="button"
+          onClick={() => setTour('read')}
+          className="underline underline-offset-4"
+        >
+          Take the library tour
+        </button>
+      </p>
       {tour && (
         <Tour
           track={tour}
           onClose={() => {
-            markSeen(tour);
+            markTourSeen(TOUR_KEY, tour);
             setTour(null);
           }}
         />
       )}
-    </Page>
+    </main>
   );
 }

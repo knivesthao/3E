@@ -3,8 +3,12 @@ import type { FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { LEVELS, createProject, deleteProject, listProjects } from '../lib/api';
 import type { Project } from '../lib/api';
-import { Alert, Badge, Button, Field, Page, inputClass } from '../components/ui';
+import { Alert, Badge, Button, Field, inputClass } from '../components/ui';
 import { useConfirm } from '../components/Dialog';
+import Tour from '../components/Tour';
+import type { TourTrack } from '../components/Tour';
+
+const TOUR_KEY = 'e3-tour-studio';
 
 export default function Studio() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -12,6 +16,8 @@ export default function Studio() {
   const [level, setLevel] = useState('A1');
   const [error, setError] = useState<string | null>(null);
   const { requestConfirm, dialog } = useConfirm();
+  // First visit to the Studio: offer the creator tour once.
+  const [tour, setTour] = useState<TourTrack | null>(null);
 
   async function refresh() {
     try {
@@ -22,6 +28,19 @@ export default function Studio() {
   }
 
   useEffect(() => {
+    try {
+      if (!window.localStorage.getItem(TOUR_KEY)) {
+        // A legacy global tour mark means the reader toured before page
+        // tracking existed: migrate it without re-prompting.
+        if (window.localStorage.getItem('e3-tour')) {
+          window.localStorage.setItem(TOUR_KEY, 'create');
+        } else {
+          setTour('create');
+        }
+      }
+    } catch {
+      /* private mode: never nag */
+    }
     void refresh();
   }, []);
 
@@ -53,7 +72,8 @@ export default function Studio() {
   }
 
   return (
-    <Page title="Studio">
+    <main className="mx-auto w-full max-w-2xl px-4 py-4 sm:px-6 sm:py-6">
+      <h1 className="sr-only">Studio</h1>
       <form onSubmit={submit} className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="flex-1">
           <Field label="Comic title">
@@ -96,6 +116,28 @@ export default function Studio() {
           </li>
         ))}
       </ul>
-    </Page>
+      <p className="mt-4 text-sm text-stone-600">
+        <button
+          type="button"
+          onClick={() => setTour('create')}
+          className="underline underline-offset-4"
+        >
+          Take the studio tour
+        </button>
+      </p>
+      {tour && (
+        <Tour
+          track={tour}
+          onClose={() => {
+            try {
+              window.localStorage.setItem(TOUR_KEY, tour);
+            } catch {
+              /* private mode */
+            }
+            setTour(null);
+          }}
+        />
+      )}
+    </main>
   );
 }

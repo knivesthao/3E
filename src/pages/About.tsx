@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Page } from '../components/ui';
 import { Button } from '../components/ui';
 import { PrivacyBody } from './Privacy';
 import { TermsBody } from './Terms';
@@ -11,8 +10,9 @@ import { TermsBody } from './Terms';
 export default function About() {
   const [tab, setTab] = useState<'about' | 'privacy' | 'terms'>('about');
   return (
-    <Page title="About 3E">
-      <div role="tablist" aria-label="About sections" className="mb-3 flex gap-2">
+    <main className="mx-auto w-full max-w-2xl px-4 pb-4 sm:px-6 sm:pb-6">
+      <h1 className="sr-only">About 3E</h1>
+      <div role="tablist" aria-label="About sections" className="sticky top-[69px] z-30 -mx-4 mb-3 flex gap-2 bg-white px-4 py-2 sm:-mx-6 sm:px-6">
         {(['about', 'privacy', 'terms'] as const).map((t) => (
           <Button
             key={t}
@@ -58,6 +58,6 @@ export default function About() {
         <TermsBody />
       </div>
       )}
-    </Page>
+    </main>
   );
 }
