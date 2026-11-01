@@ -20,4 +20,9 @@ describe('session gate', () => {
     const res = await app.request('/api/nope');
     expect(res.status).toBe(401);
   });
+
+  it('rejects /api/levels without a cookie', async () => {
+    const res = await app.request('/api/levels');
+    expect(res.status).toBe(401);
+  });
 });

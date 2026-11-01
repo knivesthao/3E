@@ -1,12 +1,13 @@
 import { Page } from '../components/ui';
+import { LegalNav } from '../components/LegalNav';
 
 // Plain-language privacy for a children's reading app. Claims below match
 // the implementation: magic-link email, progress stored in our database,
 // voice 100% on-device, AI text/art via metered providers. BEFORE LAUNCH:
 // replace contact@example.com with a real monitored inbox.
-export default function Privacy() {
+export function PrivacyBody() {
   return (
-    <Page title="Privacy policy">
+    <>
       <p className="text-sm text-stone-600">Last updated: the day we launch. Short version: we collect as little as possible, never sell anything, and your child's voice never leaves your device.</p>
       <section aria-label="What we collect" className="mt-3">
         <h2 className="font-display text-xl font-bold">What we collect</h2>
@@ -37,6 +38,15 @@ export default function Privacy() {
         <h2 className="font-display text-xl font-bold">Parents and guardians</h2>
         <p>Review your learner's progress in Admin → Guardian. To export or delete everything tied to an email address, write to contact@example.com and we will do it.</p>
       </section>
+    </>
+  );
+}
+
+export default function Privacy() {
+  return (
+    <Page title="Privacy policy">
+      <PrivacyBody />
+      <LegalNav current="privacy" />
     </Page>
   );
 }

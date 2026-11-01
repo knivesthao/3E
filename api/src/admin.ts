@@ -10,6 +10,8 @@ import {
   TEXT_MODEL,
 } from './ai/config';
 import type { Level } from './levels';
+import { isHskLevel } from './hsk';
+import type { HskLevel } from './hsk';
 import { isRecord } from './validate';
 
 // Local narrow guard (routes.ts and validate.ts each carry their own).
@@ -126,8 +128,8 @@ admin.post('/definitions', async (c) => {
     const word = r.word.trim().toLowerCase();
     const gloss = r.gloss.trim();
     if (word === '' || word.length > 50 || gloss === '' || gloss.length > 500) continue;
-    if (!isLevel(r.level)) continue;
-    const level = r.level as Level;
+    if (!isLevel(r.level) && !isHskLevel(r.level)) continue;
+    const level = r.level as Level | HskLevel;
     const verified = r.verified === 1 || r.verified === true ? 1 : 0;
     const source = typeof r.source === 'string' && r.source !== '' ? r.source.slice(0, 20) : 'baseten';
     await c.env.DB.prepare(

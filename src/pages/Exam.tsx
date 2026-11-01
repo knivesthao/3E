@@ -152,6 +152,7 @@ export default function Exam() {
           <BeltChip belt={current} />
         </p>
       ) : null}
+      <div className="max-h-[46dvh] overflow-y-auto rounded-md">
       {q.passage && (
         <p className="rounded-md bg-stone-100 px-3 py-2">Read: {q.passage}</p>
       )}
@@ -180,6 +181,7 @@ export default function Exam() {
           ))}
         </div>
       </fieldset>
+      </div>
       {error && <Alert>{error}</Alert>}
       <div className="flex flex-wrap gap-2">
         {index > 0 && <Button onClick={() => setIndex(index - 1)}>Back</Button>}

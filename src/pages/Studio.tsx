@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { ALL_LEVELS, createProject, deleteProject, listProjects } from '../lib/api';
+import { LEVELS, createProject, deleteProject, listProjects } from '../lib/api';
 import type { Project } from '../lib/api';
 import { Alert, Badge, Button, Field, Page, inputClass } from '../components/ui';
 import { useConfirm } from '../components/Dialog';
@@ -69,7 +69,7 @@ export default function Studio() {
         </div>
         <Field label="Level">
           <select value={level} onChange={(e) => setLevel(e.target.value)} className={inputClass}>
-            {ALL_LEVELS.map((l) => (
+            {LEVELS.map((l) => (
               <option key={l} value={l}>{l}</option>
             ))}
           </select>

@@ -7,7 +7,7 @@
 export type Level = 'A1' | 'A2' | 'B1' | 'B2';
 
 // Survival basics: pronouns, be/have/do/go, numbers, colors, family, home.
-const A1 = [
+export const A1 = [
   'a', 'an', 'the', 'and', 'or', 'but', 'is', 'are', 'was', 'were', 'be', 'am',
   'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them',
   'my', 'your', 'his', 'our', 'their', 'this', 'that', 'these', 'those',
@@ -27,7 +27,7 @@ const A1 = [
 ];
 
 // Everyday life: past forms, food/time/places, feelings, simple connectors.
-const A2 = [
+export const A2 = [
   'about', 'after', 'again', 'ago', 'already', 'always', 'another', 'any',
   'anyone', 'anything', 'away', 'because', 'before', 'better', 'best',
   'between', 'bought', 'bring', 'broken', 'broke', 'busy', 'buy', 'called',
@@ -61,7 +61,7 @@ const A2 = [
 ];
 
 // Connected text: school/work/travel, opinions, reasons, common abstract nouns.
-const B1 = [
+export const B1 = [
   'able', 'accept', 'accident', 'achieve', 'across', 'act', 'action',
   'active', 'add', 'admire', 'admit', 'adopt', 'advance', 'advantage',
   'adventure', 'advice', 'advise', 'affect', 'afraid', 'against', 'agree',
@@ -327,7 +327,7 @@ const B1 = [
 ];
 
 // Discussion language: opinions, society, feelings nuance, abstract nouns.
-const B2 = [
+export const B2 = [
   'abandon', 'ability', 'abroad', 'abrupt', 'absence', 'absolute', 'absorb',
   'abstract', 'absurd', 'abundance', 'abuse', 'academic', 'accelerate',
   'accent', 'accept', 'access', 'acclaim', 'accommodate', 'accompany',

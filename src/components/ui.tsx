@@ -55,8 +55,8 @@ export function Alert({ children }: { children: ReactNode }) {
 
 export function Page({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-10">
-      <h1 className="mb-6 font-display text-4xl font-bold tracking-tight">{title}</h1>
+    <main className="mx-auto w-full max-w-2xl px-4 py-4 sm:px-6 sm:py-6">
+      <h1 className="mb-4 font-display text-4xl font-bold tracking-tight">{title}</h1>
       <div className="flex flex-col gap-6">{children}</div>
     </main>
   );

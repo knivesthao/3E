@@ -192,6 +192,22 @@ describe('POST /api/admin/definitions', () => {
     expect(db.defs.size).toBe(1);
   });
 
+  it('stores HSK rows under lang zh and still rejects bad levels', async () => {
+    const db = makeDb({});
+    const cookie = await signIn(db);
+    const rows = [
+      { word: '妈妈', level: 'HSK1', gloss: 'mother', verified: 1 },
+      { word: '你好', level: 'HSK1', gloss: 'hello', verified: 0 },
+      { word: '电脑', level: 'HSK9', gloss: 'bad band' },
+    ];
+    const res = await post(db, { rows, lang: 'zh' }, cookie);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, received: 2 });
+    expect(db.defs.get('妈妈|HSK1|zh')).toMatchObject({ word: '妈妈', level: 'HSK1', lang: 'zh' });
+    expect(db.defs.has('你好|HSK1|zh')).toBe(true);
+    expect(db.defs.size).toBe(2);
+  });
+
   it('rejects empty and oversized batches', async () => {
     const db = makeDb({});
     const cookie = await signIn(db);

@@ -1,10 +1,11 @@
 import { Page } from '../components/ui';
+import { LegalNav } from '../components/LegalNav';
 
 // Plain-language terms for a children's learning app. BEFORE LAUNCH: have a
 // human review these and replace contact@example.com with a real inbox.
-export default function Terms() {
+export function TermsBody() {
   return (
-    <Page title="Terms of use">
+    <>
       <p className="text-sm text-stone-600">Short version: 3E is a practice tool for young English learners. Be kind, keep it kid-safe, and your books stay yours.</p>
       <section aria-label="What 3E is" className="mt-3">
         <h2 className="font-display text-xl font-bold">What 3E is</h2>
@@ -30,6 +31,15 @@ export default function Terms() {
         <h2 className="font-display text-xl font-bold">Availability</h2>
         <p>Provided as-is while we build it. Accounts, drafts, and progress may change during the beta. Contact: contact@example.com.</p>
       </section>
+    </>
+  );
+}
+
+export default function Terms() {
+  return (
+    <Page title="Terms of use">
+      <TermsBody />
+      <LegalNav current="terms" />
     </Page>
   );
 }

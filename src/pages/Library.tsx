@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import Tour from '../components/Tour';
 import type { TourTrack } from '../components/Tour';
 import { Badge, Button, Page } from '../components/ui';
@@ -27,8 +27,8 @@ function cachedCatalog(): CatalogBook[] | null {
 function seen(): TourTrack | 'skip' | null {
   try {
     const v = window.localStorage.getItem(SEEN_KEY);
-    // Legacy 'done' marks and fresh visits both start the reader track once.
-    return v === 'read' || v === 'create' ? v : null;
+    // Legacy 'done' marks and fresh visits both start the judge track once.
+    return v === 'read' || v === 'create' || v === 'judge' ? v : null;
   } catch {
     return 'skip';
   }
@@ -43,17 +43,22 @@ function markSeen(track: TourTrack): void {
 }
 
 export default function Library() {
-  // First visit ever: the reader track. Old 'done' marks replay it once so
-  // existing users meet Pip too; afterwards each track remembers itself.
+  // First visit ever: the 30-second judge track. Old 'done' marks replay it
+  // once; afterwards each track remembers itself.
   const [tour, setTour] = useState<TourTrack | null>(() => {
     const s = seen();
-    return s === null ? 'read' : null;
+    return s === null ? 'judge' : null;
   });
   const [best, setBest] = useState<number | null>(null);
   const [total, setTotal] = useState(0);
   const [passMark, setPassMark] = useState(0);
   const [books, setBooks] = useState<CatalogBook[] | null>(() => cachedCatalog());
   const [activity, setActivity] = useState<MyActivity | null>(null);
+  const [params] = useSearchParams();
+  const startTab = params.get('tab');
+  const [tab, setTab] = useState<'books' | 'flashcards' | 'exams'>(
+    startTab === 'flashcards' || startTab === 'exams' ? startTab : 'books',
+  );
   const belt = beltFor(best, passMark, total);
   useEffect(() => {
     getExamBest()
@@ -116,11 +121,26 @@ export default function Library() {
           ) : null}
         </section>
       ) : null}
-      <section aria-label="Published books">
+      <div role="tablist" aria-label="Library sections" className="mb-3 flex gap-2">
+        {(['books', 'flashcards', 'exams'] as const).map((t) => (
+          <Button
+            key={t}
+            onClick={() => setTab(t)}
+            variant={tab === t ? 'primary' : undefined}
+            aria-selected={tab === t}
+            role="tab"
+          >
+            {t === 'books' ? 'Books' : t === 'flashcards' ? 'Flashcards' : 'Exams'}
+          </Button>
+        ))}
+      </div>
+      {tab === 'books' && (
+      <section aria-label="Published books" role="tabpanel">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-display text-xl font-bold">Published books</h2>
           <Button onClick={() => setTour('read')}>Reader tour</Button>
           <Button onClick={() => setTour('create')}>Creator tour</Button>
+          <Button onClick={() => setTour('judge')} variant="primary">30-second tour</Button>
         </div>
         {books === null ? (
           <p>Loading books…</p>
@@ -158,7 +178,46 @@ export default function Library() {
           </ul>
         )}
       </section>
-      <section aria-label="Practice test" className="rounded-md border border-stone-300 bg-white p-3">
+      )}
+      {tab === 'flashcards' && (
+      <section aria-label="Flashcard decks" role="tabpanel">
+        <h2 className="font-display text-xl font-bold">Flashcard decks</h2>
+        <ul className="mt-2 flex flex-col gap-2">
+          <li className="rounded-md border border-stone-200 bg-white p-3">
+            <p className="text-base font-bold">Letters</p>
+            <p className="text-sm text-stone-600">All 26 letters. Hear each sound, say an example word.</p>
+            <p className="mt-1">
+              <Link to="/practice/alphabet?deck=letters" className="underline underline-offset-4">Practice letters</Link>
+            </p>
+          </li>
+          <li className="rounded-md border border-stone-200 bg-white p-3">
+            <p className="text-base font-bold">Alphabet names</p>
+            <p className="text-sm text-stone-600">A to Z by name. Hear “ay, bee, cee”, say each letter back.</p>
+            <p className="mt-1">
+              <Link to="/practice/alphabet?deck=names" className="underline underline-offset-4">Practice names</Link>
+            </p>
+          </li>
+          <li className="rounded-md border border-stone-200 bg-white p-3">
+            <p className="text-base font-bold">Letter teams</p>
+            <p className="text-sm text-stone-600">sh, ch, th, ph, wh, ck, ng and more. Two letters, one sound.</p>
+            <p className="mt-1">
+              <Link to="/practice/alphabet?deck=teams" className="underline underline-offset-4">Practice teams</Link>
+            </p>
+          </li>
+          {(['A1', 'A2', 'B1', 'B2'] as const).map((lvl) => (
+            <li key={lvl} className="rounded-md border border-stone-200 bg-white p-3">
+              <p className="text-base font-bold">{lvl} words</p>
+              <p className="text-sm text-stone-600">Everyday words at {lvl} level, split into sounded parts.</p>
+              <p className="mt-1">
+                <Link to={`/practice/alphabet?deck=${lvl}`} className="underline underline-offset-4">Practice {lvl}</Link>
+              </p>
+            </li>
+          ))}
+        </ul>
+      </section>
+      )}
+      {tab === 'exams' && (
+      <section aria-label="Practice test" role="tabpanel" className="rounded-md border border-stone-300 bg-white p-3">
         <h2 className="font-display text-xl font-bold">Practice test: A1</h2>
         <p className="text-sm text-stone-600">
           {total > 0 ? `${total} questions` : 'Sample questions at A1 level'}
@@ -171,6 +230,7 @@ export default function Library() {
           </Link>
         </p>
       </section>
+      )}
       {tour && (
         <Tour
           track={tour}

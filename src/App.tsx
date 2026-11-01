@@ -6,10 +6,12 @@ import Library from './pages/Library';
 import Studio from './pages/Studio';
 import Editor from './pages/Editor';
 import Reader from './pages/Reader';
+import Flashcards from './pages/Flashcards';
 import Admin from './pages/Admin';
 import Exam from './pages/Exam';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
+import About from './pages/About';
 import SignIn from './pages/SignIn';
 import { getMe, logout } from './lib/api';
 
@@ -75,6 +77,16 @@ export default function App() {
           >
             Studio
           </NavLink>
+          <NavLink
+            to="/about"
+            className={({ isActive }) =>
+              isActive
+                ? 'border-b-2 border-accent-900 pb-0.5 font-semibold text-stone-900'
+                : 'text-stone-600 underline decoration-stone-300 underline-offset-4 hover:decoration-stone-500'
+            }
+          >
+            About
+          </NavLink>
           <span className="ms-auto flex flex-wrap items-center gap-2 text-sm">
             {email ? (
               <UserMenu
@@ -132,8 +144,25 @@ export default function App() {
           }
         />
         <Route path="/s/:bookId" element={<Reader />} />
+        <Route
+          path="/practice/:id"
+          element={
+            <Guard email={email}>
+              <Flashcards />
+            </Guard>
+          }
+        />
+        <Route
+          path="/practice/alphabet"
+          element={
+            <Guard email={email}>
+              <Flashcards />
+            </Guard>
+          }
+        />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
+      <Route path="/about" element={<About />} />
         <Route
           path="/admin"
           element={
@@ -152,15 +181,6 @@ export default function App() {
           }
         />
       </Routes>
-      <footer className="mx-auto w-full max-w-2xl px-4 py-6 text-sm text-stone-600 sm:px-6">
-        <NavLink to="/privacy" className="underline decoration-stone-300 underline-offset-4">
-          Privacy
-        </NavLink>{' '}
-        ·{' '}
-        <NavLink to="/terms" className="underline decoration-stone-300 underline-offset-4">
-          Terms
-        </NavLink>
-      </footer>
     </>
   );
 }

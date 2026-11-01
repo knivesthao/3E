@@ -22,6 +22,10 @@ const flag = (name) => args.includes(name);
 const API = (opt('--api', process.env.API ?? 'http://localhost:8787')).replace(/\/$/, '');
 const FRONTEND = API.replace(':8787', ':5173');
 const DRY = flag('--dry');
+const LIMIT = Number(opt('--limit', '0')) || 0;
+// Explicit opt-in to measure with wired providers (Baseten text, Meta art
+// until Modal is deployed). Without it the script stays Meta-only.
+const ALLOW_WIRED = flag('--allow-wired');
 
 const BOOKS = [
   {
@@ -81,14 +85,15 @@ const devVars = existsSync('api/.dev.vars') ? readFileSync('api/.dev.vars', 'utf
 const has = (re) => re.test(devVars);
 const basetenWired = has(/^BASETEN_API_URL=https?:\/\//m) && has(/^BASETEN_API_KEY=.+/m);
 const modalWired = has(/^MODAL_API_URL=https?:\/\//m) && has(/^MODAL_PROXY_TOKEN=.+/m);
-console.log(`providers: baseten=${basetenWired ? 'WIRED (refusing)' : 'off'} modal=${modalWired ? 'WIRED (refusing)' : 'off'} meta=on`);
-if (basetenWired || modalWired) {
-  console.error('\nRefusing: Baseten/Modal dev wiring is present. Remove it for a Meta-only cost run.');
+console.log(`providers: baseten=${basetenWired ? 'WIRED' : 'off'} modal=${modalWired ? 'WIRED' : 'off'} meta=on`);
+if ((basetenWired || modalWired) && !ALLOW_WIRED) {
+  console.error('\nRefusing: Baseten/Modal dev wiring is present. Remove it for a Meta-only cost run, or pass --allow-wired to measure with wired providers.');
   process.exit(1);
 }
+const QUEUE = LIMIT > 0 ? BOOKS.slice(0, LIMIT) : BOOKS;
 if (DRY) {
   console.log('\n--dry: plan only. Books that would be made:');
-  for (const b of BOOKS) console.log(`  ${b.level}  ${b.title}  (${b.email})`);
+  for (const b of QUEUE) console.log(`  ${b.level}  ${b.title}  (${b.email})`);
   process.exit(0);
 }
 
@@ -133,7 +138,7 @@ async function signIn(email) {
 }
 
 const results = [];
-for (const spec of BOOKS) {
+for (const spec of QUEUE) {
   console.log(`\n=== ${spec.level}  ${spec.title} ===`);
   await signIn(spec.email);
   const { project } = await call('/api/projects', {
@@ -196,7 +201,7 @@ for (const spec of BOOKS) {
   });
 }
 
-console.log('\n=== cost summary (Meta Model API only) ===');
+console.log('\n=== cost summary (ledger $; Baseten-side burn is on the Baseten dashboard) ===');
 for (const r of results) {
   console.log(
     `${r.level}  ${r.title}: ${r.scenes} scenes, ${r.calls} calls, ` +

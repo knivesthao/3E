@@ -188,6 +188,7 @@ async function main() {
     for (const t of chunk) (byLevel[t.level] ??= []).push(t.word);
     for (const [level, words] of Object.entries(byLevel)) {
       let meanings;
+      let used = 0;
       try {
         ({ meanings, tokens: used } = await defineBatch(key, words, level, false));
         tokens += used;

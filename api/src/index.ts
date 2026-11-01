@@ -16,6 +16,7 @@ import { exam } from './exam';
 import { ai } from './ai/routes';
 import { share } from './share';
 import { costs } from './costs';
+import { A1, A2, B1, B2 } from './levels';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>({ strict: false });
 
@@ -118,6 +119,13 @@ app.get('/api/auth/verify', async (c) => {
 });
 
 app.get('/api/auth/me', (c) => c.json({ user: { id: c.get('userId'), email: c.get('userEmail') } }));
+
+// Word lists for level flashcard decks. Same arrays the level gate
+// enforces, served as data so the client never imports server code
+// (Vite would route that import through the /api proxy and 404).
+app.get('/api/levels', (c) =>
+  c.json({ A1, A2, B1, B2 }, 200, { 'Cache-Control': 'public, max-age=86400' }),
+);
 
 // Self activity (shelf + streaks): distinct active days from exam attempts
 // plus page turns the user made, and books whose shared position the user

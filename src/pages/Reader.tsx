@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { aiMeanings, getBook, getPosition, getSharedBook, setPosition, voiceLang } from '../lib/api';
 import { getCachedBook, putBook } from '../lib/db';
 import type { Book } from '../lib/api';
@@ -11,70 +11,9 @@ import { ListenPanel } from '../components/ListenPanel';
 import { QuizPanel } from '../components/Quiz';
 import { BuddyPanel } from '../components/Buddy';
 import { ShareClipPanel } from '../components/ShareClip';
+import { Words } from '../components/Words';
 
 const clean = cleanWord;
-
-function Words({
-  text,
-  onTap,
-  tapped,
-  base = 0,
-  heardCount = 0,
-  spoken,
-  current = null,
-}: {
-  text: string;
-  onTap: (word: string) => void;
-  tapped: string | null;
-  // Position of this segment's first word in page order; words before
-  // base + heardCount were read (in order) and highlight.
-  base?: number;
-  heardCount?: number;
-  // Listen mode trail: spoken display indices glow yellow, the word being
-  // spoken right now glows brighter.
-  spoken?: Set<number>;
-  current?: number | null;
-}) {
-  // Ordinal of the next real word in this segment. Punctuation-only
-  // tokens consume no index, matching the order array (empties filtered).
-  let at = 0;
-  return (
-    <>
-      {text.split(/(\s+)/).map((part, i) => {
-        if (/^\s+$/.test(part) || part === '') return <span key={i}>{part}</span>;
-        const w = clean(part);
-        if (w === '') return <span key={i}>{part}</span>;
-        const idx = base + at++;
-        const isCur = current !== null && idx === current;
-        const isRead = idx < heardCount || spoken?.has(idx);
-        const hl = isCur ? ' bg-amber-400' : isRead ? ' bg-yellow-300' : '';
-        // Only content words invite a lookup; glue words render plainly
-        // (but still highlight when read).
-        if (!isContentWord(w)) {
-          return (
-            <span key={i} className={`rounded-sm px-1 py-0.5${hl}`}>
-              {part}
-            </span>
-          );
-        }
-        return (
-          <button
-            key={i}
-            type="button"
-            onClick={() => void onTap(part)}
-            aria-label={`Look up ${w}`}
-            aria-current={isCur || undefined}
-            className={`min-h-0 cursor-pointer rounded-sm px-1 py-0.5 text-left underline-offset-4 ${
-              w === tapped ? 'underline decoration-2' : 'underline decoration-dotted decoration-stone-500'
-            }${hl}`}
-          >
-            {part}
-          </button>
-        );
-      })}
-    </>
-  );
-}
 
 export default function Reader() {
   const { id = '', bookId = '' } = useParams();
@@ -383,7 +322,8 @@ export default function Reader() {
               <h1 className="font-display text-3xl font-bold">{book.manifest.title}</h1>
               <p className="mb-2 text-base">
                 Level {book.level} · {book.reading_level}
-                {offline && ' · Offline copy'}
+                {offline && ' · Offline copy'}{' '}
+                <Link to="/practice/alphabet">Alphabet</Link>
               </p>
             </>
           )}

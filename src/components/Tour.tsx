@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button } from './ui';
 
-export type TourTrack = 'read' | 'create';
+export type TourTrack = 'read' | 'create' | 'judge';
 
 const TRACKS: Record<TourTrack, { title: string; body: string }[]> = {
   read: [
@@ -16,6 +16,24 @@ const TRACKS: Record<TourTrack, { title: string; body: string }[]> = {
     {
       title: 'Tap words, earn belts',
       body: 'Tap any hard word for its meaning, quiz yourself after the book, and earn belts in the practice test.',
+    },
+  ],
+  judge: [
+    {
+      title: 'Teachers need books; making them is slow',
+      body: '3E turns one scene idea into a complete leveled webcomic — written, checked, drawn, and costed — in minutes.',
+    },
+    {
+      title: 'AI writes at your level',
+      body: 'Start a comic in Studio, write one scene, and 3E Finish writes the rest. Every word is checked against A1 to B2; Simplify fixes misses.',
+    },
+    {
+      title: 'Every book shows its price',
+      body: 'Admin tracks AI cost and time per book. A full book costs about six cents — free to read, cheap to make.',
+    },
+    {
+      title: 'Learners read, tap, and practice',
+      body: 'Read on a phone, tap hard words, hear Pip read aloud, read back for a score, drill flashcards and the alphabet, earn belts.',
     },
   ],
   create: [
