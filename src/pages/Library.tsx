@@ -205,7 +205,7 @@ export default function Library() {
               <Link to="/practice/alphabet?deck=teams" className="underline underline-offset-4">Practice teams</Link>
             </p>
           </li>
-          {(['A1', 'A2', 'B1', 'B2'] as const).map((lvl) => (
+          {(['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const).map((lvl) => (
             <li key={lvl} className="rounded-md border border-stone-200 bg-white p-3">
               <p className="text-base font-bold">{lvl} words</p>
               <p className="text-sm text-stone-600">Everyday words at {lvl} level, split into sounded parts.</p>

@@ -1,0 +1,65 @@
+name: seed-dictionary
+# Server-side dictionary seeding: Baseten generates glosses, pushes them to
+# the DEVELOPMENT worker (DEV_LINKS magic-link flow works headless), and
+# uploads the SQL dump. Prod promotion is a separate, deliberate step:
+#   wrangler d1 execute 3e-db --remote --env production --file=<dump.sql>
+# Secrets (repo Settings -> Secrets -> Actions): BASETEN_API_KEY (Baseten
+# free-credits key), SEED_API (dev worker URL, e.g.
+# https://3e-dev.<subdomain>.workers.dev). Progress persists via cache, so
+# re-dispatch resumes where the last run stopped. Token budget caps Baseten
+# spend per run; the laptop can stay shut the whole time.
+
+on:
+  workflow_dispatch:
+    inputs:
+      levels:
+        description: "CEFR levels to seed (comma-separated)"
+        required: false
+        default: "A1,A2"
+      limit:
+        description: "Max words this run (0 = all remaining)"
+        required: false
+        default: "200"
+      max-tokens:
+        description: "Baseten token budget for this run"
+        required: false
+        default: "2000000"
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Restore seed progress
+        uses: actions/cache/restore@v4
+        with:
+          path: qa/definitions-progress.json
+          # One progress file per level set; a new set starts fresh.
+          key: seed-progress-${{ inputs.levels }}-
+
+      - name: Seed definitions
+        run: >
+          node qa/seed-definitions.mjs
+          --api ${{ secrets.SEED_API }}
+          --email qa-seed@example.com
+          --levels ${{ inputs.levels }}
+          --limit ${{ inputs.limit }}
+          --max-tokens ${{ inputs.max-tokens }}
+        env:
+          BASETEN_API_KEY: ${{ secrets.BASETEN_API_KEY }}
+
+      - name: Save seed progress
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: qa/definitions-progress.json
+          key: seed-progress-${{ inputs.levels }}-${{ github.run_id }}
+
+      - name: Upload SQL dump
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: definitions-seed-${{ inputs.levels }}-${{ github.run_number }}
+          path: qa/definitions-seed.sql

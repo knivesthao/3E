@@ -2,7 +2,11 @@ import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 
 export type Bindings = {
   DB: D1Database;
+  // Published-books library: shared by every env, holds ONLY the books
+  // table. Drafts, users, positions, and definitions stay in DB.
+  LIBRARY_DB: D1Database;
   ART?: R2Bucket;
+  LIBRARY_ART?: R2Bucket;
   DEV_LINKS?: string;
   MODEL_API_KEY?: string;
   AI_API_URL?: string;

@@ -37,7 +37,7 @@ describe('splitSyllables', () => {
     }
   });
   it('filters glue out of level decks', () => {
-    const decks = wordsByLevel({ A1: ['apple', 'the', 'run'], A2: [], B1: [], B2: [] });
+    const decks = wordsByLevel({ A1: ['apple', 'the', 'run'], A2: [], B1: [], B2: [], C1: [], C2: [] });
     expect(decks.A1).toEqual(['apple', 'run']);
   });
 

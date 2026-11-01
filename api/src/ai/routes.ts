@@ -44,7 +44,7 @@ function castNames(castJson: string): string[] {
 }
 
 const isLevel = (v: unknown): v is Level =>
-  v === 'A1' || v === 'A2' || v === 'B1' || v === 'B2';
+  v === 'A1' || v === 'A2' || v === 'B1' || v === 'B2' || v === 'C1' || v === 'C2';
 
 ai.post('/idea', async (c) => {
   const body = await readJson(c);

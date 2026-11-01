@@ -18,7 +18,7 @@ describe('validateProjectCreate', () => {
   it('rejects missing title, bad level, and bad purpose', () => {
     expect(validateProjectCreate({ level: 'A1' }).ok).toBe(false);
     expect(validateProjectCreate({ title: '  ', level: 'A1' }).ok).toBe(false);
-    expect(validateProjectCreate({ title: 'T', level: 'C2' }).ok).toBe(false);
+    expect(validateProjectCreate({ title: 'T', level: 'Z9' }).ok).toBe(false);
     expect(validateProjectCreate({ title: 'T', level: 'A1', purpose: 'fun' }).ok).toBe(false);
     expect(validateProjectCreate(null).ok).toBe(false);
   });

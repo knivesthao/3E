@@ -16,7 +16,7 @@ import { exam } from './exam';
 import { ai } from './ai/routes';
 import { share } from './share';
 import { costs } from './costs';
-import { A1, A2, B1, B2 } from './levels';
+import { A1, A2, B1, B2, C1, C2 } from './levels';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>({ strict: false });
 
@@ -124,7 +124,7 @@ app.get('/api/auth/me', (c) => c.json({ user: { id: c.get('userId'), email: c.ge
 // enforces, served as data so the client never imports server code
 // (Vite would route that import through the /api proxy and 404).
 app.get('/api/levels', (c) =>
-  c.json({ A1, A2, B1, B2 }, 200, { 'Cache-Control': 'public, max-age=86400' }),
+  c.json({ A1, A2, B1, B2, C1, C2 }, 200, { 'Cache-Control': 'public, max-age=86400' }),
 );
 
 // Self activity (shelf + streaks): distinct active days from exam attempts
@@ -154,13 +154,25 @@ app.get('/api/me/activity', async (c) => {
     streak++;
     cursor.setUTCDate(cursor.getUTCDate() - 1);
   }
-  const { results: atEnd } = await db
-    .prepare(
-      `SELECT b.id, b.title, b.cover_url, b.manifest_json, r.scene_number FROM books b
-       JOIN reading_sync r ON r.book_id = b.id WHERE r.updated_by = ?`,
-    )
+  // Cross-store: positions live in the app DB, published books in the
+  // library DB — D1 cannot join across databases, so fetch then match.
+  const { results: positions } = await db
+    .prepare('SELECT book_id, scene_number FROM reading_sync WHERE updated_by = ?')
     .bind(uid)
-    .all<{ id: string; title: string; cover_url: string | null; manifest_json: string; scene_number: number }>();
+    .all<{ book_id: string; scene_number: number }>();
+  const byId = new Map((positions ?? []).map((p) => [p.book_id, p.scene_number]));
+  const inIds = [...byId.keys()].map(() => '?').join(',');
+  const atEnd: { id: string; title: string; cover_url: string | null; manifest_json: string; scene_number: number }[] = [];
+  if (inIds !== '') {
+    const { results: found } = await c.env.LIBRARY_DB.prepare(
+      `SELECT id, title, cover_url, manifest_json FROM books WHERE id IN (${inIds})`,
+    )
+      .bind(...byId.keys())
+      .all<{ id: string; title: string; cover_url: string | null; manifest_json: string }>();
+    for (const b of found ?? []) {
+      atEnd.push({ ...b, scene_number: byId.get(b.id) ?? 1 });
+    }
+  }
   const finished = [];
   for (const f of atEnd ?? []) {
     try {

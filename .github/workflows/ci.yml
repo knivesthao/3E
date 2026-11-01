@@ -2,9 +2,9 @@ name: ci
 
 on:
   push:
-    branches: [develop, local, codespace]
+    branches: [main, develop, local, codespace]
   pull_request:
-    branches: [develop]
+    branches: [main, develop]
 
 jobs:
   test:
@@ -47,3 +47,41 @@ jobs:
       - name: No Node project yet
         if: steps.node.outputs.present != 'true'
         run: echo "No package.json — app scaffold (Step 1) not yet committed. Nothing to test."
+
+  # Branch strategy: develop -> development worker, main -> production.
+  # Deploys run only on push (never on PRs) and only after tests pass.
+  deploy-dev:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npx wrangler d1 migrations apply DB --remote --config api/wrangler.toml --env development
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - run: npx wrangler deploy --config api/wrangler.toml --env development
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+  deploy-prod:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npx wrangler d1 migrations apply DB --remote --config api/wrangler.toml --env production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - run: npx wrangler deploy --config api/wrangler.toml --env production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

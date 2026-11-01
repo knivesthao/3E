@@ -62,6 +62,8 @@ export interface LevelLists {
   A2: string[];
   B1: string[];
   B2: string[];
+  C1: string[];
+  C2: string[];
 }
 
 /** Content words per level for the level decks (glue filtered out). */
@@ -71,6 +73,8 @@ export function wordsByLevel(lists: LevelLists): Record<keyof LevelLists, string
     A2: lists.A2.filter(isContentWord),
     B1: lists.B1.filter(isContentWord),
     B2: lists.B2.filter(isContentWord),
+    C1: lists.C1.filter(isContentWord),
+    C2: lists.C2.filter(isContentWord),
   };
 }
 

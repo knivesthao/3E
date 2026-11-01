@@ -16,7 +16,7 @@ import { isRecord } from './validate';
 
 // Local narrow guard (routes.ts and validate.ts each carry their own).
 const isLevel = (v: unknown): v is Level =>
-  v === 'A1' || v === 'A2' || v === 'B1' || v === 'B2';
+  v === 'A1' || v === 'A2' || v === 'B1' || v === 'B2' || v === 'C1' || v === 'C2';
 
 // Admin overview (Specs + Content tabs). Session-gated by index.ts like
 // every other /api/* route. Aggregate counts only — no PII, and never
@@ -94,12 +94,15 @@ admin.get('/exam-items', async (c) => {
 admin.get('/stats', async (c) => {
   const db = c.env.DB;
   const counts: Record<string, number> = {};
-  for (const table of ['users', 'projects', 'scenes', 'books', 'panels', 'jobs', 'ai_usage'] as const) {
+  for (const table of ['users', 'projects', 'scenes', 'panels', 'jobs', 'ai_usage'] as const) {
     const row = await db
       .prepare(`SELECT COUNT(*) AS n FROM ${table}`)
       .first<{ n: number }>();
     counts[table] = row?.n ?? 0;
   }
+  // Books live in the library store, counted separately.
+  const brow = await c.env.LIBRARY_DB.prepare('SELECT COUNT(*) AS n FROM books').first<{ n: number }>();
+  counts.books = brow?.n ?? 0;
   return c.json({ counts });
 });
 

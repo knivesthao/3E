@@ -2,7 +2,7 @@
 import { isHskLevel } from './hsk';
 import type { HskLevel } from './hsk';
 
-export const LEVELS = ['A1', 'A2', 'B1', 'B2'] as const;
+export const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
 export type Level = (typeof LEVELS)[number];
 // Project language tracks: CEFR English or HSK Mandarin.
 export type ProjectLevel = Level | HskLevel;

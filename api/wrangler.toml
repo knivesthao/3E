@@ -18,6 +18,13 @@ database_name = "3e-db"
 database_id = "848c861b-e7a4-4fa8-a6ad-a09fab9c343f"
 migrations_dir = "migrations"
 
+# Published-books library (shared by every env — one copy of each book).
+[[d1_databases]]
+binding = "LIBRARY_DB"
+database_name = "3e-books"
+database_id = "c6a76db2-b682-44c5-92e9-9903c20f9f73"
+migrations_dir = "migrations-library"
+
 [vars]
 # DEV ONLY: request-link responses include the clickable magic link so you can
 # sign in without an email sender. Production overrides below — see README
@@ -29,3 +36,31 @@ DEV_LINKS = "true"
 # NEVER in this file — set with `wrangler secret put <NAME> --env production`.
 [env.production.vars]
 DEV_LINKS = "false"
+
+# Development: `develop` branch deploys here on every push (see ci.yml).
+# SHARED database and bucket with production (user decision Nov 2026):
+# books/definitions written via dev are instantly live in prod — no
+# promotion step. WARNING: DEV_LINKS stays on for one-click QA sign-in, so
+# anyone with the dev URL can mint a session on SHARED data. Acceptable
+# for the sprint; set "false" before launch or demo day.
+[env.development]
+name = "3e-dev"
+
+[[env.development.d1_databases]]
+binding = "DB"
+database_name = "3e-db"
+database_id = "848c861b-e7a4-4fa8-a6ad-a09fab9c343f"
+migrations_dir = "migrations"
+
+[[env.development.d1_databases]]
+binding = "LIBRARY_DB"
+database_name = "3e-books"
+database_id = "c6a76db2-b682-44c5-92e9-9903c20f9f73"
+migrations_dir = "migrations-library"
+
+[[env.development.r2_buckets]]
+binding = "ART"
+bucket_name = "3e-art"
+
+[env.development.vars]
+DEV_LINKS = "true"

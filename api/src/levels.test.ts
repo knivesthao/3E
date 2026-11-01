@@ -1,11 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { checkLevel, easierLevels, stem, tokenize } from './levels';
+import { A1, A2, B1, B2, C1, C2, checkLevel, easierLevels, stem, tokenize } from './levels';
 
 describe('easierLevels', () => {
   it('chains exact-first down to A1', () => {
     expect(easierLevels('A1')).toEqual(['A1']);
     expect(easierLevels('B1')).toEqual(['B1', 'A2', 'A1']);
     expect(easierLevels('B2')).toEqual(['B2', 'B1', 'A2', 'A1']);
+    expect(easierLevels('C2')).toEqual(['C2', 'C1', 'B2', 'B1', 'A2', 'A1']);
+  });
+});
+
+describe('advanced lists', () => {
+  it('ships non-empty lowercase-alpha C1/C2 cores', () => {
+    for (const list of [C1, C2]) {
+      expect(list.length).toBeGreaterThan(100);
+      for (const w of list) expect(w).toMatch(/^[a-z]+$/);
+    }
+  });
+
+  it('keeps advanced words out of easier lists', () => {
+    // Overlap would duplicate flashcard decks and blur the gate: each word
+    // lives in exactly one list, allowed cumulatively through easierLevels.
+    const easier = new Set([...A1, ...A2, ...B1, ...B2]);
+    for (const w of [...C1, ...C2]) expect(easier.has(w)).toBe(false);
+    for (const w of C2) expect(C1.includes(w)).toBe(false);
   });
 });
 
@@ -57,5 +75,13 @@ describe('checkLevel', () => {
     expect(checkLevel('Mia runs', 'A1', ['Mia']).passed).toBe(true);
     expect(checkLevel('They visit the market', 'A2').passed).toBe(true);
     expect(checkLevel('They celebrate the festival', 'B1').passed).toBe(true);
+  });
+
+  it('gates C2 words to C levels', () => {
+    const text = C2.slice(0, 40).join(' ');
+    expect(checkLevel(text, 'C2').passed).toBe(true);
+    const atB2 = checkLevel(text, 'B2');
+    expect(atB2.passed).toBe(false);
+    expect(atB2.unknown.length).toBeGreaterThan(0);
   });
 });

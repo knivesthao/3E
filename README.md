@@ -25,7 +25,11 @@ Built for the Meta AI Global Hackathon (English readers, CEFR A1–B2).
 
 React + Vite + TS · Hono on Cloudflare Workers · D1 · R2 · Meta Model API
 (text + image) · Baseten free credits (batch text + dictionary seeding).
-Work happens on `develop`; CI runs typecheck + tests + build on every push.
+Branches: `develop` is development, `main` is production. Daily work
+lands on `develop` (CI tests every push, then auto-deploys the dev worker
+with one-click sign-in). Merge to `main` only to ship — CI tests, migrates,
+and deploys production. Both workers share one D1 + one R2, so anything
+written via dev is instantly live in prod: QA there means QA on real data.
 
 ## First-time setup
 
@@ -89,12 +93,23 @@ Seeders batch-generate glosses, verify against the level gate, and push to
 the dev-only admin endpoint. The book factory measures real per-book cost
 via `/api/admin/costs/book`.
 
+Long batches run in the cloud, not on your laptop: Actions → **seed-dictionary**
+→ Run workflow (pick levels + word limit). It writes straight into the shared
+database (dev and prod read the same D1), resumes from cache on re-runs, and
+uploads the SQL dump as an audit trail.
+Needs repo secrets `BASETEN_API_KEY` and `SEED_API` (the dev worker URL).
+
 ## Pre-prod checklist (before anything beyond local dev)
 
 - [x] Add a real email sender for magic links (Resend via `api/src/email.ts`).
-- [ ] `wrangler login`, then set prod secrets (never in files):
+- [ ] `wrangler login`, then set secrets per env (never in files):
   `wrangler secret put MODEL_API_KEY --env production` (+ `RESEND_API_KEY`,
-  `EMAIL_FROM`, and the Baseten/Modal keys you actually use).
+  `EMAIL_FROM`, and the Baseten/Modal keys you actually use). Repeat with
+  `--env development` for staging.
+- [ ] In the Cloudflare dashboard, enable **R2**, then create the bucket:
+  `wrangler r2 bucket create 3e-art` (shared by dev and prod).
+- [ ] In GitHub repo settings → Secrets → Actions, add `CLOUDFLARE_API_TOKEN`
+  (Workers + D1 + R2 permissions) so CI can migrate and deploy.
 - [ ] Deploy: `wrangler deploy --env production` (`[env.production]` forces
   `DEV_LINKS=false`, so dev magic links die even if forgotten).
 - [ ] Custom domain + route in the Cloudflare dashboard.

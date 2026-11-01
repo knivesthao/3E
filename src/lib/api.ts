@@ -22,7 +22,7 @@ export const requestLink = (email: string) =>
 
 export const logout = () => api<{ ok: true }>('/api/auth/logout', { method: 'POST' });
 
-export const LEVELS = ['A1', 'A2', 'B1', 'B2'];
+export const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 // Mandarin track (parked): HSK 2.0 bands. English and Mandarin never share
 // one level picker — a language switcher picks the track first, then offers
 // LEVELS or HSK_LEVELS. The server already gates both tracks.
@@ -308,7 +308,7 @@ export const getExamBest = () =>
 
 // CEFR word lists (the same arrays the server level-gate enforces).
 export const listLevels = () =>
-  api<{ A1: string[]; A2: string[]; B1: string[]; B2: string[] }>('/api/levels');
+  api<{ A1: string[]; A2: string[]; B1: string[]; B2: string[]; C1: string[]; C2: string[] }>('/api/levels');
 
 export interface ShelfBook {
   id: string;

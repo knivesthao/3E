@@ -55,10 +55,16 @@ function apiKey() {
 function loadLists() {
   const src = readFileSync('api/src/levels.ts', 'utf8');
   const lists = {};
-  for (const lvl of ['A1', 'A2', 'B1', 'B2']) {
+  const parts = { C1: ['C1A', 'C1B', 'C1C'], C2: ['C2A', 'C2B'] };
+  for (const lvl of ['A1', 'A2', 'B1', 'B2', 'C1A', 'C1B', 'C1C', 'C2A', 'C2B']) {
     const m = src.match(new RegExp(`const ${lvl} = \\[([\\s\\S]*?)\\];`));
     if (!m) throw new Error(`list ${lvl} not found in api/src/levels.ts`);
     lists[lvl] = [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1].toLowerCase());
+  }
+  // Split arrays are an authoring detail: seed under the real level.
+  for (const [lvl, subs] of Object.entries(parts)) {
+    lists[lvl] = subs.flatMap((s) => lists[s]);
+    for (const s of subs) delete lists[s];
   }
   return lists;
 }
@@ -79,7 +85,7 @@ function stem(token) {
 }
 function allowedSet(lists, level, extra = []) {
   const set = new Set();
-  for (const l of ['A1', 'A2', 'B1', 'B2']) {
+  for (const l of ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']) {
     for (const w of lists[l]) set.add(w);
     if (l === level) break;
   }
@@ -105,6 +111,8 @@ const LEVEL_STYLE = {
   A2: 'a 7-year-old elementary learner. Use only easy everyday words',
   B1: 'an intermediate young learner. Keep it clear and simple',
   B2: 'an upper-intermediate young learner. Keep it clear, one short sentence',
+  C1: 'a proficient adult learner. One precise sentence, formal words allowed',
+  C2: 'a mastery-level adult learner. One precise sentence, rare words allowed',
 };
 async function defineBatch(key, words, level, strict) {
   const numbered = words.map((w, i) => `${i + 1}. ${w}`).join('\n');

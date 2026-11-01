@@ -17,7 +17,7 @@ const INVALID = { error: 'invalid request' } as const;
 // Edge-cached (busted on publish): hits cost zero D1 reads.
 share.get('/books', async (c) => {
   return cachedJson(c, 3600, async () => {
-    const { results } = await c.env.DB.prepare(
+    const { results } = await c.env.LIBRARY_DB.prepare(
       'SELECT id, title, level, cover_url, published_at FROM books ORDER BY published_at DESC',
     )
       .bind()
@@ -30,7 +30,7 @@ share.get('/:bookId', async (c) => {
   // One read on miss, zero on hit — including 404s, which cache briefly.
   // Safe: publish busts the exact key, so a late-published book appears.
   return cachedJson(c, 3600, async () => {
-    const book = await c.env.DB.prepare('SELECT * FROM books WHERE id = ?')
+    const book = await c.env.LIBRARY_DB.prepare('SELECT * FROM books WHERE id = ?')
       .bind(c.req.param('bookId'))
       .first<BookRow>();
     if (!book) return { status: 404, body: NOT_FOUND };
@@ -46,7 +46,7 @@ share.get('/:bookId', async (c) => {
 // in sync. First scene is the default until someone moves. Deliberately
 // NEVER edge-cached: polled every few seconds, freshness beats speed here.
 share.get('/:bookId/position', async (c) => {
-  const book = await c.env.DB.prepare('SELECT id FROM books WHERE id = ?')
+  const book = await c.env.LIBRARY_DB.prepare('SELECT id FROM books WHERE id = ?')
     .bind(c.req.param('bookId'))
     .first<{ id: string }>();
   if (!book) return c.json(NOT_FOUND, 404);
@@ -62,7 +62,7 @@ share.post('/:bookId/position', async (c) => {
   if (typeof scene !== 'number' || !Number.isInteger(scene) || scene < 1 || scene > 1000) {
     return c.json(INVALID, 400);
   }
-  const book = await c.env.DB.prepare('SELECT id FROM books WHERE id = ?')
+  const book = await c.env.LIBRARY_DB.prepare('SELECT id FROM books WHERE id = ?')
     .bind(c.req.param('bookId'))
     .first<{ id: string }>();
   if (!book) return c.json(NOT_FOUND, 404);

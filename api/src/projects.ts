@@ -137,7 +137,7 @@ projects.get('/:id', async (c) => {
 projects.get('/:id/book', async (c) => {
   const project = await ownProject(c.env.DB, c.req.param('id'), c.get('userId'));
   if (!project) return c.json(NOT_FOUND, 404);
-  const book = await c.env.DB.prepare('SELECT * FROM books WHERE project_id = ?')
+  const book = await c.env.LIBRARY_DB.prepare('SELECT * FROM books WHERE project_id = ?')
     .bind(project.id)
     .first<BookRow>();
   if (!book) return c.json(NOT_FOUND, 404);
@@ -183,7 +183,11 @@ projects.delete('/:id', async (c) => {
 });
 
 const readingLevel = (level: string): 'beginner' | 'intermediate' | 'advanced' =>
-  level === 'B2' ? 'advanced' : level === 'B1' ? 'intermediate' : 'beginner';
+  level === 'B2' || level === 'C1' || level === 'C2'
+    ? 'advanced'
+    : level === 'B1'
+      ? 'intermediate'
+      : 'beginner';
 
 // Publish (Step 4b): owner-only safety screen (Muse Spark safe/unsafe) +
 // manifest v2 packaging into books + cover. One call turns a draft into a
@@ -196,6 +200,8 @@ projects.post('/:id/publish', async (c) => {
   if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
 
   const db = c.env.DB;
+  // Published books live in the shared library store, not the app DB.
+  const library = c.env.LIBRARY_DB;
   const userId = c.get('userId');
   const { results: sceneRows } = await db
     .prepare('SELECT * FROM scenes WHERE project_id = ? ORDER BY scene_number ASC')
@@ -273,7 +279,7 @@ projects.post('/:id/publish', async (c) => {
       scenes: manifestScenes,
     };
     const stamp = new Date().toISOString();
-    const existing = await db
+    const existing = await library
       .prepare('SELECT id, published_at FROM books WHERE project_id = ?')
       .bind(project.id)
       .first<{ id: string; published_at: string }>();
@@ -282,7 +288,7 @@ projects.post('/:id/publish', async (c) => {
     if (existing) {
       bookId = existing.id;
       publishedAt = existing.published_at;
-      await db
+      await library
         .prepare(
           'UPDATE books SET title = ?, description = ?, level = ?, reading_level = ?, cover_url = ?, manifest_json = ?, updated_at = ? WHERE id = ?',
         )
@@ -300,7 +306,7 @@ projects.post('/:id/publish', async (c) => {
     } else {
       bookId = crypto.randomUUID();
       publishedAt = stamp;
-      await db
+      await library
         .prepare(
           'INSERT INTO books (id, project_id, creator_id, title, description, level, reading_level, cover_url, manifest_json, published_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         )

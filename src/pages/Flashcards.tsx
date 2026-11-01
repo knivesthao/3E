@@ -77,18 +77,18 @@ function shuffle<T>(xs: T[]): T[] {
 // get their meanings from tap-to-define in the Reader instead.
 // Meanings load lazily on flip (one word per tap) so the B2 deck never
 // prefetches thousands of glosses at once.
-type DeckKey = 'letters' | 'names' | 'teams' | 'A1' | 'A2' | 'B1' | 'B2';
+type DeckKey = 'letters' | 'names' | 'teams' | 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
 const DECK_LABEL: Record<DeckKey, string> = {
-  letters: 'Phonics', names: 'Alphabet', teams: 'Letter teams', A1: 'A1 words', A2: 'A2 words', B1: 'B1 words', B2: 'B2 words',
+  letters: 'Phonics', names: 'Alphabet', teams: 'Letter teams', A1: 'A1 words', A2: 'A2 words', B1: 'B1 words', B2: 'B2 words', C1: 'C1 words', C2: 'C2 words',
 };
 // Meaning lookup rides the deck's own level so glosses match the learner.
 const DECK_LEVEL: Record<DeckKey, string> = {
-  letters: 'A1', names: 'A1', teams: 'A1', A1: 'A1', A2: 'A2', B1: 'B1', B2: 'B2',
+  letters: 'A1', names: 'A1', teams: 'A1', A1: 'A1', A2: 'A2', B1: 'B1', B2: 'B2', C1: 'C1', C2: 'C2',
 };
 export default function Flashcards() {
   const [params] = useSearchParams();
   const initial = params.get('deck');
-  const startDeck: DeckKey = initial === 'names' || initial === 'teams' || initial === 'A1' || initial === 'A2' || initial === 'B1' || initial === 'B2' ? initial : 'letters';
+  const startDeck: DeckKey = initial === 'names' || initial === 'teams' || initial === 'A1' || initial === 'A2' || initial === 'B1' || initial === 'B2' || initial === 'C1' || initial === 'C2' ? initial : 'letters';
   const [decks, setDecks] = useState<Record<DeckKey, Card[]> | null>(null);
   const [deck] = useState<DeckKey>(startDeck);
   const [index, setIndex] = useState(0);
@@ -118,6 +118,8 @@ export default function Flashcards() {
           A2: shuffle(byLevel.A2.map((w) => bookCard(w, ''))),
           B1: shuffle(byLevel.B1.map((w) => bookCard(w, ''))),
           B2: shuffle(byLevel.B2.map((w) => bookCard(w, ''))),
+          C1: shuffle(byLevel.C1.map((w) => bookCard(w, ''))),
+          C2: shuffle(byLevel.C2.map((w) => bookCard(w, ''))),
         });
       })
       .catch(() => {
@@ -126,7 +128,7 @@ export default function Flashcards() {
           letters: shuffle(ALPHABET.map((s) => soundCard(s.sound, s.example, ''))),
           names: shuffle(ALPHABET.map((s) => nameCard(s.sound.toUpperCase(), s.example, ''))),
           teams: shuffle(DIGRAPHS.map((s) => soundCard(s.sound, s.example, ''))),
-          A1: [], A2: [], B1: [], B2: [],
+          A1: [], A2: [], B1: [], B2: [], C1: [], C2: [],
         });
       });
     return () => { cancelled = true; };
@@ -194,7 +196,7 @@ export default function Flashcards() {
           media={
             <div className="flex h-full flex-col items-center justify-center bg-white p-6 text-center" role="button" tabIndex={0} onClick={() => flip(!flipped)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') flip(!flipped); }} aria-label={flipped ? 'Show sound' : 'Show meaning'}>
               {(() => {
-                const isWord = deck === 'A1' || deck === 'A2' || deck === 'B1' || deck === 'B2';
+                const isWord = deck === 'A1' || deck === 'A2' || deck === 'B1' || deck === 'B2' || deck === 'C1' || deck === 'C2';
                 if (!isWord) {
                   return (
                     <p className="w-full break-words px-2 text-center text-[clamp(9rem,32dvh,22rem)] font-bold leading-none">
