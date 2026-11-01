@@ -5,6 +5,7 @@ import { isContentWord } from '../lib/words';
 // Shared by the Reader (page text) and Flashcards (sounded parts).
 // `spoken`/`current` light the listen trail; `heardCount` lights words
 // the learner already read in order.
+const CHUNK_COLORS = ['#0F766E', '#C2410C', '#1D4ED8', '#B91C1C', '#0E7490'];
 export function Words({
   text,
   onTap,
@@ -14,6 +15,8 @@ export function Words({
   spoken,
   current = null,
   plain = false,
+  colorful = false,
+  colorOffset = 0,
 }: {
   text: string;
   onTap: (word: string) => void;
@@ -28,6 +31,11 @@ export function Words({
   current?: number | null;
   // Plain display (flashcards): no tap underline, keeps read/listen glow.
   plain?: boolean;
+  // Colorful display (flashcards only): each sounded chunk gets a dark,
+  // high-contrast hue cycling from colorOffset, so syllables read as
+  // separate color blocks. Reader pages stay black-on-white.
+  colorful?: boolean;
+  colorOffset?: number;
 }) {
   const clean = cleanWord;
   // Ordinal of the next real word in this segment. Punctuation-only
@@ -47,8 +55,12 @@ export function Words({
         // (but still highlight when read). Plain mode renders everything as
         // text with the same highlights.
         if (plain || !isContentWord(w)) {
+          const style =
+            colorful && plain
+              ? { color: CHUNK_COLORS[(colorOffset + idx) % CHUNK_COLORS.length] }
+              : undefined;
           return (
-            <span key={i} className={`rounded-sm px-1 py-0.5${hl}`}>
+            <span key={i} className={`rounded-sm px-1 py-0.5${hl}`} style={style}>
               {part}
             </span>
           );

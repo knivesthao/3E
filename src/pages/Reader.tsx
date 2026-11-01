@@ -10,8 +10,10 @@ import { ReadAloudPanel } from '../components/ReadAloud';
 import { ListenPanel } from '../components/ListenPanel';
 import { QuizPanel } from '../components/Quiz';
 import { BuddyPanel } from '../components/Buddy';
+import { BuddyCorner } from '../components/BuddyVoice';
 import { ShareClipPanel } from '../components/ShareClip';
 import { Words } from '../components/Words';
+import { PageNav, PageShell } from '../components/PageShell';
 
 const clean = cleanWord;
 
@@ -298,66 +300,89 @@ export default function Reader() {
   }
 
   return (
-    <main className="relative mx-auto w-full max-w-xl px-3 pb-1 pt-2">
+    <main className="relative mx-auto w-full max-w-xl">
       {current === 0 ? (
-        <section aria-label={`Cover: ${book.manifest.title}`} className="mb-0">
-          {book.manifest.cover ? (
-            <div className="relative">
-              <img
-                src={book.manifest.cover}
-                alt={`Cover of ${book.manifest.title}`}
-                loading="lazy"
-                className="max-h-[calc(100dvh-80px)] w-full rounded-md object-contain"
-              />
-              <div className="absolute inset-x-0 bottom-0 rounded-b-md p-4 font-semibold text-black [-webkit-text-stroke:4px_white] [paint-order:stroke_fill]">
+        <PageShell
+          label={`Cover: ${book.manifest.title}`}
+          media={
+            book.manifest.cover ? (
+              <>
+                <img
+                  src={book.manifest.cover}
+                  alt={`Cover of ${book.manifest.title}`}
+                  loading="lazy"
+                  className="h-full w-full object-cover"
+                />
+                <div className="absolute inset-x-0 bottom-0 p-4 font-semibold text-black [-webkit-text-stroke:4px_white] [paint-order:stroke_fill]">
+                  <h1 className="font-display text-3xl font-bold">{book.manifest.title}</h1>
+                  <p className="text-base">
+                    Level {book.level} · {book.reading_level}
+                    {offline && ' · Offline copy'}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div className="flex h-full w-full flex-col items-center justify-center bg-stone-200 p-6 text-center">
                 <h1 className="font-display text-3xl font-bold">{book.manifest.title}</h1>
-                <p className="text-base">
+                <p className="mb-2 text-base">
                   Level {book.level} · {book.reading_level}
-                  {offline && ' · Offline copy'}
+                  {offline && ' · Offline copy'}{' '}
+                  <Link to="/practice/alphabet">Alphabet</Link>
                 </p>
               </div>
-            </div>
-          ) : (
-            <>
-              <h1 className="font-display text-3xl font-bold">{book.manifest.title}</h1>
-              <p className="mb-2 text-base">
-                Level {book.level} · {book.reading_level}
-                {offline && ' · Offline copy'}{' '}
-                <Link to="/practice/alphabet">Alphabet</Link>
-              </p>
-            </>
-          )}
-        </section>
+            )
+          }
+          nav={
+            <PageNav
+              label="Page navigation"
+              onPrev={() => go(current - 1)}
+              onNext={() => go(current + 1)}
+              prevDisabled
+              nextDisabled={current >= total}
+              status="Cover"
+            />
+          }
+        />
       ) : scene ? (
-        <section ref={panelRef} aria-label={`Page ${scene.scene_number} of ${total}`} className="mb-1 scroll-mt-4">
-          <div className="relative overflow-hidden rounded-md bg-stone-200">
-            <button
-              ref={buddyRef}
-              type="button"
-              onClick={() => {
+        <PageShell
+          label={`Page ${scene.scene_number} of ${total}`}
+          sectionRef={panelRef}
+          media={
+            <>
+            {scene.image_url && (
+              <img
+                src={scene.image_url}
+                alt={`Page ${scene.scene_number} art`}
+                loading="lazy"
+                className="h-full w-full object-cover"
+              />
+            )}
+            <div className="absolute inset-x-0 bottom-0 p-3 font-semibold text-black [-webkit-text-stroke:4px_white] [paint-order:stroke_fill]">
+              <p className="mb-1 text-lg leading-snug">
+                <Words text={scene.narration} onTap={(w) => void tap(w)} tapped={active?.word ?? null} base={0} heardCount={liveCount} spoken={listenSet} current={listenCur} />
+              </p>
+              {scene.bubbles.map((b, bi) => (
+                <p key={bi} className="text-lg leading-snug">
+                  <strong>{b.speaker}: </strong>
+                  <Words text={b.text} onTap={(w) => void tap(w)} tapped={active?.word ?? null} base={(bubbleBase[bi] ?? 0) + countWords(b.speaker)} heardCount={liveCount} spoken={listenSet} current={listenCur} />
+                </p>
+              ))}
+            </div>
+            </>
+          }
+          overlay={
+            <>
+            <BuddyCorner
+              open={voiceOpen}
+              buttonRef={buddyRef}
+              toggleLabel={voiceOpen ? 'Hide listen and read aloud options' : 'Show listen and read aloud options'}
+              onToggle={() => {
                 // Opening Pip's menu dismisses any open word bubble, and the
                 // bubble's own tap-outside handler re-hides it on later taps.
                 setActive(null);
                 setVoiceOpen((v) => !v);
               }}
-              aria-expanded={voiceOpen}
-              aria-label={voiceOpen ? 'Hide listen and read aloud options' : 'Show listen and read aloud options'}
-              title="Listen or read aloud"
-              className="absolute right-2 top-2 z-20 flex h-11 w-11 items-center justify-center rounded-full bg-accent-900 text-white shadow-lg"
             >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M4 5h16v11H9l-5 4V5z"
-                  fill="currentColor"
-                  opacity="0.9"
-                />
-                <circle cx="9" cy="10" r="1.2" fill="#0c4a4a" />
-                <circle cx="13" cy="10" r="1.2" fill="#0c4a4a" />
-                <path d="M9.5 13.5c1.5 1 3.5 1 5 0" stroke="#0c4a4a" strokeWidth="1.2" strokeLinecap="round" />
-              </svg>
-            </button>
-            {voiceOpen && (
-              <div className="absolute right-2 top-14 z-20 flex max-w-[calc(100%-1rem)] flex-col items-end gap-1 bg-transparent text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.9)] [&>div]:w-fit [&>div]:max-w-full">
                 <ListenPanel
                   sceneNumber={scene.scene_number}
                   text={listenText}
@@ -399,30 +424,20 @@ export default function Reader() {
                     setListenCur(null);
                   }}
                 />
-              </div>
-            )}
-            {scene.image_url && (
-              <img
-                src={scene.image_url}
-                alt={`Page ${scene.scene_number} art`}
-                loading="lazy"
-                className="w-full"
-              />
-            )}
-            <div className="absolute inset-x-0 bottom-0 p-3 font-semibold text-black [-webkit-text-stroke:4px_white] [paint-order:stroke_fill]">
-              <p className="mb-1 text-lg leading-snug">
-                <Words text={scene.narration} onTap={(w) => void tap(w)} tapped={active?.word ?? null} base={0} heardCount={liveCount} spoken={listenSet} current={listenCur} />
-              </p>
-              {scene.bubbles.map((b, bi) => (
-                <p key={bi} className="text-lg leading-snug">
-                  <strong>{b.speaker}: </strong>
-                  <Words text={b.text} onTap={(w) => void tap(w)} tapped={active?.word ?? null} base={(bubbleBase[bi] ?? 0) + countWords(b.speaker)} heardCount={liveCount} spoken={listenSet} current={listenCur} />
-                </p>
-              ))}
-            </div>
-          </div>
-          {null}
-        </section>
+            </BuddyCorner>
+            </>
+          }
+          nav={
+            <PageNav
+              label="Page navigation"
+              onPrev={() => go(current - 1)}
+              onNext={() => go(current + 1)}
+              prevDisabled={current <= 0}
+              nextDisabled={current >= total}
+              status={current === 0 ? 'Cover' : `Page ${current} of ${total}`}
+            />
+          }
+        />
       ) : null}
       {!shareMode && current > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -451,25 +466,6 @@ export default function Reader() {
           <BuddyPanel projectId={id} />
         </div>
       )}
-      <nav
-        aria-label="Page navigation"
-        className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-stone-200 bg-white py-2"
-      >
-        <Button onClick={() => go(current - 1)} disabled={current <= 0} aria-label="Previous page">
-          ← Prev
-        </Button>
-        <p className="text-sm font-medium text-stone-700" aria-live="polite">
-          {current === 0 ? 'Cover' : `Page ${current} of ${total}`}
-        </p>
-        <Button
-          onClick={() => go(current + 1)}
-          disabled={current >= total}
-          variant="primary"
-          aria-label="Next page"
-        >
-          Next →
-        </Button>
-      </nav>
       {active && (
         <div
           ref={bubbleRef}

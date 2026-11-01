@@ -184,10 +184,10 @@ export default function Library() {
         <h2 className="font-display text-xl font-bold">Flashcard decks</h2>
         <ul className="mt-2 flex flex-col gap-2">
           <li className="rounded-md border border-stone-200 bg-white p-3">
-            <p className="text-base font-bold">Letters</p>
-            <p className="text-sm text-stone-600">All 26 letters. Hear each sound, say an example word.</p>
+            <p className="text-base font-bold">Phonics</p>
+            <p className="text-sm text-stone-600">All 26 letter sounds. Hear each sound, say an example word.</p>
             <p className="mt-1">
-              <Link to="/practice/alphabet?deck=letters" className="underline underline-offset-4">Practice letters</Link>
+              <Link to="/practice/alphabet?deck=letters" className="underline underline-offset-4">Practice phonics</Link>
             </p>
           </li>
           <li className="rounded-md border border-stone-200 bg-white p-3">

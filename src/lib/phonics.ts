@@ -26,14 +26,29 @@ export interface SoundCard {
   example: string;
 }
 
-// Continuants stretch in TTS ("ssss"); stops fall back to the letter name
-// plus the example word, which always carries the true sound in context.
+// Continuants stretch in TTS ("ssss"); stops take a schwa ("buh") and
+// short vowels take short forms ("ah", "eh") — a bare single letter would
+// make TTS say the letter's NAME ("eff"), so soundText never returns one.
 const STRETCH = new Set(['s', 'f', 'm', 'n', 'l', 'r', 'v', 'z', 'h', 'w', 'y', 'th', 'sh']);
+
+// Speakable approximations TTS reads as sounds, not names.
+const SAYABLE: Record<string, string> = {
+  a: 'ah', e: 'eh', i: 'ih', o: 'oh', u: 'uh',
+  x: 'ks', ai: 'ay', oa: 'oh', ee: 'ee', oo: 'oo',
+};
 
 /** TTS-friendly sounding of a letter or digraph. */
 export function soundText(sound: string): string {
   const s = sound.toLowerCase();
-  return STRETCH.has(s) ? s.repeat(4) : s;
+  if (STRETCH.has(s)) return s.repeat(4);
+  return SAYABLE[s] ?? `${s}uh`;
+}
+
+/** Listen-mode line for the letters deck: sound first, anchored to the
+ * example word (which always carries the true sound), then the word alone
+ * as a clean model. Never contains a bare letter. */
+export function letterListenText(sound: string, example: string): string {
+  return `${soundText(sound)} as in ${example}. ${example}.`;
 }
 
 // CEFR word lists are the single source of truth in api/src/levels.ts (the

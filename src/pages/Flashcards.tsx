@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { aiMeanings, listLevels, voiceLang } from '../lib/api';
-import { ALPHABET, DIGRAPHS, soundText, splitSyllables, wordsByLevel } from '../lib/phonics';
-import { Button, Page } from '../components/ui';
+import { ALPHABET, DIGRAPHS, letterListenText, splitSyllables, wordsByLevel } from '../lib/phonics';
+import { Button } from '../components/ui';
+import { PageNav, PageShell } from '../components/PageShell';
 import { Words } from '../components/Words';
 import { ReadAloudPanel } from '../components/ReadAloud';
 import { ListenPanel } from '../components/ListenPanel';
+import { BuddyCorner } from '../components/BuddyVoice';
 
 interface Card {
   word: string;
@@ -35,7 +37,8 @@ function nameCard(letter: string, example: string, meaning: string): Card {
 }
 
 function soundCard(sound: string, example: string, meaning: string): Card {
-  const listenText = `${soundText(sound)} ${sound} as in ${example}.`;
+  // Never the bare letter: TTS reads lone letters by name ("eff").
+  const listenText = letterListenText(sound, example);
   return {
     word: example,
     meaning: meaning !== '' ? `as in ${example} — ${meaning}` : `as in ${example}`,
@@ -76,7 +79,7 @@ function shuffle<T>(xs: T[]): T[] {
 // prefetches thousands of glosses at once.
 type DeckKey = 'letters' | 'names' | 'teams' | 'A1' | 'A2' | 'B1' | 'B2';
 const DECK_LABEL: Record<DeckKey, string> = {
-  letters: 'Letters', names: 'Alphabet', teams: 'Letter teams', A1: 'A1 words', A2: 'A2 words', B1: 'B1 words', B2: 'B2 words',
+  letters: 'Phonics', names: 'Alphabet', teams: 'Letter teams', A1: 'A1 words', A2: 'A2 words', B1: 'B1 words', B2: 'B2 words',
 };
 // Meaning lookup rides the deck's own level so glosses match the learner.
 const DECK_LEVEL: Record<DeckKey, string> = {
@@ -90,7 +93,6 @@ export default function Flashcards() {
   const [deck] = useState<DeckKey>(startDeck);
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
-  const [voiceOpen, setVoiceOpen] = useState(false);
   // Buddy corner, same as the Reader: Pip sits on the card, tap to open
   // Listen and Read. No scores, no counts — just practice.
   // Listen trail (which sound is playing) and read trail (example word
@@ -167,10 +169,7 @@ export default function Flashcards() {
   const pageText = card ? card.display.join(' ') : '';
 
   return (
-    <Page title={DECK_LABEL[deck]}>
-      <p>
-        <Link to="/?tab=flashcards" className="underline underline-offset-4">‹ Decks</Link>
-      </p>
+    <main className="relative mx-auto w-full max-w-xl">
       {decks === null && <p>Loading cards…</p>}
       {done && (
         <section>
@@ -190,93 +189,110 @@ export default function Flashcards() {
         </section>
       )}
       {card && !done && (
-        <section>
-          <div className="relative mx-auto w-full max-w-xl">
-            <div className="flex min-h-[calc(100dvh-290px)] flex-col items-center justify-center rounded-lg border border-stone-200 bg-white p-6 text-center shadow-sm" role="button" tabIndex={0} onClick={() => flip(!flipped)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') flip(!flipped); }} aria-label={flipped ? 'Show sound' : 'Show meaning'}>
-              <p className="text-8xl font-bold leading-tight sm:text-9xl">
-                <Words
-                  text={pageText}
-                  onTap={() => flip(true)}
-                  tapped={null}
-                  heardCount={liveCount}
-                  spoken={listenSet}
-                  current={listenCur}
-                  plain
-                />
-              </p>
+        <PageShell
+          label={`${DECK_LABEL[deck]} card`}
+          media={
+            <div className="flex h-full flex-col items-center justify-center bg-white p-6 text-center" role="button" tabIndex={0} onClick={() => flip(!flipped)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') flip(!flipped); }} aria-label={flipped ? 'Show sound' : 'Show meaning'}>
+              {(() => {
+                const isWord = deck === 'A1' || deck === 'A2' || deck === 'B1' || deck === 'B2';
+                if (!isWord) {
+                  return (
+                    <p className="w-full break-words px-2 text-center text-[clamp(9rem,32dvh,22rem)] font-bold leading-none">
+                      <Words
+                        text={pageText}
+                        onTap={() => flip(true)}
+                        tapped={null}
+                        heardCount={liveCount}
+                        spoken={listenSet}
+                        current={listenCur}
+                        plain
+                        colorful
+                        colorOffset={index}
+                      />
+                    </p>
+                  );
+                }
+                const chars = Math.max(1, pageText.replace(/\s/g, '').length);
+                return (
+                  <p
+                    className="w-full max-w-full whitespace-nowrap px-2 text-center font-bold leading-none"
+                    style={{ fontSize: `clamp(2.5rem, calc(min(88vw, 55dvh) / ${0.62 * chars}), 7rem)` }}
+                  >
+                    <Words
+                      text={pageText}
+                      onTap={() => flip(true)}
+                      tapped={null}
+                      heardCount={liveCount}
+                      spoken={listenSet}
+                      current={listenCur}
+                      plain
+                      colorful
+                      colorOffset={index}
+                    />
+                  </p>
+                );
+              })()}
             </div>
-            {flipped && (
-              <div role="status" aria-live="polite" className="absolute left-1/2 top-4 z-50 w-60 max-w-[calc(100%-1rem)] -translate-x-1/2 rounded-lg bg-stone-900 p-3 text-center text-white shadow-lg" onClick={() => flip(false)}>
-                <div aria-hidden="true" className="absolute -top-1 right-8 h-4 w-4 rotate-45 bg-stone-900" />
-                <p>{card.meaning !== '' ? card.meaning : 'Looking it up…'}</p>
-              </div>
-            )}
-          <button
-            type="button"
-            onClick={() => setVoiceOpen((v) => !v)}
-            aria-expanded={voiceOpen}
-            aria-label={voiceOpen ? 'Hide listen and read aloud options' : 'Show listen and read aloud options'}
-            title="Listen or read aloud"
-            className="absolute right-2 top-2 z-20 flex h-11 w-11 items-center justify-center rounded-full bg-accent-900 text-white shadow-lg"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M4 5h16v11H9l-5 4V5z" fill="currentColor" opacity="0.9" />
-              <circle cx="9" cy="10" r="1.2" fill="#0c4a4a" />
-              <circle cx="13" cy="10" r="1.2" fill="#0c4a4a" />
-              <path d="M9.5 13.5c1.5 1 3.5 1 5 0" stroke="#0c4a4a" strokeWidth="1.2" strokeLinecap="round" />
-            </svg>
-          </button>
-          {voiceOpen && (
-            <div className="absolute right-2 top-14 z-20 flex max-w-[calc(100%-1rem)] flex-col items-end gap-1 bg-transparent text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.9)] [&>div]:w-fit [&>div]:max-w-full">
-              <ListenPanel
-                key={`listen-${index}`}
-                sceneNumber={index}
-                text={card.listenText}
-                wordMap={card.wordMap}
-                speechLang={voiceLang(undefined)}
-                onSpeakStart={() => {
-                  setListenSet(new Set());
-                  setListenCur(null);
-                }}
-                onSpeakProgress={(idx) => {
-                  if (idx === null) {
-                    setListenCur(null);
-                  } else {
-                    setListenCur(idx);
-                    setListenSet((prev) => new Set(prev).add(idx));
-                  }
-                }}
-              />
-              <ReadAloudPanel
-                key={`read-${index}`}
-                sceneNumber={index}
-                text={card.readText}
-                order={card.order}
-                recognitionLang={voiceLang(undefined)}
-                onPass={() => next()}
-                onLookup={() => flip(true)}
-                onProgress={setLiveCount}
-                onStart={() => {
-                  setListenSet(new Set());
-                  setListenCur(null);
-                }}
-              />
-            </div>
-          )}
-          </div>
-      <nav
-        aria-label="Card navigation"
-        className="mx-auto flex w-full max-w-xl items-center justify-between gap-2 border-t border-stone-200 bg-white py-2"
-      >
-        <Button onClick={() => { setIndex((i) => Math.max(0, i - 1)); resetTrails(); }} disabled={index === 0} aria-label="Previous card">
-          ← Prev
-        </Button>
-        <Button onClick={() => next()} variant="primary" aria-label="Next card">
-          Next →
-        </Button>
-      </nav>
-        </section>
+          }
+          overlay={
+            <>
+              {flipped && (
+                <div role="status" aria-live="polite" className="absolute left-1/2 top-4 z-50 w-60 max-w-[calc(100%-1rem)] -translate-x-1/2 rounded-lg bg-stone-900 p-3 text-center text-white shadow-lg" onClick={() => flip(false)}>
+                  <div aria-hidden="true" className="absolute -top-1 right-8 h-4 w-4 rotate-45 bg-stone-900" />
+                  <p>{card.meaning !== '' ? card.meaning : 'Looking it up…'}</p>
+                </div>
+              )}
+              <BuddyCorner
+                open
+                onToggle={() => flip(true)}
+                toggleLabel="About this card"
+              >
+<ListenPanel
+                    key={`listen-${index}`}
+                    sceneNumber={index}
+                    text={card.listenText}
+                    wordMap={card.wordMap}
+                    speechLang={voiceLang(undefined)}
+                    onSpeakStart={() => {
+                      setListenSet(new Set());
+                      setListenCur(null);
+                    }}
+                    onSpeakProgress={(idx) => {
+                      if (idx === null) {
+                        setListenCur(null);
+                      } else {
+                        setListenCur(idx);
+                        setListenSet((prev) => new Set(prev).add(idx));
+                      }
+                    }}
+                  />
+                  <ReadAloudPanel
+                    key={`read-${index}`}
+                    sceneNumber={index}
+                    text={card.readText}
+                    order={card.order}
+                    recognitionLang={voiceLang(undefined)}
+                    onPass={() => next()}
+                    onLookup={() => flip(true)}
+                    onProgress={setLiveCount}
+                    onStart={() => {
+                      setListenSet(new Set());
+                      setListenCur(null);
+                    }}
+                  />
+              </BuddyCorner>
+            </>
+          }
+          nav={
+            <PageNav
+              label="Card navigation"
+              onPrev={() => { setIndex((i) => Math.max(0, i - 1)); resetTrails(); }}
+              onNext={() => next()}
+              prevDisabled={index === 0}
+            />
+          }
+        />
       )}
-    </Page>
+    </main>
   );
 }

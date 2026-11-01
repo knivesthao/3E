@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALPHABET, DIGRAPHS, soundText, splitSyllables, wordsByLevel } from './phonics';
+import { ALPHABET, DIGRAPHS, letterListenText, soundText, splitSyllables, wordsByLevel } from './phonics';
 
 describe('splitSyllables', () => {
   it('keeps short and single-beat words whole', () => {
@@ -53,6 +53,16 @@ describe('splitSyllables', () => {
     for (const d of ['th', 'sh', 'ch', 'ph', 'wh', 'ck', 'ng']) {
       expect(DIGRAPHS.some((c) => c.sound === d)).toBe(true);
     }
+  });
+
+  it('speaks letter sounds, never letter names', () => {
+    // A bare single letter makes TTS say the letter's name ("eff"), so the
+    // letters deck must never feed one to the speaker.
+    for (const c of [...ALPHABET, ...DIGRAPHS]) {
+      expect(letterListenText(c.sound, c.example).toLowerCase()).not.toMatch(/\b[a-z]\b/);
+    }
+    expect(letterListenText('b', 'bat')).toBe('buh as in bat. bat.');
+    expect(letterListenText('f', 'fish')).toBe('ffff as in fish. fish.');
   });
 
   it('treats vowel-plus-le as one beat', () => {
