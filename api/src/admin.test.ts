@@ -11,6 +11,7 @@ function makeDb(counts: Record<string, number>, examRows: string[] = []) {
   const defs = new Map<string, Record<string, unknown>>();
   return {
     defs,
+    counts,
     prepare(sql: string) {
       const q = sql.replace(/\s+/g, ' ').trim();
       const all = async () => {
@@ -35,6 +36,8 @@ function makeDb(counts: Record<string, number>, examRows: string[] = []) {
               }
               if (q.startsWith('SELECT COUNT(*) AS n FROM')) {
                 const table = q.split('FROM ')[1];
+                // Books live in the library store; the app stub knows none.
+                if (table === 'books') return { n: 0 };
                 return { n: counts[table] ?? 0 };
               }
               return null;
@@ -69,7 +72,31 @@ function makeDb(counts: Record<string, number>, examRows: string[] = []) {
 }
 
 type Db = ReturnType<typeof makeDb>;
-const ENV = (db: Db) => ({ DB: db as unknown as D1Database, DEV_LINKS: 'true', MODEL_API_KEY: 'test-key' });
+
+// Library-store stub (3e-books): answers only the books count.
+function makeLibraryDb(counts: Record<string, number>) {
+  return {
+    prepare(sql: string) {
+      const q = sql.replace(/\s+/g, ' ').trim();
+      const first = async () => {
+        if (q.startsWith('SELECT COUNT(*) AS n FROM books')) return { n: counts.books ?? 0 };
+        return null;
+      };
+      return {
+        bind: () => ({ first, run: async () => ({ success: true }), all: async () => ({ results: [] }) }),
+        first,
+        all: async () => ({ results: [] }),
+      };
+    },
+  };
+}
+
+const ENV = (db: Db) => ({
+  DB: db as unknown as D1Database,
+  LIBRARY_DB: makeLibraryDb(db.counts) as unknown as D1Database,
+  DEV_LINKS: 'true',
+  MODEL_API_KEY: 'test-key',
+});
 
 async function signIn(db: Db): Promise<string> {
   const env = ENV(db);

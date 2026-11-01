@@ -65,13 +65,6 @@ function makeDb() {
                 ).length;
                 return { n };
               }
-              if (q.startsWith('SELECT id, published_at FROM books WHERE project_id')) {
-                const r = [...books.values()].find((x) => x.project_id === params[0]);
-                return r ? { id: r.id, published_at: r.published_at } : null;
-              }
-              if (q.startsWith('SELECT * FROM books WHERE id = ?')) {
-                return books.get(params[0] as string) ?? null;
-              }
               return null;
             },
             all: async () => {
@@ -84,13 +77,6 @@ function makeDb() {
               }
               if (q.startsWith('SELECT scene_number, image_key, mask_key FROM panels WHERE project_id')) {
                 return { results: panels.filter((x) => x.project_id === params[0]) };
-              }
-              if (q.startsWith('SELECT id, title, level, cover_url, published_at FROM books ORDER BY')) {
-                return {
-                  results: [...books.values()]
-                    .map((b) => ({ id: b.id, title: b.title, level: b.level, cover_url: b.cover_url, published_at: b.published_at }))
-                    .sort((a, b) => ((a.published_at as string) < (b.published_at as string) ? 1 : -1)),
-                };
               }
               return { results: [] };
             },
@@ -118,14 +104,6 @@ function makeDb() {
                 const [status, result, error, updated_at, id] = params as [string, string | null, string | null, string, string];
                 const row = jobs.get(id);
                 if (row) Object.assign(row, { status, result, error, updated_at });
-              } else if (q.startsWith('INSERT INTO books')) {
-                const [id, project_id, creator_id, title, description, level, reading_level, cover_url, manifest_json, published_at, updated_at] =
-                  params as unknown[];
-                books.set(id as string, { id, project_id, creator_id, title, description, level, reading_level, cover_url, manifest_json, published_at, updated_at });
-              } else if (q.startsWith('UPDATE books SET')) {
-                const [title, description, level, reading_level, cover_url, manifest_json, updated_at, id] = params as unknown[];
-                const row = books.get(id as string);
-                if (row) Object.assign(row, { title, description, level, reading_level, cover_url, manifest_json, updated_at });
               } else if (q.startsWith("UPDATE projects SET status = 'published'")) {
                 const [updated_at, id] = params as [string, string];
                 const row = projects.get(id);
@@ -147,8 +125,61 @@ function makeDb() {
 
 type Db = ReturnType<typeof makeDb>;
 
+// Library-store stub (3e-books): owns ONLY the books table, sharing the
+// same in-memory map so assertions can verify publish landed in the
+// library and NOT in the app DB (whose stub answers null for books).
+function makeLibraryDb(books: Map<string, Record<string, unknown>>) {
+  return {
+    prepare(sql: string) {
+      const q = sql.replace(/\s+/g, ' ').trim();
+      return {
+        bind(...params: unknown[]) {
+          return {
+            first: async () => {
+              if (q.startsWith('SELECT id, published_at FROM books WHERE project_id')) {
+                const r = [...books.values()].find((x) => x.project_id === params[0]);
+                return r ? { id: r.id, published_at: r.published_at } : null;
+              }
+              if (q.startsWith('SELECT * FROM books WHERE id = ?') || q.startsWith('SELECT id FROM books WHERE id = ?')) {
+                return books.get(params[0] as string) ?? null;
+              }
+              return null;
+            },
+            all: async () => {
+              if (q.startsWith('SELECT id, title, cover_url, manifest_json FROM books WHERE id IN')) {
+                return { results: (params as string[]).map((id) => books.get(id)).filter((b) => b !== undefined) };
+              }
+              if (q.startsWith('SELECT id, title, level, cover_url, published_at FROM books ORDER BY')) {
+                return {
+                  results: [...books.values()]
+                    .map((b) => ({ id: b.id, title: b.title, level: b.level, cover_url: b.cover_url, published_at: b.published_at }))
+                    .sort((a, b) => ((a.published_at as string) < (b.published_at as string) ? 1 : -1)),
+                };
+              }
+              return { results: [] };
+            },
+            run: async () => {
+              if (q.startsWith('INSERT INTO books')) {
+                const [id, project_id, creator_id, title, description, level, reading_level, cover_url, manifest_json, published_at, updated_at] =
+                  params as unknown[];
+                books.set(id as string, { id, project_id, creator_id, title, description, level, reading_level, cover_url, manifest_json, published_at, updated_at });
+              } else if (q.startsWith('UPDATE books SET')) {
+                const [title, description, level, reading_level, cover_url, manifest_json, updated_at, id] = params as unknown[];
+                const row = books.get(id as string);
+                if (row) Object.assign(row, { title, description, level, reading_level, cover_url, manifest_json, updated_at });
+              }
+              return { success: true };
+            },
+          };
+        },
+      };
+    },
+  };
+}
+
 const ENV = (db: Db, withKey = true) => ({
   DB: db as unknown as D1Database,
+  LIBRARY_DB: makeLibraryDb((db as unknown as { books: Map<string, Record<string, unknown>> }).books) as unknown as D1Database,
   DEV_LINKS: 'true',
   ...(withKey ? { MODEL_API_KEY: 'test-key' } : {}),
 });

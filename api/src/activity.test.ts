@@ -25,6 +25,8 @@ function makeDb() {
         manifest_json: JSON.stringify({ scenes: Array.from({ length: scenes }, (_, i) => ({ scene_number: i + 1 })) }),
       });
     },
+    // Exposed so the library-store stub shares the same books.
+    books,
     prepare(sql: string) {
       const q = sql.replace(/\s+/g, ' ').trim();
       return {
@@ -59,12 +61,12 @@ function makeDb() {
                 ];
                 return { results: days.map((day) => ({ day })) };
               }
-              if (q.startsWith('SELECT b.id, b.title, b.cover_url, b.manifest_json, r.scene_number FROM books b')) {
-                const results = [...sync.values()]
-                  .filter((s) => s.updated_by === params[0])
-                  .map((s) => ({ ...books.get(s.book_id), scene_number: s.scene_number }))
-                  .filter((b) => b.id !== undefined);
-                return { results };
+              if (q.startsWith('SELECT book_id, scene_number FROM reading_sync WHERE updated_by')) {
+                return {
+                  results: [...sync.values()]
+                    .filter((s) => s.updated_by === params[0])
+                    .map((s) => ({ book_id: s.book_id, scene_number: s.scene_number })),
+                };
               }
               return { results: [] };
             },
@@ -86,7 +88,35 @@ function makeDb() {
 }
 
 type Db = ReturnType<typeof makeDb>;
-const ENV = (db: Db) => ({ DB: db as unknown as D1Database, DEV_LINKS: 'true' });
+
+// Library-store stub (3e-books): shelf lookups by id only.
+function makeLibraryDb(books: Map<string, { id: string; title: string; cover_url: string | null; manifest_json: string }>) {
+  return {
+    prepare(sql: string) {
+      const q = sql.replace(/\s+/g, ' ').trim();
+      return {
+        bind(...params: unknown[]) {
+          return {
+            first: async () => null,
+            all: async () => {
+              if (q.startsWith('SELECT id, title, cover_url, manifest_json FROM books WHERE id IN')) {
+                return { results: (params as string[]).map((id) => books.get(id)).filter((b) => b !== undefined) };
+              }
+              return { results: [] };
+            },
+            run: async () => ({ success: true }),
+          };
+        },
+      };
+    },
+  };
+}
+
+const ENV = (db: Db) => ({
+  DB: db as unknown as D1Database,
+  LIBRARY_DB: makeLibraryDb(db.books) as unknown as D1Database,
+  DEV_LINKS: 'true',
+});
 
 async function signIn(db: Db): Promise<{ cookie: string; userId: string }> {
   const env = ENV(db);

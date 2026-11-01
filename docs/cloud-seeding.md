@@ -1,8 +1,9 @@
 # Cloud seeding walkthrough (server-side dictionary)
 
-Goal: generate all word definitions on Baseten, straight into the one
-shared database — with your laptop shut the whole time. Dev and prod read
-the same D1 + R2, so there is no promotion step: seeded means live.
+Goal: generate all word definitions on Baseten, straight into the shared
+app database — with your laptop shut the whole time. Dev and prod share
+the same D1 + R2; published books additionally live in the shared library
+store (`3e-books`), so there is no promotion step: seeded is live.
 
 One-time setup (do once, in order). Then the repeat loop is just step 6.
 
