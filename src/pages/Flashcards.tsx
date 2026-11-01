@@ -91,7 +91,8 @@ export default function Flashcards() {
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
-  // Listen and Read stay open under every card — no buddy tap needed.
+  // Buddy corner, same as the Reader: Pip sits on the card, tap to open
+  // Listen and Read. No scores, no counts — just practice.
   // Listen trail (which sound is playing) and read trail (example word
   // matched so far), like the Reader page.
   const [listenSet, setListenSet] = useState<Set<number>>(new Set());
@@ -191,7 +192,7 @@ export default function Flashcards() {
       {card && !done && (
         <section>
           <div className="relative mx-auto w-full max-w-xl">
-            <div className="flex min-h-[38dvh] flex-col items-center justify-center rounded-lg border border-stone-200 bg-white p-6 text-center shadow-sm" role="button" tabIndex={0} onClick={() => flip(!flipped)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') flip(!flipped); }} aria-label={flipped ? 'Show sound' : 'Show meaning'}>
+            <div className="flex min-h-[calc(100dvh-290px)] flex-col items-center justify-center rounded-lg border border-stone-200 bg-white p-6 text-center shadow-sm" role="button" tabIndex={0} onClick={() => flip(!flipped)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') flip(!flipped); }} aria-label={flipped ? 'Show sound' : 'Show meaning'}>
               <p className="text-8xl font-bold leading-tight sm:text-9xl">
                 <Words
                   text={pageText}
@@ -210,7 +211,6 @@ export default function Flashcards() {
                 <p>{card.meaning !== '' ? card.meaning : 'Looking it up…'}</p>
               </div>
             )}
-          </div>
           <button
             type="button"
             onClick={() => setVoiceOpen((v) => !v)}
@@ -263,9 +263,10 @@ export default function Flashcards() {
               />
             </div>
           )}
+          </div>
       <nav
         aria-label="Card navigation"
-        className="sticky bottom-0 mx-auto flex w-full max-w-xl items-center justify-between gap-2 border-t border-stone-200 bg-white py-2"
+        className="mx-auto flex w-full max-w-xl items-center justify-between gap-2 border-t border-stone-200 bg-white py-2"
       >
         <Button onClick={() => { setIndex((i) => Math.max(0, i - 1)); resetTrails(); }} disabled={index === 0} aria-label="Previous card">
           ← Prev
