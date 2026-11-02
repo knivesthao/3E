@@ -21,6 +21,46 @@ const maskKey = (projectId: string, sceneNumber: number): string => `${projectId
 const KEY_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-(\d{1,3}(-mask)?|cast-(characters|places)-\d{1,2})\.png$/;
 
+// Every art object a published book needs: panel + mask keys plus any
+// cast portrait referenced from cast_json. KEY_RE filters so a corrupt
+// cast_json can never turn the copy into a traversal.
+export function collectPublishKeys(
+  panels: { image_key: string; mask_key: string | null }[],
+  castJson: string,
+): string[] {
+  const out = new Set<string>();
+  for (const p of panels) {
+    if (KEY_RE.test(p.image_key)) out.add(p.image_key);
+    if (p.mask_key && KEY_RE.test(p.mask_key)) out.add(p.mask_key);
+  }
+  for (const m of castJson.matchAll(/\/api\/ai\/art\/([A-Za-z0-9_.-]+)/g)) {
+    if (KEY_RE.test(m[1])) out.add(m[1]);
+  }
+  return [...out];
+}
+
+// Best-effort ART -> LIBRARY_ART copy on publish. Missing stores (local
+// dev) skip silently; single-key failures don't fail the publish — reads
+// fall back to ART, so a missed copy degrades to two lookups, never 404.
+export async function copyArtToLibrary(
+  from: R2Bucket | undefined,
+  to: R2Bucket | undefined,
+  keys: string[],
+): Promise<void> {
+  if (!from || !to || keys.length === 0) return;
+  for (const k of keys) {
+    try {
+      const obj = await from.get(k);
+      if (!obj) continue;
+      await to.put(k, await obj.arrayBuffer(), {
+        httpMetadata: { contentType: obj.httpMetadata?.contentType ?? 'image/png' },
+      });
+    } catch {
+      // Fallback reads cover the miss; publish must not fail on storage.
+    }
+  }
+}
+
 function castEntries(castJson: string, list: 'characters' | 'places'): Record<string, unknown>[] {
   try {
     const v = JSON.parse(castJson) as unknown;
@@ -247,8 +287,10 @@ art.get('/:key', async (c) => {
   const k = c.req.param('key');
   if (!KEY_RE.test(k)) return c.json({ error: 'not found' }, 404);
   const store: R2Bucket | undefined = c.env.ART;
-  if (!store) return c.json({ error: 'not found' }, 404);
-  const obj = await store.get(k);
+  // Library-first: published books live in 3e-library; fall back to the
+  // draft bucket for older books and local dev (both may be undefined).
+  const obj =
+    (await c.env.LIBRARY_ART?.get(k)) ?? (store ? await store.get(k) : null);
   if (!obj) return c.json({ error: 'not found' }, 404);
   return new Response(await obj.arrayBuffer(), {
     headers: {

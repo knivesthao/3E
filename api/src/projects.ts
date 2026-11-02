@@ -8,6 +8,7 @@ import {
   validateSceneOrder,
 } from './validate';
 import { generate } from './ai/client';
+import { collectPublishKeys, copyArtToLibrary } from './ai/art';
 import { bustShareCache } from './cache';
 import { basetenConfig } from './ai/config';
 import { finishJob, modelKey, overLimit } from './ai/http';
@@ -325,6 +326,13 @@ projects.post('/:id/publish', async (c) => {
         )
         .run();
     }
+    // Snapshot the book's art into the shared library bucket. Best-effort:
+    // reads fall back to the draft bucket, so a missed copy never 404s.
+    await copyArtToLibrary(
+      c.env.ART,
+      c.env.LIBRARY_ART,
+      collectPublishKeys(panelRows, project.cast_json),
+    );
     await db
       .prepare("UPDATE projects SET status = 'published', updated_at = ? WHERE id = ?")
       .bind(stamp, project.id)

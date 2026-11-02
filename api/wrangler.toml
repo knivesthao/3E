@@ -11,6 +11,11 @@ not_found_handling = "single-page-application"
 binding = "ART"
 bucket_name = "3e-art"
 
+# Published-book art (shared by every env — one copy per book).
+[[r2_buckets]]
+binding = "LIBRARY_ART"
+bucket_name = "3e-library"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "3e-db"
@@ -61,6 +66,10 @@ migrations_dir = "migrations-library"
 [[env.development.r2_buckets]]
 binding = "ART"
 bucket_name = "3e-art"
+
+[[env.development.r2_buckets]]
+binding = "LIBRARY_ART"
+bucket_name = "3e-library"
 
 [env.development.vars]
 DEV_LINKS = "true"

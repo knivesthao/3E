@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import app from './index';
+import { makeBucket, type TestBucket } from './test-utils';
 
 // In-memory D1 subset for the publish route (projects/scenes/panels seeded
 // directly, books + jobs + ai_usage tracked). Model calls stubbed at fetch.
@@ -177,11 +178,13 @@ function makeLibraryDb(books: Map<string, Record<string, unknown>>) {
   };
 }
 
-const ENV = (db: Db, withKey = true) => ({
+const ENV = (db: Db, withKey = true, r2?: { art?: TestBucket; library?: TestBucket }) => ({
   DB: db as unknown as D1Database,
   LIBRARY_DB: makeLibraryDb((db as unknown as { books: Map<string, Record<string, unknown>> }).books) as unknown as D1Database,
   DEV_LINKS: 'true',
   ...(withKey ? { MODEL_API_KEY: 'test-key' } : {}),
+  ...(r2?.art ? { ART: r2.art as unknown as R2Bucket } : {}),
+  ...(r2?.library ? { LIBRARY_ART: r2.library as unknown as R2Bucket } : {}),
 });
 
 type Env = ReturnType<typeof ENV>;
@@ -305,6 +308,40 @@ describe('Publish endpoint', () => {
     expect(safety).toHaveLength(1);
     expect(safety[0].ok).toBe(1);
     expect(safety[0].model).toBe('muse-spark-1.3');
+  });
+
+  it('copies panel art into the library bucket on publish', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const art = makeBucket();
+    const library = makeBucket();
+    const env = ENV(db, true, { art, library });
+    const uid = await userIdOf(cookie, env);
+    const pid = seedBook(db, uid);
+    db.seedPanel(pid, 1, `${pid}-1.png`, `${pid}-1-mask.png`);
+    const bytes = new TextEncoder().encode('panel-bytes').buffer as ArrayBuffer;
+    await art.put(`${pid}-1.png`, bytes, { httpMetadata: { contentType: 'image/png' } });
+    await art.put(`${pid}-1-mask.png`, bytes, { httpMetadata: { contentType: 'image/png' } });
+    stubSafety('safe');
+
+    const res = await app.request(`/api/projects/${pid}/publish`, json('POST', {}, cookie), env);
+    expect(res.status).toBe(200);
+    expect(library.store.has(`${pid}-1.png`)).toBe(true);
+    expect(library.store.has(`${pid}-1-mask.png`)).toBe(true);
+  });
+
+  it('publishes fine with no buckets (local dev skips the copy)', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const env = ENV(db);
+    const uid = await userIdOf(cookie, env);
+    const pid = seedBook(db, uid);
+    db.seedPanel(pid, 1, `${pid}-1.png`, `${pid}-1-mask.png`);
+    stubSafety('safe');
+
+    const res = await app.request(`/api/projects/${pid}/publish`, json('POST', {}, cookie), env);
+    expect(res.status).toBe(200);
+    expect(db.books.size).toBe(1);
   });
 
   it('unsafe content blocks publish with 422 and no book', async () => {

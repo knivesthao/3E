@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import app from './index';
+import { makeBucket } from './test-utils';
 
 // In-memory D1 subset for the art routes (projects/scenes seeded directly,
 // panels + jobs + ai_usage tracked). Model calls are stubbed at fetch.
@@ -119,26 +120,6 @@ function makeDb() {
 }
 
 type Db = ReturnType<typeof makeDb>;
-
-function makeBucket() {
-  const store = new Map<string, { bytes: ArrayBuffer; contentType: string }>();
-  return {
-    store,
-    async put(key: string, value: ArrayBuffer, opts?: { httpMetadata?: { contentType?: string } }) {
-      store.set(key, { bytes: value, contentType: opts?.httpMetadata?.contentType ?? 'application/octet-stream' });
-    },
-    async get(key: string) {
-      const row = store.get(key);
-      if (!row) return null;
-      // Mirrors R2ObjectBody: the route reads via arrayBuffer(), not .body.
-      return {
-        body: new Blob([row.bytes]),
-        httpMetadata: { contentType: row.contentType },
-        arrayBuffer: async () => row.bytes,
-      };
-    },
-  };
-}
 
 const ENV = (db: Db, opts?: { key?: boolean; bucket?: boolean }) => {
   const withKey = opts?.key ?? true;
@@ -350,6 +331,29 @@ describe('Scene art endpoints', () => {
     const missing = `/api/ai/art/${crypto.randomUUID()}-9.png`;
     expect((await app.request(missing, { headers: { cookie } }, env)).status).toBe(404);
     expect((await app.request('/api/ai/art/nope.png', { headers: { cookie } }, env)).status).toBe(404);
+  });
+
+  it('serves published art from the library bucket with draft fallback', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const key = `${crypto.randomUUID()}-1.png`;
+    const bytes = new TextEncoder().encode('lib-bytes').buffer as ArrayBuffer;
+    const library = makeBucket();
+    await library.put(key, bytes, { httpMetadata: { contentType: 'image/png' } });
+    const env = { ...ENV(db), LIBRARY_ART: library as unknown as R2Bucket };
+    const res = await app.request(`/api/ai/art/${key}`, { headers: { cookie } }, env);
+    expect(res.status).toBe(200);
+    expect(await res.arrayBuffer()).toEqual(bytes);
+
+    // Draft bucket still serves older books the copy never saw.
+    const art = makeBucket();
+    await art.put(key, bytes, { httpMetadata: { contentType: 'image/png' } });
+    const env2 = {
+      ...ENV(db),
+      ART: art as unknown as R2Bucket,
+      LIBRARY_ART: makeBucket() as unknown as R2Bucket,
+    };
+    expect((await app.request(`/api/ai/art/${key}`, { headers: { cookie } }, env2)).status).toBe(200);
   });
 
   it('draws a cast portrait, stores it, and persists image_url into cast_json', async () => {
