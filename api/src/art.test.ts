@@ -331,6 +331,21 @@ describe('Scene art endpoints', () => {
     const missing = `/api/ai/art/${crypto.randomUUID()}-9.png`;
     expect((await app.request(missing, { headers: { cookie } }, env)).status).toBe(404);
     expect((await app.request('/api/ai/art/nope.png', { headers: { cookie } }, env)).status).toBe(404);
+    expect((await app.request('/api/ai/art/../secret.png', { headers: { cookie } }, env)).status).toBe(404);
+    expect((await app.request('/api/ai/art/flash-a1-apple.png', { headers: { cookie } }, env)).status).toBe(404);
+  });
+
+  it('serves flashcard images from the library bucket', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const key = 'flash-a1-apple.png';
+    const bytes = new TextEncoder().encode('flash-bytes').buffer as ArrayBuffer;
+    const library = makeBucket();
+    await library.put(key, bytes, { httpMetadata: { contentType: 'image/png' } });
+    const env = { ...ENV(db), LIBRARY_ART: library as unknown as R2Bucket };
+    const res = await app.request(`/api/ai/art/${key}`, { headers: { cookie } }, env);
+    expect(res.status).toBe(200);
+    expect(await res.arrayBuffer()).toEqual(bytes);
   });
 
   it('serves published art from the library bucket with draft fallback', async () => {

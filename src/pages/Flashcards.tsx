@@ -19,6 +19,17 @@ interface Card {
   wordMap: number[];
   readText: string;
   order: string[];
+  // Word decks only: picture cue served from the shared library bucket.
+  // Absent until generated — the card renders text-only, no layout shift.
+  // Letters/sounds/teams never carry images (phonics stays distraction-free).
+  image?: string;
+}
+
+// Deterministic image key per (level, word): shared 3e-library bucket,
+// served through the art route's KEY_RE flash branch. Non-alpha words
+// get no image (the route couldn't serve them anyway).
+function flashImage(level: string, word: string): string | undefined {
+  return /^[a-z]+$/.test(word) ? `/api/ai/art/flash-${level}-${word}.png` : undefined;
 }
 
 function nameCard(letter: string, example: string, meaning: string): Card {
@@ -50,11 +61,12 @@ function soundCard(sound: string, example: string, meaning: string): Card {
   };
 }
 
-function bookCard(word: string, meaning: string): Card {
+function bookCard(word: string, meaning: string, image?: string): Card {
   const display = splitSyllables(word);
   return {
     word,
     meaning,
+    image,
     display,
     listenText: display.join(' '),
     wordMap: display.map((_, i) => i),
@@ -114,12 +126,12 @@ export default function Flashcards() {
           letters: shuffle(ALPHABET.map((s) => soundCard(s.sound, s.example, ''))),
           names: shuffle(ALPHABET.map((s) => nameCard(s.sound.toUpperCase(), s.example, ''))),
           teams: shuffle(DIGRAPHS.map((s) => soundCard(s.sound, s.example, ''))),
-          A1: shuffle(byLevel.A1.map((w) => bookCard(w, ''))),
-          A2: shuffle(byLevel.A2.map((w) => bookCard(w, ''))),
-          B1: shuffle(byLevel.B1.map((w) => bookCard(w, ''))),
-          B2: shuffle(byLevel.B2.map((w) => bookCard(w, ''))),
-          C1: shuffle(byLevel.C1.map((w) => bookCard(w, ''))),
-          C2: shuffle(byLevel.C2.map((w) => bookCard(w, ''))),
+          A1: shuffle(byLevel.A1.map((w) => bookCard(w, '', flashImage('A1', w)))),
+          A2: shuffle(byLevel.A2.map((w) => bookCard(w, '', flashImage('A2', w)))),
+          B1: shuffle(byLevel.B1.map((w) => bookCard(w, '', flashImage('B1', w)))),
+          B2: shuffle(byLevel.B2.map((w) => bookCard(w, '', flashImage('B2', w)))),
+          C1: shuffle(byLevel.C1.map((w) => bookCard(w, '', flashImage('C1', w)))),
+          C2: shuffle(byLevel.C2.map((w) => bookCard(w, '', flashImage('C2', w)))),
         });
       })
       .catch(() => {
@@ -216,22 +228,34 @@ export default function Flashcards() {
                 }
                 const chars = Math.max(1, pageText.replace(/\s/g, '').length);
                 return (
-                  <p
-                    className="w-full max-w-full whitespace-nowrap px-2 text-center font-bold leading-none"
-                    style={{ fontSize: `clamp(2.5rem, calc(min(88vw, 55dvh) / ${0.62 * chars}), 7rem)` }}
-                  >
-                    <Words
-                      text={pageText}
-                      onTap={() => flip(true)}
-                      tapped={null}
-                      heardCount={liveCount}
-                      spoken={listenSet}
-                      current={listenCur}
-                      plain
-                      colorful
-                      colorOffset={index}
-                    />
-                  </p>
+                  <>
+                    {card.image && (
+                      <img
+                        src={card.image}
+                        alt=""
+                        aria-hidden="true"
+                        loading="lazy"
+                        className="mb-2 max-h-[28dvh] w-auto max-w-full rounded-md object-contain"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                    )}
+                    <p
+                      className="w-full max-w-full whitespace-nowrap px-2 text-center font-bold leading-none"
+                      style={{ fontSize: `clamp(2.5rem, calc(min(88vw, 55dvh) / ${0.62 * chars}), 7rem)` }}
+                    >
+                      <Words
+                        text={pageText}
+                        onTap={() => flip(true)}
+                        tapped={null}
+                        heardCount={liveCount}
+                        spoken={listenSet}
+                        current={listenCur}
+                        plain
+                        colorful
+                        colorOffset={index}
+                      />
+                    </p>
+                  </>
                 );
               })()}
             </div>

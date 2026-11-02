@@ -4,7 +4,7 @@ import type { AiTask, BasetenConfig, ModalConfig } from './config';
 import { AiError, metaImage, metaSegment, metaText } from './meta';
 import type { ImageOut } from './meta';
 import { basetenText } from './baseten';
-import { modalMask } from './modal';
+import { modalImage, modalMask } from './modal';
 
 // Metered generation: every attempt is a row (retry reuses op_id, attempt+1).
 // Exactly one retry on retryable errors or invalid JSON, then surface.
@@ -67,13 +67,19 @@ export async function generateArt(
     size?: { width: number; height: number };
     referenceImage?: string;
     apiUrl?: string;
+    modal?: ModalConfig | null;
   },
 ): Promise<{ bytes: ArrayBuffer; contentType: string; attempts: number }> {
-  const model = TASK_MODEL.art;
+  // Burn Modal credits first: image routes to the linked Modal endpoint
+  // when present, Meta otherwise. Masks are unaffected (generateMask).
+  const modalUrl = opts.modal?.imageApiUrl;
+  const model = modalUrl ? 'modal/sdxl-turbo' : TASK_MODEL.art;
   for (let attempt = 1; attempt <= 2; attempt++) {
     const start = Date.now();
     try {
-      const out = await metaImage(opts.apiKey, model, opts.prompt, {
+      const out = modalUrl
+        ? await modalImage(opts.modal as ModalConfig, modalUrl, opts.prompt, opts.size)
+        : await metaImage(opts.apiKey, model, opts.prompt, {
         size: opts.size,
         referenceImage: opts.referenceImage,
         apiUrl: opts.apiUrl,
@@ -113,14 +119,19 @@ export async function generateMask(
   const model = TASK_MODEL.isolate;
   // Cost-efficient path: text-prompted SAM on Modal (per-second GPU,
   // scale-to-zero) when configured; otherwise Meta Model API.
-  const useModal = !!opts.modal;
+  const useModal = !!opts.modal?.apiUrl;
   const activeModel = useModal ? 'modal/sam-3.1' : model;
   const provider = useModal ? 'modal' : 'meta-model-api';
   for (let attempt = 1; attempt <= 2; attempt++) {
     const start = Date.now();
     try {
       const out: ImageOut = useModal
-        ? await modalMask(opts.modal as ModalConfig, opts.imageBytes, opts.textPrompt)
+        ? await modalMask(
+            opts.modal as ModalConfig,
+            (opts.modal as ModalConfig).apiUrl as string,
+            opts.imageBytes,
+            opts.textPrompt,
+          )
         : await metaSegment(
             opts.apiKey,
             model,

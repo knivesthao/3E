@@ -17,9 +17,10 @@ export const art = new Hono<{ Bindings: Bindings; Variables: Variables }>({ stri
 const panelKey = (projectId: string, sceneNumber: number): string => `${projectId}-${sceneNumber}.png`;
 const maskKey = (projectId: string, sceneNumber: number): string => `${projectId}-${sceneNumber}-mask.png`;
 
-// Flat keys only (uuid + scene/cast suffix): no slashes, no traversal.
+// Flat keys only (uuid + scene/cast suffix, or flashcard image keys):
+// no slashes, no traversal.
 const KEY_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-(\d{1,3}(-mask)?|cast-(characters|places)-\d{1,2})\.png$/;
+  /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-(\d{1,3}(-mask)?|cast-(characters|places)-\d{1,2})|flash-[a-z0-9-]+)\.png$/;
 
 // Every art object a published book needs: panel + mask keys plus any
 // cast portrait referenced from cast_json. KEY_RE filters so a corrupt
@@ -255,6 +256,7 @@ art.post('/portrait', async (c) => {
       task: 'portrait',
       size: { width: 512, height: 640 },
       apiUrl: c.env.AI_API_URL,
+      modal: modalConfig(c.env),
     });
     const imageKey = `${project.id}-cast-${kind}-${index}.png`;
     await store.put(imageKey, card.bytes, { httpMetadata: { contentType: card.contentType } });
