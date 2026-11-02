@@ -12,6 +12,7 @@
 // Usage:
 //   node qa/seed-definitions.mjs [--api http://localhost:8787]
 //     [--email qa@example.com] [--levels A1,A2] [--limit 50] [--dry-run]
+//     [--shard 0/2] — parallel disjoint split; shard is part of the CI cache key.
 //     [--max-tokens 2000000] [--batch 10] [--sql-out qa/definitions-seed.sql]
 //     [--no-push] [--clean] [--key $BASETEN_API_KEY]
 //   Requires the dev stack: ./run.sh dev
@@ -33,6 +34,7 @@ const LIMIT = Number(opt('--limit', '0')) || 0;
 const DRY = flag('--dry-run');
 const MAX_TOKENS = Number(opt('--max-tokens', '2000000')) || 2000000;
 const BATCH = Number(opt('--batch', '10')) || 10;
+const SHARD = opt('--shard', '');
 const SQL_OUT = opt('--sql-out', 'qa/definitions-seed.sql');
 const PUSH = !flag('--no-push');
 const PROGRESS_FILE = 'qa/definitions-progress.json';
@@ -171,13 +173,18 @@ async function main() {
     try { progress = JSON.parse(readFileSync(PROGRESS_FILE, 'utf8')); } catch { /* start fresh */ }
   }
   const done = new Set(progress.done);
-  const targets = [];
+  // Shard by index in the FULL list (before the done-filter) so parallel
+  // runs stay permanently disjoint across resumes: --shard 0/2, --shard 1/2.
+  const sm = SHARD.match(/^(\d+)\/(\d+)$/);
+  if (SHARD && !sm) throw new Error(`bad --shard ${SHARD}, want i/n`);
+  const full = [];
   for (const level of LEVELS) {
     if (!lists[level]) throw new Error(`unknown level ${level}`);
-    for (const word of lists[level]) {
-      if (!done.has(`${level}|${word}`)) targets.push({ level, word });
-    }
+    for (const word of lists[level]) full.push({ level, word });
   }
+  const targets = full.filter(
+    (t, i) => (!sm || i % Number(sm[2]) === Number(sm[1])) && !done.has(`${t.level}|${t.word}`),
+  );
   const queue = LIMIT > 0 ? targets.slice(0, LIMIT) : targets;
   console.log(`${queue.length} glosses to generate (${done.size} already done)${DRY ? ' [dry run]' : ''}`);
   if (DRY) {

@@ -13,7 +13,7 @@ import {
 import type { AdminSpecs, AdminStats, BookCosts, ExamItemStat, MyActivity, Project } from '../lib/api';
 import { Alert, Button, Field, Page, inputClass } from '../components/ui';
 import { DetailsDeck } from './Details';
-import { DesignSection } from './Design';
+import { DesignSection, FactorySection } from './Design';
 
 type Tab = 'costs' | 'specs' | 'content' | 'exam' | 'guardian' | 'details' | 'design';
 
@@ -286,7 +286,10 @@ export default function Admin() {
       ) : tab === 'details' ? (
         <DetailsDeck />
       ) : (
-        <DesignSection />
+        <>
+          <DesignSection />
+          <FactorySection />
+        </>
       )}
     </Page>
   );

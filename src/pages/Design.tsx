@@ -88,7 +88,19 @@ function Arrow({
   );
 }
 
-export function DesignSection() {
+function DiagramShell({
+  title,
+  ariaLabel,
+  caption,
+  viewBox,
+  children,
+}: {
+  title: string;
+  ariaLabel: string;
+  caption: string;
+  viewBox: string;
+  children: React.ReactNode;
+}) {
   const [presenting, setPresenting] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
@@ -113,51 +125,56 @@ export function DesignSection() {
   }
 
   return (
-    <>
-      <div
-        ref={wrapRef}
-        className={`flex flex-col rounded-lg border border-stone-200 bg-white p-4 ${
-          presenting ? 'h-full overflow-auto' : ''
-        }`}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-lg font-bold text-stone-900">3E system design</h3>
-          <Button onClick={togglePresent} aria-label="View diagram full screen">
-            {presenting ? 'Exit full screen' : '⛶ Full screen'}
-          </Button>
-        </div>
-        <svg
-          viewBox="0 0 960 560"
-          role="img"
-          aria-label="System diagram: web app talks to a Hono API on Cloudflare Workers, backed by D1 and R2, calling Meta Model API for AI, with Baseten and Modal parked."
-          className="mt-2 w-full"
-        >
-          <defs>
-            <marker id="head" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-              <path d="M0,0 L8,4 L0,8" fill="none" stroke="#0c4a4a" strokeWidth={1.5} />
-            </marker>
-          </defs>
+    <div
+      ref={wrapRef}
+      className={`flex flex-col rounded-lg border border-stone-200 bg-white p-4 ${
+        presenting ? 'h-full overflow-auto' : ''
+      }`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-lg font-bold text-stone-900">{title}</h3>
+        <Button onClick={togglePresent} aria-label={`View ${title} full screen`}>
+          {presenting ? 'Exit full screen' : '⛶ Full screen'}
+        </Button>
+      </div>
+      <svg viewBox={viewBox} role="img" aria-label={ariaLabel} className="mt-2 w-full">
+        <defs>
+          <marker id="head" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+            <path d="M0,0 L8,4 L0,8" fill="none" stroke="#0c4a4a" strokeWidth={1.5} />
+          </marker>
+        </defs>
+        {children}
+      </svg>
+      <p className="mt-2 text-sm text-stone-600">{caption}</p>
+      {presenting ? <p className="mt-1 text-sm text-stone-500">Esc to exit full screen.</p> : null}
+    </div>
+  );
+}
 
+export function DesignSection() {
+  return (
+    <>
+      <DiagramShell
+        title="3E system design"
+        viewBox="0 0 960 560"
+        ariaLabel="System diagram: web app talks to a Hono API on Cloudflare Workers, backed by D1 and R2, calling Meta, Baseten, and Modal for AI."
+        caption="All three AI providers are live: Baseten for text, Modal for images, Meta as the metered fallback. The AI factory diagram below shows how they build content."
+      >
           <Box x={20} y={200} w={210} h={150} title="Web app" lines={['React + Vite + TS', 'Library · Studio · Editor', 'Reader · Exam · Admin']} />
           <Box x={310} y={200} w={230} h={150} title="Hono API (Workers)" lines={['auth · projects · scenes', 'ai · exam · admin · share', 'level gate · daily AI cap']} />
           <Box x={310} y={420} w={150} h={100} title="D1 database" lines={['users · sessions', 'projects · scenes · books', 'jobs · ai_usage · exam']} />
           <Box x={480} y={420} w={150} h={100} title="R2 bucket" lines={['scene panels', 'masks · portraits', 'immutable cache']} />
-          <Box x={640} y={200} w={300} h={150} title="Meta Model API (active)" lines={['text: draft · check · exam help', 'image: panels · portraits', 'segment: cutouts (SAM alt.)']} />
-          <Box x={640} y={420} w={150} h={100} title="Baseten (parked)" lines={['Glimmer text route', 'dev IaC only', 'no idle spend']} parked />
-          <Box x={810} y={420} w={130} h={100} title="Modal (parked)" lines={['SAM cutouts', 'scale-to-zero', 'needs credits']} parked />
+          <Box x={640} y={200} w={300} h={150} title="Meta Model API (active)" lines={['text: draft · check · exam help', 'image: panels · portraits', 'metered fallback route']} />
+          <Box x={640} y={420} w={150} h={100} title="Baseten (active)" lines={['dictionary glosses', 'book text drafts', 'free-credits key']} />
+          <Box x={810} y={420} w={130} h={100} title="Modal (active)" lines={['SDXL-Turbo images', 'credits first, $0 idle', 'SAM alt. parked']} />
 
           <Arrow x1={230} y1={275} x2={310} y2={275} label="HTTPS + session" />
           <Arrow x1={540} y1={275} x2={640} y2={275} label="metered, logged" />
           <Arrow x1={385} y1={350} x2={385} y2={420} />
           <Arrow x1={480} y1={350} x2={545} y2={420} />
-          <Arrow x1={620} y1={350} x2={700} y2={420} parked />
-          <Arrow x1={700} y1={350} x2={860} y2={420} parked />
-        </svg>
-        <p className="mt-2 text-sm text-stone-600">
-          Solid lines are live traffic. Dashed lines are parked providers — wired, metered, and off until they win on cost.
-        </p>
-        {presenting ? <p className="mt-1 text-sm text-stone-500">Esc to exit full screen.</p> : null}
-      </div>
+          <Arrow x1={620} y1={350} x2={700} y2={420} />
+          <Arrow x1={700} y1={350} x2={860} y2={420} />
+      </DiagramShell>
 
       <section aria-label="Key flows" className="mt-4">
         <h3 className="mb-1 text-lg font-bold">Key flows</h3>
@@ -171,8 +188,47 @@ export function DesignSection() {
           <li className="rounded-md border border-stone-200 px-3 py-2">
             <strong>Cost control:</strong> every AI attempt is logged per user, task, and model; a daily per-user cap and the Admin costs tab keep spend visible; idle GPUs are deactivated, not left running.
           </li>
+          <li className="rounded-md border border-stone-200 px-3 py-2">
+            <strong>Factory:</strong> GitHub Actions seed shards run Baseten overnight → SQL dumps promote to shared D1; flash-batch.sh burns Modal credits into shared R2; Meta stays the metered fallback. Details below.
+          </li>
         </ul>
       </section>
     </>
+  );
+}
+
+export function FactorySection() {
+  return (
+    <div className="mt-6">
+      <DiagramShell
+        title="AI factory: how content gets built"
+        viewBox="0 0 960 640"
+        ariaLabel="Factory diagram: git feeds GitHub Actions and the Docker dev stack; Actions run Baseten dictionary shards and deploy to Cloudflare; Baseten and Modal generate text and images into shared D1 and R2; Meta is the fallback."
+        caption="Git is the trigger for everything: pushes run CI, dispatches run the overnight dictionary shards, and the same commit deploys dev and prod."
+      >
+        <Box x={20} y={30} w={200} h={140} title="Git repo" lines={['main = production', 'develop = development', 'PRs · review · push']} />
+        <Box x={260} y={30} w={240} h={140} title="GitHub Actions" lines={['ci: typecheck · test · deploy', 'seed: B2×2 + C1 + C2 shards', 'artifacts: SQL dumps']} />
+        <Box x={540} y={30} w={200} h={140} title="Docker 3e-dev" lines={['local API + web UI', 'same D1/R2 bindings', 'QA books · art check']} />
+        <Box x={780} y={30} w={160} h={140} title="Laptop scripts" lines={['qa/*.mjs seeders', 'flash-batch.sh', 'wrangler promote']} />
+
+        <Box x={20} y={240} w={220} h={140} title="Baseten (text)" lines={['dictionary glosses', 'book drafts · exam help', 'free-credits key']} />
+        <Box x={280} y={240} w={220} h={140} title="Modal (images)" lines={['SDXL-Turbo on T4', 'flash + panel art', 'credits first · $0 idle']} />
+        <Box x={540} y={240} w={200} h={140} title="Meta (fallback)" lines={['text + image route', 'metered, per-call $0.01', 'used when others off']} />
+
+        <Box x={20} y={450} w={440} h={150} title="Shared stores" lines={['D1 3e-db: definitions · users', 'D1 3e-books: published books', 'R2 3e-art · 3e-library: art']} />
+        <Box x={500} y={450} w={440} h={150} title="Workers serve learners" lines={['dev + prod Hono API · cache', 'books A1–C2 · flashcards · exams', 'read-aloud · listen on-device']} />
+
+        <Arrow x1={220} y1={100} x2={260} y2={100} label="push / dispatch" />
+        <Arrow x1={740} y1={100} x2={780} y2={100} label="QA + upload" />
+        <Arrow x1={380} y1={170} x2={130} y2={240} label="seed jobs" />
+        <Arrow x1={420} y1={170} x2={390} y2={240} label="image jobs" />
+        <Arrow x1={260} y1={170} x2={260} y2={450} label="SQL dumps" />
+        <Arrow x1={860} y1={170} x2={860} y2={450} label="promote" />
+        <Arrow x1={130} y1={380} x2={130} y2={450} label="glosses" />
+        <Arrow x1={390} y1={380} x2={220} y2={450} label="art PNGs" />
+        <Arrow x1={640} y1={380} x2={560} y2={450} label="fallback" />
+        <Arrow x1={460} y1={525} x2={500} y2={525} label="reads" />
+      </DiagramShell>
+    </div>
   );
 }

@@ -13,6 +13,7 @@ if [ ! -x node_modules/.bin/vite ] || [ ! -x node_modules/.bin/wrangler ]; then
 fi
 
 echo Y | npx wrangler --config api/wrangler.toml d1 migrations apply DB --local >/dev/null 2>&1 || true
+echo Y | npx wrangler --config api/wrangler.toml d1 migrations apply 3e-books --local >/dev/null 2>&1 || true
 
 echo "3E dev stack:"
 echo "  Frontend: http://localhost:5173"
