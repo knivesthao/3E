@@ -221,6 +221,14 @@ projects.post('/:id/publish', async (c) => {
     if (!parsed.ok) return c.json(INVALID, 400);
     scenes.push({ scene_number: s.scene_number, narration: parsed.value.narration, bubbles: parsed.value.bubbles, characters: parsed.value.characters });
   }
+  // No partial books: the draft must cover scenes 1..target contiguously,
+  // where the target mirrors the /finish minimum (6) or the highest drafted
+  // scene. Gate-rejected scenes stay out of the Library until they pass.
+  const haveScenes = new Set(scenes.map((s) => s.scene_number));
+  const sceneTarget = Math.max(6, ...scenes.map((s) => s.scene_number));
+  const missingScenes: number[] = [];
+  for (let n = 1; n <= sceneTarget; n++) if (!haveScenes.has(n)) missingScenes.push(n);
+  if (missingScenes.length > 0) return c.json({ error: 'incomplete draft', missing: missingScenes }, 400);
 
   const jobId = crypto.randomUUID();
   const now = new Date().toISOString();

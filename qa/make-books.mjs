@@ -154,16 +154,22 @@ for (const spec of QUEUE) {
   console.log('cast saved');
 
   // Finish drafts all missing scenes; the level gate can reject individual
-  // scenes, so retry until all 6 pass or we run out of patience.
+  // scenes, so retry until all 6 pass or we run out of patience. A short
+  // draft never publishes (the server also 400s incomplete drafts).
   let saved = [];
+  let failed = [];
   for (let attempt = 1; attempt <= 4; attempt++) {
     const finish = await call('/api/ai/finish', {
       method: 'POST',
       body: JSON.stringify({ projectId: project.id }),
     });
     saved = [...new Set([...saved, ...finish.saved])].sort((a, b) => a - b);
-    console.log(`finish try ${attempt}: saved [${saved.join(',')}] failed ${JSON.stringify(finish.failed)}`);
+    failed = finish.failed ?? [];
+    console.log(`finish try ${attempt}: saved [${saved.join(',')}] failed ${JSON.stringify(failed)}`);
     if (saved.length >= 6) break;
+  }
+  if (saved.length < 6) {
+    throw new Error(`incomplete draft for ${level} ${title}: saved [${saved.join(',')}] missing ${JSON.stringify(failed)} — fix the gate or wording, then rerun`);
   }
 
   for (const n of saved) {

@@ -20,6 +20,7 @@ function makeDb() {
     jobs,
     books,
     projects,
+    scenes,
     seedProject(row: Record<string, unknown>) {
       projects.set(row.id as string, row);
     },
@@ -238,6 +239,10 @@ function seedBook(db: Db, creatorId: string, level = 'A1') {
   });
   db.seedScene(pid, 1, { narration: 'Noy walks to the rice field.', bubbles: [{ speaker: 'Noy', text: "Let's go!" }] });
   db.seedScene(pid, 2, { narration: 'A red bird sings.', bubbles: [] });
+  db.seedScene(pid, 3, { narration: 'The sun is hot.', bubbles: [] });
+  db.seedScene(pid, 4, { narration: 'Noy drinks cold tea.', bubbles: [] });
+  db.seedScene(pid, 5, { narration: 'A white dog runs by.', bubbles: [] });
+  db.seedScene(pid, 6, { narration: 'Noy waves and goes home.', bubbles: [] });
   return pid;
 }
 
@@ -290,7 +295,7 @@ describe('Publish endpoint', () => {
     expect(body.book.cover_url).toBe(`/api/ai/art/${pid}-1.png`);
     expect(body.book.manifest.version).toBe(2);
     expect(body.book.manifest.title).toBe('T');
-    expect(body.book.manifest.scenes).toHaveLength(2);
+    expect(body.book.manifest.scenes).toHaveLength(6);
     expect(body.book.manifest.scenes[0].image_url).toBe(`/api/ai/art/${pid}-1.png`);
     expect(body.book.manifest.scenes[0].mask_url).toBe(`/api/ai/art/${pid}-1-mask.png`);
     expect(body.book.manifest.scenes[1].image_url).toBeNull();
@@ -342,6 +347,28 @@ describe('Publish endpoint', () => {
     const res = await app.request(`/api/projects/${pid}/publish`, json('POST', {}, cookie), env);
     expect(res.status).toBe(200);
     expect(db.books.size).toBe(1);
+  });
+
+  it('rejects partial drafts with 400 and no book', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const env = ENV(db);
+    const uid = await userIdOf(cookie, env);
+    const pid = seedBook(db, uid);
+    // Drop scenes 3-6: a gate-rejected middle must never ship a short book.
+    for (const [id, row] of [...db.scenes.entries()]) {
+      if ((row as { scene_number: number }).scene_number > 2) db.scenes.delete(id);
+    }
+    stubSafety('safe');
+
+    const res = await app.request(`/api/projects/${pid}/publish`, json('POST', {}, cookie), env);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'incomplete draft', missing: [3, 4, 5, 6] });
+    expect(db.books.size).toBe(0);
+    const proj = (await (
+      await app.request(`/api/projects/${pid}`, { headers: { cookie } }, env)
+    ).json()) as { project: { status: string } };
+    expect(proj.project.status).toBe('draft');
   });
 
   it('unsafe content blocks publish with 422 and no book', async () => {
