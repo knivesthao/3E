@@ -32,12 +32,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Cache key
+        id: ckey
+        # Cache keys forbid commas — A1,A2 becomes A1_A2.
+        run: echo "key=seed-progress-$(echo '${{ inputs.levels }}' | tr ', ' '__')" >> "$GITHUB_OUTPUT"
+
       - name: Restore seed progress
         uses: actions/cache/restore@v4
         with:
           path: qa/definitions-progress.json
           # One progress file per level set; a new set starts fresh.
-          key: seed-progress-${{ inputs.levels }}-
+          key: ${{ steps.ckey.outputs.key }}-
 
       - name: Seed definitions
         run: >
@@ -55,7 +60,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: qa/definitions-progress.json
-          key: seed-progress-${{ inputs.levels }}-${{ github.run_id }}
+          key: ${{ steps.ckey.outputs.key }}-${{ github.run_number }}
 
       - name: Upload SQL dump
         if: always()
