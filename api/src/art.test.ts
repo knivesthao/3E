@@ -121,7 +121,7 @@ function makeDb() {
 
 type Db = ReturnType<typeof makeDb>;
 
-const ENV = (db: Db, opts?: { key?: boolean; bucket?: boolean }) => {
+const ENV = (db: Db, opts?: { key?: boolean; bucket?: boolean; modal?: boolean }) => {
   const withKey = opts?.key ?? true;
   const withBucket = opts?.bucket ?? true;
   return {
@@ -130,6 +130,9 @@ const ENV = (db: Db, opts?: { key?: boolean; bucket?: boolean }) => {
     AI_API_URL: 'https://model.test/v1',
     ...(withKey ? { MODEL_API_KEY: 'test-key' } : {}),
     ...(withBucket ? { ART: makeBucket() as unknown as R2Bucket } : {}),
+    ...(opts?.modal
+      ? { MODAL_IMAGE_API_URL: 'https://example.modal.run/draw', MODAL_PROXY_TOKEN: 'id.ws-secret' }
+      : {}),
   };
 };
 
@@ -258,6 +261,31 @@ describe('Scene art endpoints', () => {
     const mask = await app.request(body.panels[0].mask_url, { headers: { cookie } }, env);
     expect(mask.status).toBe(200);
     expect(await mask.text()).toBe('MASKDATA');
+  });
+
+  it('routes panel art through Modal and logs provider modal', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const env = ENV(db, { modal: true });
+    const uid = await userIdOf(cookie, env);
+    const pid = seedBook(db, uid);
+    stubFetch((body: unknown) => {
+      const b = body as { auth?: unknown; input?: { prompts?: unknown } };
+      // Modal image contract carries the proxy auth in the body.
+      if (typeof b.auth === 'string') return { image_b64: b64('PNGDATA'), content_type: 'image/png' };
+      return artReply(body);
+    });
+
+    const res = await app.request('/api/ai/art', json('POST', { projectId: pid, sceneNumber: 1 }, cookie), env);
+    expect(res.status).toBe(200);
+
+    const art = db.usage.find((u) => u.task === 'art');
+    expect(art?.provider).toBe('modal');
+    expect(art?.model).toBe('modal/sdxl-turbo');
+    expect(art?.ok).toBe(1);
+    // No SAM endpoint configured: cutouts stay on the Meta route.
+    const seg = db.usage.find((u) => u.task === 'isolate');
+    expect(seg?.provider).toBe('meta-model-api');
   });
 
   it('draws the page cast: known names expand to looks, unknown names pass through', async () => {

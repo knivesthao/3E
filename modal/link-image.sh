@@ -5,7 +5,10 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEV_JSON="$ROOT/modal/image-dev.json"
-TARGET="$ROOT/api/.dev.vars"
+# Wrangler dev loads .dev.vars from the repo root; qa scripts and
+# flash-batch.sh read api/.dev.vars. Write both so the worker and the
+# tooling always agree.
+TARGETS="$ROOT/.dev.vars $ROOT/api/.dev.vars"
 
 URL="${1:-}"
 if [ -z "$URL" ]; then
@@ -23,8 +26,9 @@ json.dump(d, open(p, 'w'), indent=2)
 open(p, 'a').write('\n')
 "
 
-# Upsert URL into api/.dev.vars. Existing keys (incl. MODAL_PROXY_TOKEN,
+# Upsert URL into both .dev.vars files. Existing keys (incl. MODAL_PROXY_TOKEN,
 # reused as the body auth) are preserved. Nothing is echoed.
+for TARGET in $TARGETS; do
 touch "$TARGET"
 python3 - "$TARGET" "$URL" <<'EOF'
 import sys
@@ -39,6 +43,7 @@ for line in lines:
 out.append(f'MODAL_IMAGE_API_URL={url}')
 open(path, 'w').write('\n'.join(l for l in out if l) + '\n')
 EOF
+done
 
-echo "Linked Modal image endpoint. Target: api/.dev.vars (MODAL_IMAGE_API_URL)."
-echo "Unlink (fall back to Meta): delete that line from api/.dev.vars."
+echo "Linked Modal image endpoint. Targets: .dev.vars + api/.dev.vars (MODAL_IMAGE_API_URL)."
+echo "Unlink (fall back to Meta): delete that line from both files."

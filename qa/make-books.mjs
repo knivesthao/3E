@@ -23,8 +23,9 @@ const API = (opt('--api', process.env.API ?? 'http://localhost:8787')).replace(/
 const FRONTEND = API.replace(':8787', ':5173');
 const DRY = flag('--dry');
 const LIMIT = Number(opt('--limit', '0')) || 0;
-// Explicit opt-in to measure with wired providers (Baseten text, Meta art
-// until Modal is deployed). Without it the script stays Meta-only.
+const OFFSET = Number(opt('--offset', '0')) || 0;
+// Explicit opt-in to measure with wired providers (Baseten text, Modal
+// images with Meta fallback). Without it the script stays Meta-only.
 const ALLOW_WIRED = flag('--allow-wired');
 
 const BOOKS = [
@@ -84,13 +85,13 @@ const BOOKS = [
 const devVars = existsSync('api/.dev.vars') ? readFileSync('api/.dev.vars', 'utf8') : '';
 const has = (re) => re.test(devVars);
 const basetenWired = has(/^BASETEN_API_URL=https?:\/\//m) && has(/^BASETEN_API_KEY=.+/m);
-const modalWired = has(/^MODAL_API_URL=https?:\/\//m) && has(/^MODAL_PROXY_TOKEN=.+/m);
+const modalWired = has(/^MODAL_IMAGE_API_URL=https?:\/\//m) && has(/^MODAL_PROXY_TOKEN=.+/m);
 console.log(`providers: baseten=${basetenWired ? 'WIRED' : 'off'} modal=${modalWired ? 'WIRED' : 'off'} meta=on`);
 if ((basetenWired || modalWired) && !ALLOW_WIRED) {
   console.error('\nRefusing: Baseten/Modal dev wiring is present. Remove it for a Meta-only cost run, or pass --allow-wired to measure with wired providers.');
   process.exit(1);
 }
-const QUEUE = LIMIT > 0 ? BOOKS.slice(0, LIMIT) : BOOKS;
+const QUEUE = (LIMIT > 0 ? BOOKS.slice(OFFSET, OFFSET + LIMIT) : BOOKS.slice(OFFSET));
 if (DRY) {
   console.log('\n--dry: plan only. Books that would be made:');
   for (const b of QUEUE) console.log(`  ${b.level}  ${b.title}  (${b.email})`);

@@ -74,6 +74,7 @@ export async function generateArt(
   // when present, Meta otherwise. Masks are unaffected (generateMask).
   const modalUrl = opts.modal?.imageApiUrl;
   const model = modalUrl ? 'modal/sdxl-turbo' : TASK_MODEL.art;
+  const provider = modalUrl ? 'modal' : 'meta-model-api';
   for (let attempt = 1; attempt <= 2; attempt++) {
     const start = Date.now();
     try {
@@ -86,15 +87,15 @@ export async function generateArt(
       });
       const ms = Date.now() - start;
       if (out.bytes.byteLength === 0 || !out.contentType.startsWith('image/')) {
-        await logAttempt(db, { ...opts, task: opts.task ?? 'art' }, model, 'image', attempt, out.inputTokens, out.outputTokens, false, 'invalid shape', ms);
+        await logAttempt(db, { ...opts, task: opts.task ?? 'art' }, model, 'image', attempt, out.inputTokens, out.outputTokens, false, 'invalid shape', ms, provider);
         if (attempt === 2) break;
         continue;
       }
-      await logAttempt(db, { ...opts, task: opts.task ?? 'art' }, model, 'image', attempt, out.inputTokens, out.outputTokens, true, null, ms);
+      await logAttempt(db, { ...opts, task: opts.task ?? 'art' }, model, 'image', attempt, out.inputTokens, out.outputTokens, true, null, ms, provider);
       return { bytes: out.bytes, contentType: out.contentType, attempts: attempt };
     } catch (e) {
       const retryable = e instanceof AiError && e.retryable;
-      await logAttempt(db, { ...opts, task: opts.task ?? 'art' }, model, 'image', attempt, 0, 0, false, e instanceof Error ? e.message : 'failed', Date.now() - start);
+      await logAttempt(db, { ...opts, task: opts.task ?? 'art' }, model, 'image', attempt, 0, 0, false, e instanceof Error ? e.message : 'failed', Date.now() - start, provider);
       if (!retryable || attempt === 2) break;
     }
   }
