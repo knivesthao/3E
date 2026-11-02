@@ -1,6 +1,6 @@
 ---
 name: commit-summary
-description: GitHub commit workflow for the 3E repo. Use whenever committing: inspects the change, writes a descriptive message, and reports a summary of the commits and work done.
+description: "GitHub commit workflow for the 3E repo. Use whenever committing."
 ---
 
 # Commit summary — 3E GitHub workflow
