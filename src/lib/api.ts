@@ -192,6 +192,9 @@ export interface Book {
   // Language track: 'en' default, 'zh' for Mandarin books (migration 0007).
   // Optional so books cached before the column existed still load.
   lang?: string;
+  // Focus tags (closed vocabulary): what the book drills. Optional so books
+  // published before migration 0002 still load.
+  tags?: FocusTag[];
   manifest: Manifest;
 }
 
@@ -200,8 +203,11 @@ export function voiceLang(lang: string | undefined): string {
   return lang === 'zh' ? 'zh-CN' : 'en-US';
 }
 
-export const publishProject = (id: string) =>
-  api<{ job: { id: string; status: string }; book: Book }>(`/api/projects/${id}/publish`, { method: 'POST' });
+export const publishProject = (id: string, tags?: FocusTag[]) =>
+  api<{ job: { id: string; status: string }; book: Book }>(`/api/projects/${id}/publish`, {
+    method: 'POST',
+    ...(tags ? { body: JSON.stringify({ tags }) } : {}),
+  });
 
 export const getBook = (projectId: string) => api<{ book: Book }>(`/api/projects/${projectId}/book`);
 
@@ -213,6 +219,7 @@ export interface CatalogBook {
   level: string;
   cover_url: string | null;
   published_at: string;
+  tags?: FocusTag[];
 }
 
 export const listBooks = () => api<{ books: CatalogBook[] }>('/api/share/books');
@@ -306,9 +313,19 @@ export const getExam = () =>
 export const getExamBest = () =>
   api<{ attempts: number; best: number | null; total: number; passMark: number }>('/api/exam/best');
 
-// CEFR word lists (the same arrays the server level-gate enforces).
+// CEFR word lists (the same arrays the server level-gate enforces) plus the
+// closed book-focus vocabulary — the client never hardcodes either.
+export type FocusTag = 'nouns' | 'verbs' | 'adjectives';
 export const listLevels = () =>
-  api<{ A1: string[]; A2: string[]; B1: string[]; B2: string[]; C1: string[]; C2: string[] }>('/api/levels');
+  api<{
+    A1: string[];
+    A2: string[];
+    B1: string[];
+    B2: string[];
+    C1: string[];
+    C2: string[];
+    focusTags: FocusTag[];
+  }>('/api/levels');
 
 export interface ShelfBook {
   id: string;

@@ -1752,6 +1752,15 @@ export const C2 = [...C2A, ...C2B];
 
 const ORDER: Level[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
+// Book focus tags (closed set): what the book drills. Single-sourced here,
+// served via GET /api/levels so the client never hardcodes the vocabulary.
+export const FOCUS_TAGS = ['nouns', 'verbs', 'adjectives'] as const;
+export type FocusTag = (typeof FOCUS_TAGS)[number];
+
+export function isFocusTag(t: unknown): t is FocusTag {
+  return typeof t === 'string' && (FOCUS_TAGS as readonly string[]).includes(t);
+}
+
 // Tunables: minimum known-word coverage, max scene words per level.
 export const LEVEL_COVERAGE = 0.9;
 export const SCENE_MAX_WORDS: Record<Level, number> = { A1: 40, A2: 60, B1: 80, B2: 100, C1: 120, C2: 140 };

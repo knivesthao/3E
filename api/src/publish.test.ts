@@ -151,10 +151,17 @@ function makeLibraryDb(books: Map<string, Record<string, unknown>>) {
               if (q.startsWith('SELECT id, title, cover_url, manifest_json FROM books WHERE id IN')) {
                 return { results: (params as string[]).map((id) => books.get(id)).filter((b) => b !== undefined) };
               }
-              if (q.startsWith('SELECT id, title, level, cover_url, published_at FROM books ORDER BY')) {
+              if (q.startsWith('SELECT id, title, level, tags_json, cover_url, published_at FROM books ORDER BY')) {
                 return {
                   results: [...books.values()]
-                    .map((b) => ({ id: b.id, title: b.title, level: b.level, cover_url: b.cover_url, published_at: b.published_at }))
+                    .map((b) => ({
+                      id: b.id,
+                      title: b.title,
+                      level: b.level,
+                      tags_json: (b.tags_json as string | undefined) ?? '[]',
+                      cover_url: b.cover_url,
+                      published_at: b.published_at,
+                    }))
                     .sort((a, b) => ((a.published_at as string) < (b.published_at as string) ? 1 : -1)),
                 };
               }
@@ -162,13 +169,13 @@ function makeLibraryDb(books: Map<string, Record<string, unknown>>) {
             },
             run: async () => {
               if (q.startsWith('INSERT INTO books')) {
-                const [id, project_id, creator_id, title, description, level, reading_level, cover_url, manifest_json, published_at, updated_at] =
+                const [id, project_id, creator_id, title, description, level, reading_level, tags_json, cover_url, manifest_json, published_at, updated_at] =
                   params as unknown[];
-                books.set(id as string, { id, project_id, creator_id, title, description, level, reading_level, cover_url, manifest_json, published_at, updated_at });
+                books.set(id as string, { id, project_id, creator_id, title, description, level, reading_level, tags_json, cover_url, manifest_json, published_at, updated_at });
               } else if (q.startsWith('UPDATE books SET')) {
-                const [title, description, level, reading_level, cover_url, manifest_json, updated_at, id] = params as unknown[];
+                const [title, description, level, reading_level, tags_json, cover_url, manifest_json, updated_at, id] = params as unknown[];
                 const row = books.get(id as string);
-                if (row) Object.assign(row, { title, description, level, reading_level, cover_url, manifest_json, updated_at });
+                if (row) Object.assign(row, { title, description, level, reading_level, tags_json, cover_url, manifest_json, updated_at });
               }
               return { success: true };
             },
@@ -369,6 +376,39 @@ describe('Publish endpoint', () => {
       await app.request(`/api/projects/${pid}`, { headers: { cookie } }, env)
     ).json()) as { project: { status: string } };
     expect(proj.project.status).toBe('draft');
+  });
+
+  it('stores focus tags on publish, republish, and the catalog', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const env = ENV(db);
+    const uid = await userIdOf(cookie, env);
+    const pid = seedBook(db, uid);
+    stubSafety('safe');
+
+    const tagged = (t: unknown) => json('POST', { tags: t }, cookie);
+    const res = await app.request(`/api/projects/${pid}/publish`, tagged(['nouns']), env);
+    expect(res.status).toBe(200);
+    const book = ((await res.json()) as { book: { tags: string[]; manifest: { tags: string[] } } }).book;
+    expect(book.tags).toEqual(['nouns']);
+    expect(book.manifest.tags).toEqual(['nouns']);
+
+    const catalog = (await (await app.request('/api/share/books', {}, env)).json()) as {
+      books: { tags: string[] }[];
+    };
+    expect(catalog.books).toHaveLength(1);
+    expect(catalog.books[0].tags).toEqual(['nouns']);
+
+    // Republish replaces the tag set; unknown tags never store.
+    const res2 = await app.request(`/api/projects/${pid}/publish`, tagged(['verbs', 'adjectives']), env);
+    expect(res2.status).toBe(200);
+    expect(((await res2.json()) as { book: { tags: string[] } }).book.tags).toEqual(['verbs', 'adjectives']);
+    const bad = await app.request(`/api/projects/${pid}/publish`, tagged(['nouns', 'pirates']), env);
+    expect(bad.status).toBe(400);
+    const kept = (await (await app.request('/api/share/books', {}, env)).json()) as {
+      books: { tags: string[] }[];
+    };
+    expect(kept.books[0].tags).toEqual(['verbs', 'adjectives']);
   });
 
   it('unsafe content blocks publish with 422 and no book', async () => {

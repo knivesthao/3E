@@ -24,6 +24,7 @@ const FRONTEND = API.replace(':8787', ':5173');
 const DRY = flag('--dry');
 const LIMIT = Number(opt('--limit', '0')) || 0;
 const OFFSET = Number(opt('--offset', '0')) || 0;
+const TAGS = opt('--tags', '').split(',').map((s) => s.trim()).filter(Boolean);
 // Explicit opt-in to measure with wired providers (Baseten text, Modal
 // images with Meta fallback). Without it the script stays Meta-only.
 const ALLOW_WIRED = flag('--allow-wired');
@@ -190,7 +191,10 @@ for (const spec of QUEUE) {
   }
   const scenes = saved;
 
-  const pub = await call(`/api/projects/${project.id}/publish`, { method: 'POST' });
+  const pub = await call(`/api/projects/${project.id}/publish`, {
+    method: 'POST',
+    body: TAGS.length > 0 ? JSON.stringify({ tags: TAGS }) : undefined,
+  });
   console.log(`published book ${pub.book.id}`);
 
   const costs = await call(`/api/admin/costs/book?projectId=${encodeURIComponent(project.id)}`);

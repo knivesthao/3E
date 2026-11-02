@@ -7,7 +7,9 @@ import {
   aiSimplify,
   createScene,
   deleteScene,
+  getBook,
   getProject,
+  listLevels,
   parseScene,
   publishProject,
   reorderScenes,
@@ -15,7 +17,7 @@ import {
   updateScene,
 } from '../lib/api';
 import { LEVELS } from '../lib/api';
-import type { Book, Cast, CastKind, Panel, Project, Scene, SceneData } from '../lib/api';
+import type { Book, Cast, CastKind, FocusTag, Panel, Project, Scene, SceneData } from '../lib/api';
 import { Alert, Badge, Button, Field, Page, inputClass } from '../components/ui';
 import { Dialog, useConfirm } from '../components/Dialog';
 
@@ -111,6 +113,8 @@ export default function Editor() {
   const [panels, setPanels] = useState<Record<number, Panel>>({});
   const [publishBusy, setPublishBusy] = useState(false);
   const [book, setBook] = useState<Book | null>(null);
+  const [tags, setTags] = useState<FocusTag[]>([]);
+  const [focusOptions, setFocusOptions] = useState<FocusTag[]>([]);
   const [shared, setShared] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const { requestConfirm, dialog } = useConfirm();
@@ -133,6 +137,20 @@ export default function Editor() {
       const d: Record<string, SceneData> = {};
       for (const s of res.scenes) d[s.id] = toDraft(s);
       setDrafts(d);
+      try {
+        const b = await getBook(id);
+        setBook(b.book);
+        setTags(b.book.tags ?? []);
+      } catch {
+        setBook(null);
+        setTags([]);
+      }
+      try {
+        const lists = await listLevels();
+        setFocusOptions(lists.focusTags);
+      } catch {
+        setFocusOptions([]);
+      }
     } catch {
       setError('Could not load the comic.');
     }
@@ -251,14 +269,19 @@ export default function Editor() {
     setError(null);
     setPublishBusy(true);
     try {
-      const res = await publishProject(id);
+      const res = await publishProject(id, tags);
       setBook(res.book);
+      setTags(res.book.tags ?? tags);
       setProject((p) => (p ? { ...p, status: 'published' } : p));
     } catch {
       setError('Publish failed.');
     } finally {
       setPublishBusy(false);
     }
+  }
+
+  function toggleTag(t: FocusTag) {
+    setTags((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t].slice(0, 3)));
   }
 
   async function simplifyScene(sceneId: string) {
@@ -314,6 +337,24 @@ export default function Editor() {
               </select>
             </Field>
           </div>
+          {focusOptions.length > 0 && (
+            <div>
+              <Field label="Focus (applies on publish)">
+                <span className="flex flex-wrap gap-1">
+                  {focusOptions.map((t) => (
+                    <Button
+                      key={t}
+                      onClick={() => toggleTag(t)}
+                      aria-pressed={tags.includes(t)}
+                      pressed={tags.includes(t)}
+                    >
+                      {t}
+                    </Button>
+                  ))}
+                </span>
+              </Field>
+            </div>
+          )}
           <Button onClick={() => void saveProject()}>Save</Button>
         </div>
       </section>

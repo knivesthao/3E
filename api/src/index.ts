@@ -16,7 +16,7 @@ import { exam } from './exam';
 import { ai } from './ai/routes';
 import { share } from './share';
 import { costs } from './costs';
-import { A1, A2, B1, B2, C1, C2 } from './levels';
+import { A1, A2, B1, B2, C1, C2, FOCUS_TAGS } from './levels';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>({ strict: false });
 
@@ -124,7 +124,9 @@ app.get('/api/auth/me', (c) => c.json({ user: { id: c.get('userId'), email: c.ge
 // enforces, served as data so the client never imports server code
 // (Vite would route that import through the /api proxy and 404).
 app.get('/api/levels', (c) =>
-  c.json({ A1, A2, B1, B2, C1, C2 }, 200, { 'Cache-Control': 'public, max-age=86400' }),
+  c.json({ A1, A2, B1, B2, C1, C2, focusTags: [...FOCUS_TAGS] }, 200, {
+    'Cache-Control': 'public, max-age=86400',
+  }),
 );
 
 // Self activity (shelf + streaks): distinct active days from exam attempts

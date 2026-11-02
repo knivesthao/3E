@@ -13,16 +13,23 @@ const NOT_FOUND = { error: 'not found' } as const;
 const INVALID = { error: 'invalid request' } as const;
 
 // Public catalog for the Library page. Same gate as reading: only published
-// books exist in `books`, newest first. Cover + level, no manifest payload.
-// Edge-cached (busted on publish): hits cost zero D1 reads.
+// books exist in `books`, newest first. Cover + level + focus tags, no
+// manifest payload. Edge-cached (busted on publish): hits cost zero D1 reads.
 share.get('/books', async (c) => {
   return cachedJson(c, 3600, async () => {
     const { results } = await c.env.LIBRARY_DB.prepare(
-      'SELECT id, title, level, cover_url, published_at FROM books ORDER BY published_at DESC',
+      'SELECT id, title, level, tags_json, cover_url, published_at FROM books ORDER BY published_at DESC',
     )
       .bind()
-      .all<{ id: string; title: string; level: string; cover_url: string | null; published_at: string }>();
-    return { status: 200, body: { books: results } };
+      .all<{
+        id: string;
+        title: string;
+        level: string;
+        tags_json: string | null;
+        cover_url: string | null;
+        published_at: string;
+      }>();
+    return { status: 200, body: { books: results.map((r) => ({ ...r, tags: tagsOf(r) })) } };
   });
 });
 
@@ -36,10 +43,21 @@ share.get('/:bookId', async (c) => {
     if (!book) return { status: 404, body: NOT_FOUND };
     return {
       status: 200,
-      body: { book: { ...book, manifest: JSON.parse(book.manifest_json) as unknown } },
+      body: { book: { ...book, tags: tagsOf(book), manifest: JSON.parse(book.manifest_json) as unknown } },
     };
   });
 });
+
+// tags_json predates some rows and hand edits: never let a bad value break
+// the catalog — unparseable means untagged.
+function tagsOf(row: { tags_json?: unknown }): string[] {
+  try {
+    const v = typeof row.tags_json === 'string' ? (JSON.parse(row.tags_json) as unknown) : [];
+    return Array.isArray(v) ? v.filter((t): t is string => typeof t === 'string') : [];
+  } catch {
+    return [];
+  }
+}
 
 // Dual reading (Step 6a): one shared scene position per book, polling.
 // Same public gate as the share route so a second device on the link stays

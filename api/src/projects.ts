@@ -2,11 +2,14 @@ import { Hono } from 'hono';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Bindings, Variables } from './types';
 import {
+  isRecord,
   validateProjectCreate,
   validateProjectPatch,
   validateSceneData,
   validateSceneOrder,
 } from './validate';
+import { isFocusTag } from './levels';
+import type { FocusTag } from './levels';
 import { generate } from './ai/client';
 import { collectPublishKeys, copyArtToLibrary } from './ai/art';
 import { bustShareCache } from './cache';
@@ -48,6 +51,7 @@ export interface BookRow {
   description: string;
   level: string;
   reading_level: string;
+  tags_json?: string | null;
   cover_url: string | null;
   manifest_json: string;
   published_at: string;
@@ -200,6 +204,21 @@ projects.post('/:id/publish', async (c) => {
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
   if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
 
+  // Optional focus tags (closed vocabulary, max 3, deduped). Empty body or
+  // missing tags publishes untagged; republish replaces the tag set.
+  let tags: FocusTag[] = [];
+  try {
+    const body: unknown = await c.req.json();
+    if (isRecord(body) && body.tags !== undefined) {
+      if (!Array.isArray(body.tags) || body.tags.length > 3 || !body.tags.every(isFocusTag)) {
+        return c.json(INVALID, 400);
+      }
+      tags = [...new Set(body.tags)];
+    }
+  } catch {
+    // No body: publish untagged.
+  }
+
   const db = c.env.DB;
   // Published books live in the shared library store, not the app DB.
   const library = c.env.LIBRARY_DB;
@@ -284,6 +303,7 @@ projects.post('/:id/publish', async (c) => {
       description: project.description,
       level: project.level,
       reading_level: readingLevel(project.level),
+      tags,
       cover,
       scenes: manifestScenes,
     };
@@ -299,13 +319,14 @@ projects.post('/:id/publish', async (c) => {
       publishedAt = existing.published_at;
       await library
         .prepare(
-          'UPDATE books SET title = ?, description = ?, level = ?, reading_level = ?, cover_url = ?, manifest_json = ?, updated_at = ? WHERE id = ?',
+          'UPDATE books SET title = ?, description = ?, level = ?, reading_level = ?, tags_json = ?, cover_url = ?, manifest_json = ?, updated_at = ? WHERE id = ?',
         )
         .bind(
           project.title,
           project.description,
           project.level,
           manifest.reading_level,
+          JSON.stringify(tags),
           cover,
           JSON.stringify(manifest),
           stamp,
@@ -317,7 +338,7 @@ projects.post('/:id/publish', async (c) => {
       publishedAt = stamp;
       await library
         .prepare(
-          'INSERT INTO books (id, project_id, creator_id, title, description, level, reading_level, cover_url, manifest_json, published_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO books (id, project_id, creator_id, title, description, level, reading_level, tags_json, cover_url, manifest_json, published_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         )
         .bind(
           bookId,
@@ -327,6 +348,7 @@ projects.post('/:id/publish', async (c) => {
           project.description,
           project.level,
           manifest.reading_level,
+          JSON.stringify(tags),
           cover,
           JSON.stringify(manifest),
           stamp,
@@ -355,6 +377,8 @@ projects.post('/:id/publish', async (c) => {
       description: project.description,
       level: project.level,
       reading_level: manifest.reading_level,
+      tags_json: JSON.stringify(tags),
+      tags,
       cover_url: cover,
       manifest_json: JSON.stringify(manifest),
       published_at: publishedAt,

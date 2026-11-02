@@ -3,8 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import Tour from '../components/Tour';
 import type { TourTrack } from '../components/Tour';
 import { Badge, Button } from '../components/ui';
-import { getExamBest, getMyActivity, listBooks } from '../lib/api';
-import type { CatalogBook, MyActivity } from '../lib/api';
+import { getExamBest, getMyActivity, listBooks, listLevels } from '../lib/api';
+import type { CatalogBook, FocusTag, MyActivity } from '../lib/api';
 import { BELT_LABEL, beltFor } from '../lib/belts';
 
 const TOUR_KEY = 'e3-tour-library';
@@ -55,6 +55,8 @@ export default function Library() {
   const [total, setTotal] = useState(0);
   const [passMark, setPassMark] = useState(0);
   const [books, setBooks] = useState<CatalogBook[] | null>(() => cachedCatalog());
+  const [focusOptions, setFocusOptions] = useState<FocusTag[]>([]);
+  const [focusFilter, setFocusFilter] = useState<'all' | FocusTag>('all');
   const [activity, setActivity] = useState<MyActivity | null>(null);
   const [params] = useSearchParams();
   const startTab = params.get('tab');
@@ -85,6 +87,9 @@ export default function Library() {
         }
       })
       .catch(() => setBooks((b) => b ?? []));
+    listLevels()
+      .then((lists) => setFocusOptions(lists.focusTags))
+      .catch(() => setFocusOptions([]));
   }, []);
   return (
     <main className="mx-auto w-full max-w-2xl px-4 pb-4 sm:px-6 sm:pb-6">
@@ -143,13 +148,29 @@ export default function Library() {
         <div className="mb-2">
           <h2 className="font-display text-xl font-bold">Published books</h2>
         </div>
+        {focusOptions.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1" role="group" aria-label="Filter by focus">
+            {(['all', ...focusOptions] as const).map((f) => (
+              <Button
+                key={f}
+                onClick={() => setFocusFilter(f)}
+                variant={focusFilter === f ? 'primary' : undefined}
+                aria-pressed={focusFilter === f}
+              >
+                {f === 'all' ? 'All' : f}
+              </Button>
+            ))}
+          </div>
+        )}
         {books === null ? (
           <p>Loading books…</p>
         ) : books.length === 0 ? (
           <p className="text-stone-600">No published books yet — make one in the Studio.</p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {books.map((b) => (
+            {books
+              .filter((b) => focusFilter === 'all' || (b.tags ?? []).includes(focusFilter))
+              .map((b) => (
               <li
                 key={b.id}
                 className="flex items-center gap-3 rounded-md border border-stone-200 bg-white p-2"
@@ -164,8 +185,13 @@ export default function Library() {
                 ) : null}
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="truncate text-base font-bold">{b.title}</span>
-                  <span>
+                  <span className="flex flex-wrap items-center gap-1">
                     <Badge status={b.level} />
+                    {(b.tags ?? []).map((t) => (
+                      <span key={t} className="rounded border border-stone-200 px-1 text-sm text-stone-600">
+                        {t}
+                      </span>
+                    ))}
                   </span>
                 </div>
                 <Link
