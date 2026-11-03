@@ -400,10 +400,23 @@ if (DRY) {
 }
 
 let cookie = '';
+// Overnight-proofing: a single dropped connection (proxy blip, worker
+// redeploy) must not kill a whole shard run. Retry transient network
+// failures with backoff; only give up loudly after 4 attempts.
+async function fetchRetry(url, init) {
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      return await fetch(url, init);
+    } catch {
+      if (attempt < 4) await new Promise((r) => setTimeout(r, 5000 * attempt));
+    }
+  }
+  return null;
+}
 async function call(path, init = {}, email = '') {
   const headers = { 'Content-Type': 'application/json', ...(init.headers ?? {}) };
   if (cookie) headers.Cookie = cookie;
-  const res = await fetch(`${API}${path}`, { ...init, headers }).catch(() => null);
+  const res = await fetchRetry(`${API}${path}`, { ...init, headers });
   if (!res) {
     console.error(`\nCannot reach the API at ${API}. Start the dev stack first: ./run.sh dev`);
     process.exit(1);
@@ -431,7 +444,7 @@ async function signIn(email) {
     console.error('\nNo devLink returned. Is DEV_LINKS=true in api/wrangler.toml?');
     process.exit(1);
   }
-  const verify = await fetch(devLink, { redirect: 'manual' });
+  const verify = await fetchRetry(devLink, { redirect: 'manual' });
   const setCookies = verify.headers.getSetCookie?.() ?? [];
   const session = setCookies.map((c) => c.split(';')[0]).find((c) => c && !c.endsWith('='));
   if (!session) {
@@ -444,11 +457,14 @@ async function signIn(email) {
 const results = [];
 async function tryGetProject(projectId) {
   // Raw fetch (not call): a 404 here just means "start fresh", it must
-  // never abort the run.
-  const res = await fetch(`${API}/api/projects/${projectId}`, {
+  // never abort the run. But a NETWORK failure must never read as 404 —
+  // that would duplicate the project on retry. Throw so the per-book catch
+  // ledger-marks it and the next --resume run tries again.
+  const res = await fetchRetry(`${API}/api/projects/${projectId}`, {
     headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) },
-  }).catch(() => null);
-  if (!res || !res.ok) return null;
+  });
+  if (!res) throw new Error(`GET /api/projects/${projectId} -> unreachable`);
+  if (!res.ok) return null;
   return res.json();
 }
 
