@@ -26,3 +26,27 @@ describe('session gate', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('native-shell CORS', () => {
+  it('answers preflights from the Capacitor origin, not the open web', async () => {
+    const pre = await app.request('/api/share/books', {
+      method: 'OPTIONS',
+      headers: { Origin: 'capacitor://localhost' },
+    });
+    expect(pre.status).toBe(200);
+    expect(pre.headers.get('Access-Control-Allow-Origin')).toBe('capacitor://localhost');
+    expect(pre.headers.get('Access-Control-Allow-Credentials')).toBe('true');
+
+    const other = await app.request('/api/share/books', {
+      method: 'OPTIONS',
+      headers: { Origin: 'https://evil.example' },
+    });
+    expect(other.headers.get('Access-Control-Allow-Origin')).toBeNull();
+  });
+
+  it('leaves same-origin traffic header-free', async () => {
+    const res = await app.request('/api/health');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+  });
+});

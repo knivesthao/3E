@@ -18,6 +18,7 @@ import {
 } from '../lib/api';
 import { LEVELS } from '../lib/api';
 import type { Book, Cast, CastKind, FocusTag, Panel, Project, Scene, SceneData } from '../lib/api';
+import { webUrl } from '../lib/api';
 import { Alert, Badge, Button, Field, Page, inputClass } from '../components/ui';
 import { Dialog, useConfirm } from '../components/Dialog';
 
@@ -374,7 +375,7 @@ export default function Editor() {
             <Button
               onClick={() => {
                 setShared(false);
-                const url = `${window.location.origin}/s/${book.id}`;
+                const url = webUrl(`/s/${book.id}`);
                 const done = () => setShared(true);
                 if (navigator.share) {
                   navigator.share({ title: book.title, url }).then(done, () => {});

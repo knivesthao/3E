@@ -16,11 +16,16 @@
     "modal:link": "./modal/link.sh",
     "modal:check": "test -f api/.dev.vars && grep -q '^MODAL_API_URL=https\\?://' api/.dev.vars && grep -q '^MODAL_PROXY_TOKEN=..*' api/.dev.vars && echo 'modal dev wiring: present' || (echo 'modal dev wiring: missing (see modal/README.md)' >&2; exit 1)",
     "build": "tsc --noEmit && vite build",
+    "build:native": "tsc --noEmit && vite build && cap sync",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/cli": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/ios": "^8.6.0",
     "hono": "^4.6.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

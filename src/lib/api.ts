@@ -1,5 +1,22 @@
+// Native shells (Capacitor) run from capacitor://localhost, so relative
+// /api calls would hit the phone. VITE_API_URL points those builds at the
+// deployed Worker; web builds leave it empty and stay same-origin.
+const ENV = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
+const API_BASE = (ENV.VITE_API_URL ?? '').replace(/\/$/, '');
+
+// Absolute URL for server-hosted bytes (panel art, covers, flash images).
+// Same-origin on web; required in native shells where relative URLs would
+// resolve against capacitor://localhost.
+export const apiUrl = (path: string) => `${API_BASE}${path}`;
+
+// Public web URL for share links. The Worker serves UI + API from one
+// origin, so the API base is the web base when set; web builds fall back
+// to the current origin (native shells must never share capacitor:// links).
+export const webUrl = (path: string) =>
+  `${API_BASE || (typeof window !== 'undefined' ? window.location.origin : '')}${path}`;
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(apiUrl(path), {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     ...init,
@@ -326,6 +343,14 @@ export const listLevels = () =>
     C2: string[];
     focusTags: FocusTag[];
   }>('/api/levels');
+
+// Flashcard image index: "LEVEL:word" entries for generated images.
+// Null when unreachable (old worker, offline) — callers then request
+// images directly and rely on the card's text fallback.
+export const listFlashImages = (): Promise<Set<string> | null> =>
+  api<{ images: string[] }>('/api/ai/art/flash-index')
+    .then((res) => new Set(res.images))
+    .catch(() => null);
 
 export interface ShelfBook {
   id: string;

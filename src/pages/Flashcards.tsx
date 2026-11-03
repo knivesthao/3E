@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { aiMeanings, listLevels, voiceLang } from '../lib/api';
+import { aiMeanings, apiUrl, listFlashImages, listLevels, voiceLang } from '../lib/api';
 import { ALPHABET, DIGRAPHS, letterListenText, splitSyllables, wordsByLevel } from '../lib/phonics';
 import { Button } from '../components/ui';
 import { PageNav, PageShell } from '../components/PageShell';
 import { Words } from '../components/Words';
-import { ReadAloudPanel } from '../components/ReadAloud';
 import { ListenPanel } from '../components/ListenPanel';
 import { BuddyCorner } from '../components/BuddyVoice';
 
@@ -28,8 +27,12 @@ interface Card {
 // Deterministic image key per (level, word): shared 3e-library bucket,
 // served through the art route's KEY_RE flash branch. Non-alpha words
 // get no image (the route couldn't serve them anyway).
-function flashImage(level: string, word: string): string | undefined {
-  return /^[a-z]+$/.test(word) ? `/api/ai/art/flash-${level}-${word}.png` : undefined;
+function flashImage(level: string, word: string, known: Set<string> | null): string | undefined {
+  if (!/^[a-z]+$/.test(word)) return undefined;
+  // Indexed: only ask for images that exist (no 404 noise for abstract or
+  // not-yet-generated words). Unknown index: ask anyway, card falls back.
+  if (known && !known.has(`${level}:${word}`)) return undefined;
+  return apiUrl(`/api/ai/art/flash-${level}-${word}.png`);
 }
 
 function nameCard(letter: string, example: string, meaning: string): Card {
@@ -105,33 +108,32 @@ export default function Flashcards() {
   const [deck] = useState<DeckKey>(startDeck);
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
-  // Buddy corner, same as the Reader: Pip sits on the card, tap to open
-  // Listen and Read. No scores, no counts — just practice.
-  // Listen trail (which sound is playing) and read trail (example word
-  // matched so far), like the Reader page.
+  // Buddy corner: Pip sits on the card, tap to open Listen (hear it).
+  // Flashcards are practice, never graded — no mic, no scores, no counts.
+  // Listen trail (which sound is playing), like the Reader page.
   const [listenSet, setListenSet] = useState<Set<number>>(new Set());
   const [listenCur, setListenCur] = useState<number | null>(null);
-  const [liveCount, setLiveCount] = useState(0);
 
   // Decks build from the server word lists with blank meanings; each
   // meaning arrives on first flip (single-word lookup, DB-first, one
-  // model call at most).
+  // model call at most). The flash index tells which words have art so
+  // the rest never fire image requests.
   useEffect(() => {
     let cancelled = false;
-    listLevels()
-      .then((lists) => {
+    Promise.all([listLevels(), listFlashImages()])
+      .then(([lists, known]) => {
         if (cancelled) return;
         const byLevel = wordsByLevel(lists);
         setDecks({
           letters: shuffle(ALPHABET.map((s) => soundCard(s.sound, s.example, ''))),
           names: shuffle(ALPHABET.map((s) => nameCard(s.sound.toUpperCase(), s.example, ''))),
           teams: shuffle(DIGRAPHS.map((s) => soundCard(s.sound, s.example, ''))),
-          A1: shuffle(byLevel.A1.map((w) => bookCard(w, '', flashImage('A1', w)))),
-          A2: shuffle(byLevel.A2.map((w) => bookCard(w, '', flashImage('A2', w)))),
-          B1: shuffle(byLevel.B1.map((w) => bookCard(w, '', flashImage('B1', w)))),
-          B2: shuffle(byLevel.B2.map((w) => bookCard(w, '', flashImage('B2', w)))),
-          C1: shuffle(byLevel.C1.map((w) => bookCard(w, '', flashImage('C1', w)))),
-          C2: shuffle(byLevel.C2.map((w) => bookCard(w, '', flashImage('C2', w)))),
+          A1: shuffle(byLevel.A1.map((w) => bookCard(w, '', flashImage('A1', w, known)))),
+          A2: shuffle(byLevel.A2.map((w) => bookCard(w, '', flashImage('A2', w, known)))),
+          B1: shuffle(byLevel.B1.map((w) => bookCard(w, '', flashImage('B1', w, known)))),
+          B2: shuffle(byLevel.B2.map((w) => bookCard(w, '', flashImage('B2', w, known)))),
+          C1: shuffle(byLevel.C1.map((w) => bookCard(w, '', flashImage('C1', w, known)))),
+          C2: shuffle(byLevel.C2.map((w) => bookCard(w, '', flashImage('C2', w, known)))),
         });
       })
       .catch(() => {
@@ -173,7 +175,6 @@ export default function Flashcards() {
     setFlipped(false);
     setListenSet(new Set());
     setListenCur(null);
-    setLiveCount(0);
   };
 
   const next = () => {
@@ -216,7 +217,6 @@ export default function Flashcards() {
                         text={pageText}
                         onTap={() => flip(true)}
                         tapped={null}
-                        heardCount={liveCount}
                         spoken={listenSet}
                         current={listenCur}
                         plain
@@ -247,7 +247,6 @@ export default function Flashcards() {
                         text={pageText}
                         onTap={() => flip(true)}
                         tapped={null}
-                        heardCount={liveCount}
                         spoken={listenSet}
                         current={listenCur}
                         plain
@@ -290,20 +289,6 @@ export default function Flashcards() {
                         setListenCur(idx);
                         setListenSet((prev) => new Set(prev).add(idx));
                       }
-                    }}
-                  />
-                  <ReadAloudPanel
-                    key={`read-${index}`}
-                    sceneNumber={index}
-                    text={card.readText}
-                    order={card.order}
-                    recognitionLang={voiceLang(undefined)}
-                    onPass={() => next()}
-                    onLookup={() => flip(true)}
-                    onProgress={setLiveCount}
-                    onStart={() => {
-                      setListenSet(new Set());
-                      setListenCur(null);
                     }}
                   />
               </BuddyCorner>

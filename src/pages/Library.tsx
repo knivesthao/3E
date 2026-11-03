@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import Tour from '../components/Tour';
 import type { TourTrack } from '../components/Tour';
 import { Badge, Button } from '../components/ui';
-import { getExamBest, getMyActivity, listBooks, listLevels } from '../lib/api';
+import { apiUrl, getExamBest, getMyActivity, listBooks, listLevels } from '../lib/api';
 import type { CatalogBook, FocusTag, MyActivity } from '../lib/api';
 import { BELT_LABEL, beltFor } from '../lib/belts';
 
@@ -115,7 +115,7 @@ export default function Library() {
                   >
                     {b.cover_url ? (
                       <img
-                        src={b.cover_url}
+                        src={apiUrl(b.cover_url)}
                         alt=""
                         className="h-12 w-10 rounded object-cover"
                         loading="lazy"
@@ -177,7 +177,7 @@ export default function Library() {
               >
                 {b.cover_url ? (
                   <img
-                    src={b.cover_url}
+                    src={apiUrl(b.cover_url)}
                     alt={`Cover of ${b.title}`}
                     className="h-20 w-16 shrink-0 rounded object-cover"
                     loading="lazy"

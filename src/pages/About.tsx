@@ -36,6 +36,15 @@ export default function About() {
           <li><strong>Practice.</strong> Flashcards for letter sounds, the alphabet, and digraphs, plus belt exams.</li>
         </ul>
       </section>
+      <section aria-label="Mobile first" className="mt-3">
+        <h2 className="font-display text-xl font-bold">Mobile first</h2>
+        <ul className="mt-1 flex list-disc flex-col gap-1 pl-5">
+          <li><strong>Install it like an app.</strong> On Android: browser menu → Add to Home Screen. On iPhone: Share → Add to Home Screen. It opens full-screen with its own icon — no app store needed.</li>
+          <li><strong>Reads offline.</strong> Books you open are cached on the phone, so a lesson survives bad wifi and airplane mode.</li>
+          <li><strong>Built for phones, usable on desktop.</strong> Every page — reader, flashcards, exams — is designed thumb-first for small screens.</li>
+          <li><strong>Store builds next.</strong> Play Store and App Store packages (same app, wrapped with Capacitor) ship as soon as funding lands — no rewrite required.</li>
+        </ul>
+      </section>
       <section aria-label="Child safeguarding" className="mt-3">
         <h2 className="font-display text-xl font-bold">Keeping young readers safe</h2>
         <ul className="mt-1 flex list-disc flex-col gap-1 pl-5">

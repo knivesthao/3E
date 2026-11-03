@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { aiMeanings, getBook, getPosition, getSharedBook, setPosition, voiceLang } from '../lib/api';
+import { aiMeanings, apiUrl, getBook, getPosition, getSharedBook, setPosition, voiceLang } from '../lib/api';
 import { getCachedBook, putBook } from '../lib/db';
 import type { Book } from '../lib/api';
 import { cleanWord, stopSpeaking } from '../lib/speech';
@@ -308,7 +308,7 @@ export default function Reader() {
             book.manifest.cover ? (
               <>
                 <img
-                  src={book.manifest.cover}
+                  src={apiUrl(book.manifest.cover)}
                   alt={`Cover of ${book.manifest.title}`}
                   loading="lazy"
                   className="h-full w-full object-cover"
@@ -351,7 +351,7 @@ export default function Reader() {
             <>
             {scene.image_url && (
               <img
-                src={scene.image_url}
+                src={apiUrl(scene.image_url)}
                 alt={`Page ${scene.scene_number} art`}
                 loading="lazy"
                 className="h-full w-full object-cover"
@@ -449,7 +449,7 @@ export default function Reader() {
           </Button>
           {scene?.image_url ? (
             <ShareClipPanel
-              imageUrl={scene.image_url}
+              imageUrl={apiUrl(scene.image_url)}
               title={book.manifest.title}
               pageLabel={`page-${scene.scene_number}`}
             />

@@ -360,13 +360,26 @@ describe('Scene art endpoints', () => {
     expect((await app.request(missing, { headers: { cookie } }, env)).status).toBe(404);
     expect((await app.request('/api/ai/art/nope.png', { headers: { cookie } }, env)).status).toBe(404);
     expect((await app.request('/api/ai/art/../secret.png', { headers: { cookie } }, env)).status).toBe(404);
-    expect((await app.request('/api/ai/art/flash-a1-apple.png', { headers: { cookie } }, env)).status).toBe(404);
+    expect((await app.request('/api/ai/art/flash-A1-apple.png', { headers: { cookie } }, env)).status).toBe(404);
+  });
+
+  it('lists which flashcard images exist (index for the client)', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const library = makeBucket();
+    await library.put('flash-A1-cat.png', new Uint8Array([1]).buffer as ArrayBuffer);
+    await library.put('flash-A2-tree.png', new Uint8Array([2]).buffer as ArrayBuffer);
+    await library.put('notes.txt', new Uint8Array([3]).buffer as ArrayBuffer);
+    const env = { ...ENV(db), LIBRARY_ART: library as unknown as R2Bucket };
+    const res = await app.request('/api/ai/art/flash-index', { headers: { cookie } }, env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ images: ['A1:cat', 'A2:tree'] });
   });
 
   it('serves flashcard images from the library bucket', async () => {
     const db = makeDb();
     const cookie = await signIn(db);
-    const key = 'flash-a1-apple.png';
+    const key = 'flash-A1-apple.png';
     const bytes = new TextEncoder().encode('flash-bytes').buffer as ArrayBuffer;
     const library = makeBucket();
     await library.put(key, bytes, { httpMetadata: { contentType: 'image/png' } });

@@ -8,6 +8,7 @@ import { modalConfig } from './config';
 import { castPortraitPrompt, isolateText, sceneArtPrompt } from './prompts';
 import { ownProject } from '../projects';
 import { isRecord, validateSceneData } from '../validate';
+import { cachedJson } from '../cache';
 
 // Scene art (Step 4a). Mounted at /api/ai/art with relative paths:
 // POST / draws + isolates one scene panel into R2, GET /:key serves it.
@@ -18,9 +19,13 @@ const panelKey = (projectId: string, sceneNumber: number): string => `${projectI
 const maskKey = (projectId: string, sceneNumber: number): string => `${projectId}-${sceneNumber}-mask.png`;
 
 // Flat keys only (uuid + scene/cast suffix, or flashcard image keys):
-// no slashes, no traversal.
+// no slashes, no traversal. Flash levels are uppercase (A1..C2).
 const KEY_RE =
-  /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-(\d{1,3}(-mask)?|cast-(characters|places)-\d{1,2})|flash-[a-z0-9-]+)\.png$/;
+  /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-(\d{1,3}(-mask)?|cast-(characters|places)-\d{1,2})|flash-[A-Za-z0-9-]+)\.png$/;
+
+// Flashcard image key: flash-<LEVEL>-<word>.png. Single parser for the
+// index endpoint; KEY_RE above stays the serving gate.
+const FLASH_RE = /^flash-([A-Za-z0-9]+)-([a-z0-9-]+)\.png$/;
 
 // Every art object a published book needs: panel + mask keys plus any
 // cast portrait referenced from cast_json. KEY_RE filters so a corrupt
@@ -283,6 +288,31 @@ art.post('/portrait', async (c) => {
     if (e instanceof AiError) return c.json(FAILED, 502);
     throw e;
   }
+});
+
+// Flashcard image index: which flash-<LEVEL>-<word>.png keys exist in the
+// shared library bucket. The client renders <img> only for indexed words,
+// so abstract or not-yet-generated words never fire 404s. Anonymous (no
+// session gate on GET art paths); identical for everyone, edge-cached.
+// Registered before /:key so the literal path wins.
+art.get('/flash-index', async (c) => {
+  return cachedJson(c, 600, async () => {
+    const images: string[] = [];
+    const store = c.env.LIBRARY_ART;
+    if (store) {
+      let cursor: string | undefined;
+      for (let page = 0; page < 10; page++) {
+        const listed = await store.list({ prefix: 'flash-', cursor, limit: 500 });
+        for (const o of listed.objects) {
+          const m = FLASH_RE.exec(o.key);
+          if (m) images.push(`${m[1]}:${m[2]}`);
+        }
+        if (listed.truncated) cursor = listed.cursor;
+        else break;
+      }
+    }
+    return { status: 200, body: { images } };
+  });
 });
 
 art.get('/:key', async (c) => {

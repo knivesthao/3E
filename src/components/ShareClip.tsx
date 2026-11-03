@@ -163,6 +163,9 @@ export function ShareClipPanel({
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    // Anonymous CORS: keeps the canvas exportable when art is cross-origin
+    // (native shells). No-op for same-origin web loads.
+    img.crossOrigin = 'anonymous';
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error('art failed to load'));
     img.src = src;

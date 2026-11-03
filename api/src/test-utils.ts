@@ -16,6 +16,19 @@ export function makeBucket() {
         arrayBuffer: async () => row.bytes,
       };
     },
+    async list(opts?: { prefix?: string; cursor?: string; limit?: number }) {
+      const keys = [...store.keys()]
+        .filter((k) => !opts?.prefix || k.startsWith(opts.prefix))
+        .sort();
+      const start = opts?.cursor ? Number(opts.cursor) : 0;
+      const limit = opts?.limit ?? 1000;
+      const slice = keys.slice(start, start + limit);
+      return {
+        objects: slice.map((key) => ({ key })),
+        truncated: start + limit < keys.length,
+        cursor: String(start + limit),
+      };
+    },
   };
 }
 

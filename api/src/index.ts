@@ -20,6 +20,30 @@ import { A1, A2, B1, B2, C1, C2, FOCUS_TAGS } from './levels';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>({ strict: false });
 
+// Native-shell origins (Capacitor WebViews). Same-origin web traffic sends
+// no Origin header and never touches this path.
+const NATIVE_ORIGINS = ['capacitor://localhost', 'http://localhost'];
+const isNative = (c: { req: { header(n: string): string | undefined } }) =>
+  NATIVE_ORIGINS.includes(c.req.header('Origin') ?? '');
+
+// Native-shell CORS: the deployed API answers the bundled app cross-origin
+// (cookies included). Preflights end here; everything else falls through to
+// the session gate below unchanged.
+app.use('/api/*', async (c, next) => {
+  if (isNative(c)) {
+    const origin = c.req.header('Origin') as string;
+    c.header('Access-Control-Allow-Origin', origin);
+    c.header('Vary', 'Origin');
+    c.header('Access-Control-Allow-Credentials', 'true');
+    if (c.req.method === 'OPTIONS') {
+      c.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+      c.header('Access-Control-Allow-Headers', 'Content-Type');
+      return c.text('', 200);
+    }
+  }
+  await next();
+});
+
 // Session gate: everything under /api/* requires a valid session except
 // the health probe and the two magic-link endpoints.
 app.use('/api/*', async (c, next) => {
@@ -108,10 +132,14 @@ app.get('/api/auth/verify', async (c) => {
   await c.env.DB.prepare('INSERT INTO sessions (id_hash, user_id, expires_at) VALUES (?, ?, ?)')
     .bind(await hashToken(session), row.user_id, Date.now() + SESSION_TTL_MS)
     .run();
+  // Native shells fetch cross-origin, where Lax cookies are never sent.
+  // Only for those origins: SameSite=None (Secure required, and the
+  // deployed API is always HTTPS). Web logins keep Lax exactly as before.
+  const native = isNative(c);
   setCookie(c, SESSION_COOKIE, session, {
     httpOnly: true,
-    secure: new URL(c.req.url).protocol === 'https:',
-    sameSite: 'Lax',
+    secure: native ? true : new URL(c.req.url).protocol === 'https:',
+    sameSite: native ? 'None' : 'Lax',
     path: '/',
     maxAge: SESSION_TTL_MS / 1000,
   });
