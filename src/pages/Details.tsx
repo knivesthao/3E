@@ -39,11 +39,12 @@ const SLIDES: Slide[] = [
   },
   {
     kicker: 'Slide 3 · The core problem',
-    title: 'Access, not ability',
+    title: 'Years of English, no English',
     points: [
-      'Children in underserved communities don’t fail to read because they can’t learn — they fail because they have nothing to read.',
-      'Books are costly to print and import, hard to ship to remote areas, and every new level or language needs another print run.',
-      'The cycle reinforces itself: no books → no practice → weaker literacy → less demand for books.',
+      'Students study English year after year and barely improve — effort without progress.',
+      'Classrooms are huge, teaching quality is uneven, and nobody assesses improvement, so nothing ever gets fixed.',
+      'The internet is full of English content but almost no English learning content: nothing matched to your level that checks you understood.',
+      'That gap is where 3E plays: stories written at your exact level, with built-in proof you are improving.',
     ],
   },
   {
