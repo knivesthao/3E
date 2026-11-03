@@ -13,6 +13,9 @@ import { sendMagicLink } from './email';
 import { projects } from './projects';
 import { admin } from './admin';
 import { exam } from './exam';
+import { misses } from './misses';
+import { progress } from './progress';
+import { finishedBooks } from './shelf';
 import { ai } from './ai/routes';
 import { share } from './share';
 import { costs } from './costs';
@@ -184,36 +187,9 @@ app.get('/api/me/activity', async (c) => {
     streak++;
     cursor.setUTCDate(cursor.getUTCDate() - 1);
   }
-  // Cross-store: positions live in the app DB, published books in the
-  // library DB — D1 cannot join across databases, so fetch then match.
-  const { results: positions } = await db
-    .prepare('SELECT book_id, scene_number FROM reading_sync WHERE updated_by = ?')
-    .bind(uid)
-    .all<{ book_id: string; scene_number: number }>();
-  const byId = new Map((positions ?? []).map((p) => [p.book_id, p.scene_number]));
-  const inIds = [...byId.keys()].map(() => '?').join(',');
-  const atEnd: { id: string; title: string; cover_url: string | null; manifest_json: string; scene_number: number }[] = [];
-  if (inIds !== '') {
-    const { results: found } = await c.env.LIBRARY_DB.prepare(
-      `SELECT id, title, cover_url, manifest_json FROM books WHERE id IN (${inIds})`,
-    )
-      .bind(...byId.keys())
-      .all<{ id: string; title: string; cover_url: string | null; manifest_json: string }>();
-    for (const b of found ?? []) {
-      atEnd.push({ ...b, scene_number: byId.get(b.id) ?? 1 });
-    }
-  }
-  const finished = [];
-  for (const f of atEnd ?? []) {
-    try {
-      const m = JSON.parse(f.manifest_json) as { scenes?: unknown[] };
-      if (Array.isArray(m.scenes) && f.scene_number >= m.scenes.length) {
-        finished.push({ id: f.id, title: f.title, cover_url: f.cover_url });
-      }
-    } catch {
-      // Corrupt manifest: not shelf-worthy.
-    }
-  }
+  // Finished books via the shared shelf helper (same fetch-then-match
+  // across the app/library DB boundary the summary endpoint uses).
+  const { finished } = await finishedBooks(db, c.env.LIBRARY_DB, uid);
   return c.json({ days, streak, totalDays: days.length, finished });
 });
 
@@ -231,6 +207,8 @@ app.post('/api/auth/logout', async (c) => {
 app.route('/api/projects', projects);
 app.route('/api/admin', admin);
 app.route('/api/exam', exam);
+app.route('/api/misses', misses);
+app.route('/api/progress', progress);
 app.route('/api/ai', ai);
 app.route('/api/share', share);
 app.route('/api/admin/costs', costs);

@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '../components/ui';
 import { PrivacyBody } from './Privacy';
 import { TermsBody } from './Terms';
+import { getProgressSummary } from '../lib/api';
+import type { ProgressSummary } from '../lib/api';
 
 // About 3E with tabbed Privacy and Terms at the top: mission and the
 // child-safeguarding commitment first, legal detail one tap away, no
@@ -9,6 +11,12 @@ import { TermsBody } from './Terms';
 // inbox, and have a human review every claim on this page.
 export default function About() {
   const [tab, setTab] = useState<'about' | 'privacy' | 'terms'>('about');
+  // My progress card: counters only (books, flashes, exams). Signed out:
+  // the summary 401s and the card stays hidden — never a sign-in nudge.
+  const [summary, setSummary] = useState<ProgressSummary | null>(null);
+  useEffect(() => {
+    getProgressSummary().then(setSummary).catch(() => {});
+  }, []);
   return (
     <main className="mx-auto w-full max-w-2xl px-4 pb-4 sm:px-6 sm:pb-6">
       <h1 className="sr-only">About 3E</h1>
@@ -28,6 +36,16 @@ export default function About() {
       {tab === 'about' && (
       <div role="tabpanel">
       <p className="text-sm text-stone-600">Leveled webcomics for English learners, from one scene idea to a whole book — in minutes, for about six cents a book.</p>
+      {summary && (
+        <section aria-label="My progress" className="mt-3 rounded-md border border-accent-900 bg-accent-50 p-3">
+          <h2 className="font-display text-xl font-bold">My progress</h2>
+          <ul className="mt-1 flex list-disc flex-col gap-1 pl-5 text-base">
+            <li>📚 {summary.booksStarted} {summary.booksStarted === 1 ? 'book' : 'books'} started · {summary.booksFinished} finished</li>
+            <li>🃏 {summary.flashSeen} cards practiced · {summary.flashKnown} words learned</li>
+            <li>🥋 {summary.examAttempts} {summary.examAttempts === 1 ? 'test' : 'tests'} taken{summary.examBest !== null ? ` · best ${summary.examBest}` : ''}</li>
+          </ul>
+        </section>
+      )}
       <section aria-label="What 3E does" className="mt-3">
         <h2 className="font-display text-xl font-bold">What 3E does</h2>
         <ul className="mt-1 flex list-disc flex-col gap-1 pl-5">

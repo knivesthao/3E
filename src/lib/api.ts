@@ -338,6 +338,7 @@ export interface ExamResult {
   passed: boolean;
   message: string;
   review: { id: string; correct: boolean; answer: number; explanation: string }[];
+  missedWords: string[];
 }
 
 export const getExam = () =>
@@ -397,3 +398,56 @@ export const aiMeanings = (words: string[], level: string) =>
     method: 'POST',
     body: JSON.stringify({ words, level }),
   });
+
+export interface WordMiss {
+  word: string;
+  level: string;
+  source: 'reader' | 'exam';
+  misses: number;
+  last_seen: string;
+}
+
+// Missed-word loop: record a stumble (fire-and-forget; anonymous taps 401
+// and are ignored), list the My Words deck source, clear a learned word.
+export const recordMiss = (word: string, level: string, source: 'reader' | 'exam') =>
+  api<{ ok: true; word: string }>('/api/misses', {
+    method: 'POST',
+    body: JSON.stringify({ word, level, source }),
+  });
+
+export const listMisses = () => api<{ misses: WordMiss[] }>('/api/misses');
+
+export const clearMiss = (word: string) =>
+  api<{ ok: true }>(`/api/misses/${encodeURIComponent(word)}`, { method: 'DELETE' });
+
+export interface RecommendedBook {
+  id: string;
+  title: string;
+  level: string;
+  cover_url: string | null;
+  hits: number;
+  matched: string[];
+}
+
+export const getRecommendations = (level?: string) =>
+  api<{ books: RecommendedBook[] }>(
+    `/api/misses/recommend${level ? `?level=${encodeURIComponent(level)}` : ''}`,
+  );
+
+export const putFlashProgress = (set: string, seen: number, known: number) =>
+  api<{ ok: true }>(`/api/progress/flash/${encodeURIComponent(set)}`, {
+    method: 'POST',
+    body: JSON.stringify({ seen, known }),
+  });
+
+export interface ProgressSummary {
+  booksStarted: number;
+  booksFinished: number;
+  finished: { id: string; title: string; cover_url: string | null }[];
+  flashSeen: number;
+  flashKnown: number;
+  examAttempts: number;
+  examBest: number | null;
+}
+
+export const getProgressSummary = () => api<ProgressSummary>('/api/progress/summary');

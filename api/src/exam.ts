@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Bindings, Variables } from './types';
 import { isRecord } from './validate';
+import { recordMiss } from './misses';
 
 // Fixed A1 sample test: hand-written bank mirroring published A1 task
 // families (Cambridge A1 Movers Reading & Writing: word definitions,
@@ -88,6 +89,19 @@ function buildBank(): ExamQuestion[] {
 export const QUESTIONS = buildBank();
 const byId = new Map(QUESTIONS.map((q) => [q.id, q]));
 
+// Vocabulary each item tests (dictionary-form lemmas). Missed items record
+// these as word misses so the My Words deck drills exactly what the exam
+// exposed. Keep in sync with the bank above when items change.
+const ITEM_WORDS: Record<string, string[]> = {
+  p1a: ['cat'], p1b: ['book'], p1c: ['sun'], p1d: ['water'], p1e: ['dog'], p1f: ['house'],
+  p2a: ['big', 'small'], p2b: ['run', 'morning'], p2c: ['drink', 'water'],
+  p2d: ['night', 'house'], p2e: ['sad', 'happy'], p2f: ['red'],
+  p3a: ['name'], p3b: ['book'], p3c: ['house'], p3d: ['like'],
+  p3e: ['happy'], p3f: ['yellow'],
+  p4a: ['cat'], p4b: ['drink'], p4c: ['water'], p4d: ['name'],
+  p4e: ['two', 'three'], p4f: ['go'],
+};
+
 function pickForm(): ExamQuestion[] {
   const form: ExamQuestion[] = [];
   for (let part: 1 | 2 | 3 | 4 = 1; part <= 4; part = (part + 1) as 1 | 2 | 3 | 4) {
@@ -167,6 +181,13 @@ exam.post('/submit', async (c) => {
     .run();
   const passed = score >= Math.ceil(formSet.size * PASS_RATE);
   const weak = [...new Set(review.filter((r) => !r.correct).map((r) => byId.get(r.id)?.section ?? ''))];
+  // Missed items feed the word-miss loop: the My Words deck drills these.
+  const missedWords = [
+    ...new Set(review.filter((r) => !r.correct).flatMap((r) => ITEM_WORDS[r.id] ?? [])),
+  ];
+  for (const w of missedWords) {
+    await recordMiss(c.env.DB, c.get('userId'), w, 'A1', 'exam');
+  }
   return c.json({
     score,
     total: formSet.size,
@@ -175,5 +196,6 @@ exam.post('/submit', async (c) => {
       ? 'Ready for A1. Try a B1 book next, or a real certificate such as LanguageCert ESOL A1.'
       : `Keep practicing${weak.length ? ` — focus on: ${weak.join(', ')}` : ''}. Reread an A1 book, then try again.`,
     review,
+    missedWords,
   });
 });

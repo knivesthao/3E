@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { aiMeanings, apiUrl, listFlashImages, listLevels, voiceLang } from '../lib/api';
+import { aiMeanings, apiUrl, clearMiss, listFlashImages, listLevels, listMisses, putFlashProgress, voiceLang } from '../lib/api';
 import { ALPHABET, DIGRAPHS, letterListenText, splitSyllables, wordsByLevel } from '../lib/phonics';
 import { Button } from '../components/ui';
 import { PageNav, PageShell } from '../components/PageShell';
@@ -11,6 +11,9 @@ import { BuddyCorner } from '../components/BuddyVoice';
 interface Card {
   word: string;
   meaning: string;
+  // My Words deck only: each card keeps its own miss level so meanings
+  // and art ride the word's level, not the deck's.
+  level?: string;
   // What the card shows big: the letter or digraph. The read target stays
   // a real example word (isolated phonemes transcribe too poorly to score).
   display: string[];
@@ -64,12 +67,13 @@ function soundCard(sound: string, example: string, meaning: string): Card {
   };
 }
 
-function bookCard(word: string, meaning: string, image?: string): Card {
+function bookCard(word: string, meaning: string, image?: string, level?: string): Card {
   const display = splitSyllables(word);
   return {
     word,
     meaning,
     image,
+    ...(level ? { level } : {}),
     display,
     listenText: display.join(' '),
     wordMap: display.map((_, i) => i),
@@ -92,18 +96,19 @@ function shuffle<T>(xs: T[]): T[] {
 // get their meanings from tap-to-define in the Reader instead.
 // Meanings load lazily on flip (one word per tap) so the B2 deck never
 // prefetches thousands of glosses at once.
-type DeckKey = 'letters' | 'names' | 'teams' | 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
+type DeckKey = 'letters' | 'names' | 'teams' | 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2' | 'mine';
 const DECK_LABEL: Record<DeckKey, string> = {
-  letters: 'Phonics', names: 'Alphabet', teams: 'Letter teams', A1: 'A1 words', A2: 'A2 words', B1: 'B1 words', B2: 'B2 words', C1: 'C1 words', C2: 'C2 words',
+  letters: 'Phonics', names: 'Alphabet', teams: 'Letter teams', A1: 'A1 words', A2: 'A2 words', B1: 'B1 words', B2: 'B2 words', C1: 'C1 words', C2: 'C2 words', mine: 'My words',
 };
 // Meaning lookup rides the deck's own level so glosses match the learner.
+// My Words cards carry their own miss level instead.
 const DECK_LEVEL: Record<DeckKey, string> = {
-  letters: 'A1', names: 'A1', teams: 'A1', A1: 'A1', A2: 'A2', B1: 'B1', B2: 'B2', C1: 'C1', C2: 'C2',
+  letters: 'A1', names: 'A1', teams: 'A1', A1: 'A1', A2: 'A2', B1: 'B1', B2: 'B2', C1: 'C1', C2: 'C2', mine: 'A1',
 };
 export default function Flashcards() {
   const [params] = useSearchParams();
   const initial = params.get('deck');
-  const startDeck: DeckKey = initial === 'names' || initial === 'teams' || initial === 'A1' || initial === 'A2' || initial === 'B1' || initial === 'B2' || initial === 'C1' || initial === 'C2' ? initial : 'letters';
+  const startDeck: DeckKey = initial === 'names' || initial === 'teams' || initial === 'A1' || initial === 'A2' || initial === 'B1' || initial === 'B2' || initial === 'C1' || initial === 'C2' || initial === 'mine' ? initial : 'letters';
   const [decks, setDecks] = useState<Record<DeckKey, Card[]> | null>(null);
   const [deck] = useState<DeckKey>(startDeck);
   const [index, setIndex] = useState(0);
@@ -120,8 +125,8 @@ export default function Flashcards() {
   // the rest never fire image requests.
   useEffect(() => {
     let cancelled = false;
-    Promise.all([listLevels(), listFlashImages()])
-      .then(([lists, known]) => {
+    Promise.all([listLevels(), listFlashImages(), listMisses().catch(() => ({ misses: [] }))])
+      .then(([lists, known, mine]) => {
         if (cancelled) return;
         const byLevel = wordsByLevel(lists);
         setDecks({
@@ -134,6 +139,10 @@ export default function Flashcards() {
           B2: shuffle(byLevel.B2.map((w) => bookCard(w, '', flashImage('B2', w, known)))),
           C1: shuffle(byLevel.C1.map((w) => bookCard(w, '', flashImage('C1', w, known)))),
           C2: shuffle(byLevel.C2.map((w) => bookCard(w, '', flashImage('C2', w, known)))),
+          // My Words: the reader's own stumbles, most-missed first, each
+          // card riding its miss level for meanings and art. Signed out:
+          // misses stay empty and the deck waits.
+          mine: shuffle(mine.misses.map((m) => bookCard(m.word, '', flashImage(m.level, m.word, known), m.level))),
         });
       })
       .catch(() => {
@@ -142,7 +151,7 @@ export default function Flashcards() {
           letters: shuffle(ALPHABET.map((s) => soundCard(s.sound, s.example, ''))),
           names: shuffle(ALPHABET.map((s) => nameCard(s.sound.toUpperCase(), s.example, ''))),
           teams: shuffle(DIGRAPHS.map((s) => soundCard(s.sound, s.example, ''))),
-          A1: [], A2: [], B1: [], B2: [], C1: [], C2: [],
+          A1: [], A2: [], B1: [], B2: [], C1: [], C2: [], mine: [],
         });
       });
     return () => { cancelled = true; };
@@ -153,7 +162,8 @@ export default function Flashcards() {
     if (open && card && card.meaning === '') {
       const at = index;
       const key = deck;
-      aiMeanings([card.word], DECK_LEVEL[key])
+      const level = card.level ?? DECK_LEVEL[key];
+      aiMeanings([card.word], level)
         .then((res) => {
           const meaning = res.meanings[0]?.meaning ?? '';
           if (!meaning) return;
@@ -170,11 +180,34 @@ export default function Flashcards() {
   const cards = decks?.[deck] ?? null;
   const card = cards?.[index] ?? null;
   const done = cards !== null && index >= cards.length;
+  // Deck completion reports seen cards once (ref-guarded: StrictMode
+  // double-fires the effect in dev). Anonymous 401s are ignored.
+  const progressSent = useRef(false);
+
+  useEffect(() => {
+    if (!done || !cards || cards.length === 0 || progressSent.current) return;
+    progressSent.current = true;
+    void putFlashProgress(deck, cards.length, 0).catch(() => {});
+  }, [done, cards, deck]);
 
   const resetTrails = () => {
     setFlipped(false);
     setListenSet(new Set());
     setListenCur(null);
+  };
+
+  // 'Got it' (My Words only): the learner knows this word — drop it from
+  // the deck and count it known. The card unmounts; no layout shift.
+  const gotIt = () => {
+    if (!card || deck !== 'mine') return;
+    const word = card.word;
+    void clearMiss(word).catch(() => {});
+    void putFlashProgress('mine', 0, 1).catch(() => {});
+    setDecks((d) => {
+      if (!d) return d;
+      return { ...d, mine: d.mine.filter((c) => c.word !== word) };
+    });
+    resetTrails();
   };
 
   const next = () => {
@@ -209,7 +242,7 @@ export default function Flashcards() {
           media={
             <div className="flex h-full flex-col items-center justify-center bg-white p-6 text-center" role="button" tabIndex={0} onClick={() => flip(!flipped)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') flip(!flipped); }} aria-label={flipped ? 'Show sound' : 'Show meaning'}>
               {(() => {
-                const isWord = deck === 'A1' || deck === 'A2' || deck === 'B1' || deck === 'B2' || deck === 'C1' || deck === 'C2';
+                const isWord = deck === 'A1' || deck === 'A2' || deck === 'B1' || deck === 'B2' || deck === 'C1' || deck === 'C2' || deck === 'mine';
                 if (!isWord) {
                   return (
                     <p className="w-full break-words px-2 text-center text-[clamp(9rem,32dvh,22rem)] font-bold leading-none">
@@ -295,12 +328,19 @@ export default function Flashcards() {
             </>
           }
           nav={
-            <PageNav
-              label="Card navigation"
-              onPrev={() => { setIndex((i) => Math.max(0, i - 1)); resetTrails(); }}
-              onNext={() => next()}
-              prevDisabled={index === 0}
-            />
+            <div className="flex flex-col gap-2">
+              <PageNav
+                label="Card navigation"
+                onPrev={() => { setIndex((i) => Math.max(0, i - 1)); resetTrails(); }}
+                onNext={() => next()}
+                prevDisabled={index === 0}
+              />
+              {deck === 'mine' && (
+                <Button onClick={gotIt} aria-label={`I know ${card?.word ?? 'this word'}, remove it`}>
+                  Got it ✓ — I know this word
+                </Button>
+              )}
+            </div>
           }
         />
       )}

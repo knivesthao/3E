@@ -3,8 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import Tour from '../components/Tour';
 import type { TourTrack } from '../components/Tour';
 import { Badge, Button } from '../components/ui';
-import { apiUrl, getExamBest, getMyActivity, listBooks, listLevels } from '../lib/api';
-import type { CatalogBook, FocusTag, MyActivity } from '../lib/api';
+import { apiUrl, getExamBest, getMyActivity, getRecommendations, listBooks, listLevels, listMisses } from '../lib/api';
+import type { CatalogBook, FocusTag, MyActivity, RecommendedBook } from '../lib/api';
 import { BELT_LABEL, beltFor } from '../lib/belts';
 
 const TOUR_KEY = 'e3-tour-library';
@@ -58,6 +58,10 @@ export default function Library() {
   const [focusOptions, setFocusOptions] = useState<FocusTag[]>([]);
   const [focusFilter, setFocusFilter] = useState<'all' | FocusTag>('all');
   const [activity, setActivity] = useState<MyActivity | null>(null);
+  // Missed-word loop: how many stumbles await practice, and which books
+  // drill them. Signed out: both 401 and stay hidden.
+  const [missCount, setMissCount] = useState<number | null>(null);
+  const [recs, setRecs] = useState<RecommendedBook[] | null>(null);
   const [params] = useSearchParams();
   const startTab = params.get('tab');
   const [tab, setTab] = useState<'books' | 'flashcards' | 'exams'>(
@@ -77,6 +81,12 @@ export default function Library() {
     getMyActivity()
       .then(setActivity)
       .catch(() => {});
+    listMisses()
+      .then((res) => setMissCount(res.misses.length))
+      .catch(() => setMissCount(null));
+    getRecommendations()
+      .then((res) => setRecs(res.books))
+      .catch(() => setRecs([]));
     listBooks()
       .then((res) => {
         setBooks(res.books);
@@ -145,6 +155,41 @@ export default function Library() {
       </div>
       {tab === 'books' && (
       <section aria-label="Published books" role="tabpanel">
+        {recs !== null && recs.length > 0 ? (
+          <div className="mb-3 rounded-md border border-accent-900 bg-accent-50 p-3">
+            <h2 className="font-display text-xl font-bold">Recommended for you</h2>
+            <p className="text-sm text-stone-600">These books practice your trickiest words.</p>
+            <ul className="mt-2 flex flex-col gap-2">
+              {recs.map((b) => (
+                <li key={b.id} className="flex items-center gap-3 rounded-md border border-stone-200 bg-white p-2">
+                  {b.cover_url ? (
+                    <img
+                      src={apiUrl(b.cover_url)}
+                      alt={`Cover of ${b.title}`}
+                      className="h-20 w-16 shrink-0 rounded object-cover"
+                      loading="lazy"
+                    />
+                  ) : null}
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="truncate text-base font-bold">{b.title}</span>
+                    <span className="flex flex-wrap items-center gap-1">
+                      <Badge status={b.level} />
+                      <span className="rounded border border-stone-200 px-1 text-sm text-stone-600">
+                        practices: {b.matched.slice(0, 4).join(', ')}
+                      </span>
+                    </span>
+                  </div>
+                  <Link
+                    to={`/s/${b.id}`}
+                    className="shrink-0 rounded-md border border-stone-900 bg-white px-4 py-2 text-base font-medium text-stone-900 underline decoration-stone-300 underline-offset-4"
+                  >
+                    Read
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <div className="mb-2">
           <h2 className="font-display text-xl font-bold">Published books</h2>
         </div>
@@ -210,6 +255,15 @@ export default function Library() {
       <section aria-label="Flashcard decks" role="tabpanel">
         <h2 className="font-display text-xl font-bold">Flashcard decks</h2>
         <ul className="mt-2 flex flex-col gap-2">
+          {missCount !== null && missCount > 0 ? (
+            <li className="rounded-md border border-accent-900 bg-accent-50 p-3">
+              <p className="text-base font-bold">My words · {missCount} to practice</p>
+              <p className="text-sm text-stone-600">Words you tapped in books or missed in tests. Say “Got it” to clear each one.</p>
+              <p className="mt-1">
+                <Link to="/practice/alphabet?deck=mine" className="underline underline-offset-4">Practice my words</Link>
+              </p>
+            </li>
+          ) : null}
           <li className="rounded-md border border-stone-200 bg-white p-3">
             <p className="text-base font-bold">Phonics</p>
             <p className="text-sm text-stone-600">All 26 letter sounds. Hear each sound, say an example word.</p>

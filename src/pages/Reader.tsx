@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { aiMeanings, apiUrl, getBook, getPosition, getSharedBook, setPosition, voiceLang } from '../lib/api';
+import { aiMeanings, apiUrl, getBook, getPosition, getSharedBook, recordMiss, setPosition, voiceLang } from '../lib/api';
 import { getCachedBook, putBook } from '../lib/db';
 import type { Book } from '../lib/api';
 import { cleanWord, stopSpeaking } from '../lib/speech';
@@ -43,6 +43,10 @@ export default function Reader() {
   // and prefetches skip the call and show the sign-in prompt directly.
   const [needsSignIn, setNeedsSignIn] = useState(false);
   const prefetching = useRef(false);
+  // Missed-word loop: one record per tapped word per book-open (taps are
+  // the "I don't know this" signal; the gloss prefetch is not). Anonymous
+  // taps 401 and are ignored — no sign-in prompt from a background write.
+  const missLogged = useRef(new Set<string>());
   const lastMoveRef = useRef(0);
   const panelRef = useRef<HTMLElement | null>(null);
   const [quiz, setQuiz] = useState(false);
@@ -124,6 +128,7 @@ export default function Reader() {
         setCurrent(0);
         setActive(null);
         setMeanings({});
+        missLogged.current = new Set();
         setNeedsSignIn(false);
         setPassed(new Set());
         setOffline(false);
@@ -195,6 +200,14 @@ export default function Reader() {
     setAnchor({ left, top: r.bottom + 8 + window.scrollY });
   }
 
+  // A tap with a real gloss means the reader stumbled: record one miss
+  // per word per book-open. Failures and sign-in prompts never record.
+  function noteMiss(word: string) {
+    if (shareMode || missLogged.current.has(word)) return;
+    missLogged.current.add(word);
+    if (book) void recordMiss(word, book.level, 'reader').catch(() => {});
+  }
+
   async function tap(raw: string) {
     if (!book || lookingUp) return;
     const word = clean(raw);
@@ -209,6 +222,7 @@ export default function Reader() {
     }
     if (meanings[word]) {
       setActive({ word, meaning: meanings[word] });
+      noteMiss(word);
       return;
     }
     // Prefetch already learned the visitor is signed out: skip the call.
@@ -222,7 +236,10 @@ export default function Reader() {
     try {
       const res = await aiMeanings([word], book.level);
       const meaning = res.meanings[0]?.meaning ?? 'No meaning found.';
-      setMeanings((m) => ({ ...m, [word]: meaning }));
+      if (meaning !== 'No meaning found.') {
+        setMeanings((m) => ({ ...m, [word]: meaning }));
+        noteMiss(word);
+      }
       setActive({ word, meaning });
     } catch (e) {
       setActive({

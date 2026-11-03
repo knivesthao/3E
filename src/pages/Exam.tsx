@@ -95,6 +95,15 @@ export default function Exam() {
           </p>
         ) : null}
         <p>{result.message}</p>
+        {result.missedWords.length > 0 && (
+          <p className="rounded-md border border-accent-900 bg-accent-50 px-3 py-2">
+            📝 Practice these {result.missedWords.length === 1 ? 'word' : 'words'}:{' '}
+            <strong>{result.missedWords.join(', ')}</strong>{' — '}
+            <Link to="/practice/alphabet?deck=mine" className="underline underline-offset-4">
+              drill them in My Words
+            </Link>
+          </p>
+        )}
         {error && <Alert>{error}</Alert>}
         <section aria-label="Answer review">
           <h2 className="mb-1 font-display text-xl font-bold">Review</h2>
