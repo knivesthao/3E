@@ -5,6 +5,10 @@ compatibility_date = "2024-10-01"
 
 [assets]
 directory = "../dist"
+# binding exposes the asset fetcher to the worker as env.ASSETS, which the
+# SPA fallback route uses to serve index.html for deep links. Without this
+# name the platform serves exact files only and the worker cannot reach them.
+binding = "ASSETS"
 not_found_handling = "single-page-application"
 
 [[r2_buckets]]
