@@ -9,13 +9,62 @@ import {
   getExamItems,
   getMyActivity,
   listProjects,
+  listSeedJobs,
 } from '../lib/api';
-import type { AdminSpecs, AdminStats, BookCosts, ExamItemStat, MyActivity, Project } from '../lib/api';
-import { Alert, Button, Field, Page, inputClass } from '../components/ui';
+import type { AdminSpecs, AdminStats, BookCosts, ExamItemStat, MyActivity, Project, SeedJob } from '../lib/api';
+import { Alert, Badge, Button, Field, Page, inputClass } from '../components/ui';
 import { DetailsDeck } from './Details';
 import { DesignSection, FactorySection } from './Design';
 
-type Tab = 'costs' | 'specs' | 'content' | 'exam' | 'guardian' | 'details' | 'design';
+type Tab = 'costs' | 'specs' | 'content' | 'exam' | 'guardian' | 'details' | 'design' | 'jobs';
+
+function JobsSection() {
+  const [jobs, setJobs] = useState<SeedJob[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    listSeedJobs()
+      .then((res) => setJobs(res.jobs))
+      .catch(() => setError('Could not load seed jobs (dev worker only).'));
+  }, []);
+
+  if (error) return <Alert>{error}</Alert>;
+  if (!jobs) return <p>Loading…</p>;
+  if (jobs.length === 0) return <p className="text-stone-600">No seed runs recorded yet.</p>;
+  const stalled = (j: SeedJob) =>
+    j.status === 'running' && Date.now() - new Date(j.updated_at).getTime() > 6 * 3600 * 1000;
+  return (
+    <ul className="flex flex-col gap-2">
+      {jobs.map((j) => (
+        <li key={j.scope} className="rounded-md border border-stone-200 px-3 py-2">
+          <p>
+            <strong>{j.scope}</strong>{' '}
+            <Badge status={stalled(j) ? 'stalled' : j.status} />{' '}
+            <span className="text-sm text-stone-600">
+              {j.done}/{j.total} defined · {j.missed.length} missed
+              {j.error ? ` · error: ${j.error}` : ''}
+            </span>
+          </p>
+          {j.missed.length > 0 && (
+            <p className="mt-1 text-sm text-stone-600">
+              Missed ({j.missed.length}): {j.missed.slice(0, 12).join(', ')}
+              {j.missed.length > 12 ? ` +${j.missed.length - 12} more` : ''} — rerun the same
+              scope to pick these up without regenerating the rest.
+            </p>
+          )}
+          <p className="mt-1 text-sm">
+            {j.run_url ? (
+              <a className="underline underline-offset-2" href={j.run_url} target="_blank" rel="noreferrer">
+                Workflow run
+              </a>
+            ) : null}{' '}
+            <span className="text-stone-500">updated {new Date(j.updated_at).toLocaleString()}</span>
+          </p>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function GuardianSection() {
   const [activity, setActivity] = useState<MyActivity | null>(null);
@@ -260,6 +309,7 @@ const TAB_LABEL: Record<Tab, string> = {
   guardian: 'Guardian',
   details: 'Details',
   design: 'Design',
+  jobs: 'Seed jobs',
 };
 
 export default function Admin() {
@@ -285,11 +335,13 @@ export default function Admin() {
         <GuardianSection />
       ) : tab === 'details' ? (
         <DetailsDeck />
-      ) : (
+      ) : tab === 'design' ? (
         <>
           <DesignSection />
           <FactorySection />
         </>
+      ) : (
+        <JobsSection />
       )}
     </Page>
   );

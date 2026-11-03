@@ -298,6 +298,22 @@ export interface AdminStats {
 export const getAdminSpecs = () => api<AdminSpecs>('/api/admin/specs');
 export const getAdminStats = () => api<AdminStats>('/api/admin/stats');
 
+export interface SeedJob {
+  scope: string;
+  levels: string;
+  shard: string;
+  status: 'running' | 'done' | 'failed';
+  total: number;
+  done: number;
+  missed: string[];
+  error: string | null;
+  run_url: string | null;
+  started_at: string;
+  updated_at: string;
+}
+
+export const listSeedJobs = () => api<{ jobs: SeedJob[] }>('/api/admin/seed-jobs');
+
 export interface ExamQuestion {
   id: string;
   part: 1 | 2 | 3 | 4;

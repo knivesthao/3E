@@ -9,14 +9,26 @@ function makeDb(counts: Record<string, number>, examRows: string[] = []) {
   const users = new Map<string, { id: string; email: string }>();
   const sessions = new Map<string, { user_id: string; expires_at: number }>();
   const defs = new Map<string, Record<string, unknown>>();
+  const seedJobs = new Map<string, Record<string, unknown>>();
   return {
     defs,
     counts,
     prepare(sql: string) {
       const q = sql.replace(/\s+/g, ' ').trim();
-      const all = async () => {
+      const all = async (params: unknown[] = []) => {
         if (q.startsWith('SELECT answers_json FROM exam_attempts')) {
           return { results: examRows.map((answers_json) => ({ answers_json })) };
+        }
+        if (q.startsWith('SELECT word, level FROM definitions')) {
+          const levels = new Set(params as string[]);
+          return {
+            results: [...defs.values()]
+              .filter((d) => levels.size === 0 || levels.has(d.level as string))
+              .map((d) => ({ word: d.word, level: d.level })),
+          };
+        }
+        if (q.startsWith('SELECT scope, levels, shard') && q.includes('FROM seed_jobs')) {
+          return { results: [...seedJobs.values()] };
         }
         return { results: [] };
       };
@@ -47,6 +59,12 @@ function makeDb(counts: Record<string, number>, examRows: string[] = []) {
           const [word, level, lang] = params as [string, string, string, ...unknown[]];
           const k = `${word}|${level}|${lang}`;
           if (!defs.has(k)) defs.set(k, { word, level, lang });
+        } else if (q.startsWith('INSERT INTO seed_jobs')) {
+          const [id, scope, levels, shard, status, total, done, missed_json, error, run_url, started_at, updated_at] =
+            params as unknown[];
+          seedJobs.set(scope as string, {
+            id, scope, levels, shard, status, total, done, missed_json, error, run_url, started_at, updated_at,
+          });
         } else if (q.startsWith('INSERT INTO users')) {
           const [id, email] = params as [string, string, ...unknown[]];
           users.set(id, { id, email });
@@ -62,10 +80,10 @@ function makeDb(counts: Record<string, number>, examRows: string[] = []) {
         bind: (...params: unknown[]) => ({
           first: () => first(params),
           run: () => run(params),
-          all: () => all(),
+          all: () => all(params),
         }),
         first: () => first([]),
-        all: () => all(),
+        all: () => all([]),
       };
     },
   };
@@ -241,5 +259,87 @@ describe('POST /api/admin/definitions', () => {
     expect((await post(db, { rows: [] }, cookie)).status).toBe(400);
     const big = Array.from({ length: 201 }, (_, i) => ({ word: `w${i}`, level: 'A1', gloss: 'g' }));
     expect((await post(db, { rows: big }, cookie)).status).toBe(400);
+  });
+});
+
+describe('seed job ledger', () => {
+  const postJob = (db: Db, body: unknown, cookie: string, links = 'true') =>
+    app.request('/api/admin/seed-jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', cookie },
+      body: JSON.stringify(body),
+    }, { ...ENV(db), DEV_LINKS: links });
+
+  it('upserts heartbeats and lists jobs with parsed misses', async () => {
+    const db = makeDb({});
+    const cookie = await signIn(db);
+    const env = ENV(db);
+    const run = { levels: ['B2'], shard: '0/2', status: 'running', total: 3153, done: 10, missed: [], run_url: 'https://example.com/run/1' };
+    const res = await app.request('/api/admin/seed-jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', cookie },
+      body: JSON.stringify(run),
+    }, env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, scope: 'B2@0/2' });
+
+    const fin = await app.request('/api/admin/seed-jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', cookie },
+      body: JSON.stringify({ ...run, status: 'done', done: 3150, missed: ['B2|abandon', 'B2|zoo'] }),
+    }, env);
+    expect(fin.status).toBe(200);
+
+    const list = await app.request('/api/admin/seed-jobs', { headers: { cookie } }, env);
+    expect(list.status).toBe(200);
+    const { jobs } = (await list.json()) as { jobs: Record<string, unknown>[] };
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({
+      scope: 'B2@0/2', levels: 'B2', shard: '0/2', status: 'done', total: 3153, done: 3150,
+      missed: ['B2|abandon', 'B2|zoo'], run_url: 'https://example.com/run/1',
+    });
+    expect(jobs[0]).not.toHaveProperty('missed_json');
+  });
+
+  it('rejects bad levels and normalizes bad shards', async () => {
+    const db = makeDb({});
+    const cookie = await signIn(db);
+    const env = ENV(db);
+    expect((await postJob(db, { levels: ['XX'] }, cookie)).status).toBe(400);
+    expect((await postJob(db, { levels: [] }, cookie)).status).toBe(400);
+    const res = await postJob(db, { levels: ['C1'], shard: 'nope' }, cookie);
+    expect(res.status).toBe(200);
+    const list = (await (await app.request('/api/admin/seed-jobs', { headers: { cookie } }, env)).json()) as {
+      jobs: { shard: string }[];
+    };
+    expect(list.jobs[0].shard).toBe('');
+  });
+
+  it('is dev-only like the definitions route', async () => {
+    const db = makeDb({});
+    const cookie = await signIn(db);
+    const env = { ...ENV(db), DEV_LINKS: 'false' };
+    expect((await app.request('/api/admin/seed-jobs', { headers: { cookie } }, env)).status).toBe(404);
+    expect(
+      (await app.request('/api/admin/seed-jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie },
+        body: '{}',
+      }, env)).status,
+    ).toBe(404);
+    expect((await app.request('/api/admin/done-words?levels=B2', { headers: { cookie } }, env)).status).toBe(404);
+  });
+
+  it('reports defined words for resume', async () => {
+    const db = makeDb({});
+    db.defs.set('cat|B1|en', { word: 'cat', level: 'B1', lang: 'en' });
+    db.defs.set('dog|B2|en', { word: 'dog', level: 'B2', lang: 'en' });
+    const cookie = await signIn(db);
+    const env = ENV(db);
+    const res = await app.request('/api/admin/done-words?levels=B1,B2', { headers: { cookie } }, env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ done: ['B1|cat', 'B2|dog'] });
+    expect((await app.request('/api/admin/done-words?levels=XX', { headers: { cookie } }, env)).status).toBe(400);
+    expect((await app.request('/api/admin/done-words', { headers: { cookie } }, env)).status).toBe(400);
   });
 });

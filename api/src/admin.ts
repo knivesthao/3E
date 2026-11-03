@@ -144,3 +144,87 @@ admin.post('/definitions', async (c) => {
   }
   return c.json({ ok: true, received });
 });
+
+// Seed job ledger (DEV ONLY, same guard as /definitions above): which
+// dictionary scopes ran, what finished, what missed. The seeder heartbeats
+// here per chunk and finalizes at the end; reruns resume from
+// level-words MINUS definitions present, so nothing regenerates.
+function seedScope(levels: string[], shard: string): string {
+  return `${[...levels].sort().join(',')}@${shard || 'full'}`;
+}
+
+admin.post('/seed-jobs', async (c) => {
+  if (c.env.DEV_LINKS !== 'true') return c.json({ error: 'not found' }, 404);
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'invalid request' }, 400);
+  }
+  if (!isRecord(body) || !Array.isArray(body.levels) || body.levels.length === 0) {
+    return c.json({ error: 'invalid request' }, 400);
+  }
+  const levels = body.levels.filter((l): l is Level => isLevel(l));
+  if (levels.length === 0) return c.json({ error: 'invalid request' }, 400);
+  const shard = typeof body.shard === 'string' && /^(\d+\/\d+)?$/.test(body.shard) ? body.shard : '';
+  const status =
+    body.status === 'done' || body.status === 'failed' ? body.status : ('running' as const);
+  const total = typeof body.total === 'number' && body.total >= 0 ? Math.floor(body.total) : 0;
+  const done = typeof body.done === 'number' && body.done >= 0 ? Math.floor(body.done) : 0;
+  const missed = Array.isArray(body.missed)
+    ? body.missed.filter((m): m is string => typeof m === 'string').slice(0, 500)
+    : [];
+  const error = typeof body.error === 'string' ? body.error.slice(0, 500) : null;
+  const runUrl =
+    typeof body.run_url === 'string' && body.run_url.startsWith('https://') ? body.run_url.slice(0, 300) : null;
+  const now = new Date().toISOString();
+  const scope = seedScope(levels, shard);
+  await c.env.DB.prepare(
+    `INSERT INTO seed_jobs (id, scope, levels, shard, status, total, done, missed_json, error, run_url, started_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(scope) DO UPDATE SET status=excluded.status, total=excluded.total, done=excluded.done,
+       missed_json=excluded.missed_json, error=excluded.error, run_url=excluded.run_url, updated_at=excluded.updated_at`,
+  )
+    .bind(
+      crypto.randomUUID(), scope, levels.join(','), shard, status, total, done,
+      JSON.stringify(missed), error, runUrl, now, now,
+    )
+    .run();
+  return c.json({ ok: true, scope });
+});
+
+admin.get('/seed-jobs', async (c) => {
+  if (c.env.DEV_LINKS !== 'true') return c.json({ error: 'not found' }, 404);
+  const { results } = await c.env.DB.prepare(
+    'SELECT scope, levels, shard, status, total, done, missed_json, error, run_url, started_at, updated_at FROM seed_jobs ORDER BY updated_at DESC LIMIT 50',
+  ).all<{
+    scope: string; levels: string; shard: string; status: string; total: number; done: number;
+    missed_json: string; error: string | null; run_url: string | null; started_at: string; updated_at: string;
+  }>();
+  return c.json({
+    jobs: results.map((r) => {
+      let missed: string[] = [];
+      try {
+        const v = JSON.parse(r.missed_json) as unknown;
+        if (Array.isArray(v)) missed = v.filter((m): m is string => typeof m === 'string');
+      } catch { /* corrupt ledger row reads as no misses */ }
+      const { missed_json: _drop, ...rest } = r;
+      return { ...rest, missed };
+    }),
+  });
+});
+
+// Resume source of truth: words already defined for these levels, so a rerun
+// (or a lost progress file) only generates what's actually missing.
+admin.get('/done-words', async (c) => {
+  if (c.env.DEV_LINKS !== 'true') return c.json({ error: 'not found' }, 404);
+  const levels = (c.req.query('levels') ?? '').split(',').map((s) => s.trim().toUpperCase()).filter(isLevel);
+  if (levels.length === 0) return c.json({ error: 'invalid request' }, 400);
+  const placeholders = levels.map(() => '?').join(',');
+  const { results } = await c.env.DB.prepare(
+    `SELECT word, level FROM definitions WHERE level IN (${placeholders})`,
+  )
+    .bind(...levels)
+    .all<{ word: string; level: string }>();
+  return c.json({ done: results.map((r) => `${r.level}|${r.word}`) });
+});

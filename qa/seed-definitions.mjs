@@ -36,6 +36,7 @@ const MAX_TOKENS = Number(opt('--max-tokens', '2000000')) || 2000000;
 const BATCH = Number(opt('--batch', '10')) || 10;
 const SHARD = opt('--shard', '');
 const SQL_OUT = opt('--sql-out', 'qa/definitions-seed.sql');
+const JOB_URL = opt('--job-url', '');
 const PUSH = !flag('--no-push');
 const PROGRESS_FILE = 'qa/definitions-progress.json';
 const MODEL = 'meta-models/muse-spark-open-1026';
@@ -192,10 +193,39 @@ async function main() {
     return;
   }
   const cookie = PUSH ? await signIn() : '';
+  // DB-backed resume: words already defined are done even if the progress
+  // cache was lost. Union with the file set; both stay in sync below.
+  if (PUSH) {
+    try {
+      const dw = await fetch(`${API}/api/admin/done-words?levels=${LEVELS.join(',')}`, {
+        headers: { Cookie: cookie },
+      });
+      if (dw.ok) {
+        const { done: dbDone } = await dw.json();
+        for (const k of dbDone ?? []) done.add(k);
+      }
+    } catch { /* file set alone still resumes */ }
+  }
+  // Job ledger heartbeat (best-effort: never fail a seed over bookkeeping).
+  async function heartbeat(status, error = null) {
+    if (!PUSH) return;
+    try {
+      const missed = full.filter((t) => !done.has(`${t.level}|${t.word}`)).map((t) => `${t.level}|${t.word}`);
+      await fetch(`${API}/api/admin/seed-jobs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify({
+          levels: LEVELS, shard: SHARD, status, total: full.length, done: done.size,
+          missed: missed.slice(0, 500), error, run_url: JOB_URL || undefined,
+        }),
+      });
+    } catch { /* ledger is advisory */ }
+  }
   let tokens = 0;
   let generated = 0;
   const sample = {};
   const sql = ['-- 3E dictionary seed: run with `wrangler d1 execute 3e-db --file=<this>` for prod.'];
+  await heartbeat('running');
   for (let i = 0; i < queue.length; i += BATCH) {
     const chunk = queue.slice(i, i + BATCH);
     if (tokens >= MAX_TOKENS) { console.log(`token budget reached (${tokens}) — stopping, rerun resumes`); break; }
@@ -250,7 +280,12 @@ async function main() {
       writeFileSync(PROGRESS_FILE, JSON.stringify({ done: [...done] }));
     }
     console.log(`[${Math.min(i + BATCH, queue.length)}/${queue.length}] tokens=${tokens} generated=${generated}`);
+    await heartbeat('running');
   }
+  // Clean exit: run completed its budget. Misses (if any) are listed on the
+  // job row for resume. A crash leaves the row 'running' with a stale
+  // heartbeat, which the Admin tab labels stalled.
+  await heartbeat('done');
   writeFileSync(SQL_OUT, sql.join('\n') + '\n');
   console.log(`\nSQL dump: ${SQL_OUT} (${sql.length - 1} rows) — prod import: wrangler d1 execute 3e-db --file=${SQL_OUT}`);
   for (const [level, items] of Object.entries(sample)) {
