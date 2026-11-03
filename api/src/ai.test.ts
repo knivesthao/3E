@@ -480,6 +480,29 @@ describe('AI endpoints', () => {
     expect(db.usage.filter((u) => u.task === 'meanings').map((u) => u.provider)).toEqual(['meta-model-api']);
   });
 
+  it('meanings exact:true skips the easier-level fallback and writes that level', async () => {
+    const db = makeDb();
+    db.seedDefinitions([
+      { word: 'dog', level: 'B1', lang: 'en', gloss: 'a pet animal', source: 'baseten', verified: 1 },
+    ]);
+    const cookie = await signIn(db);
+    stubFetch(modelReply);
+    const env = ENV(db);
+    // Without exact, the B1 gloss serves a B2 ask with no model call.
+    const fallback = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['dog'], level: 'B2' }, cookie), env);
+    expect(await fallback.json()).toEqual({ meanings: [{ word: 'dog', meaning: 'a pet animal' }] });
+    // With exact, the B2 row is generated and cached even though B1 has it.
+    const res = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['dog'], level: 'B2', exact: true }, cookie), env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ meanings: [{ word: 'dog', meaning: 'simple dog' }] });
+    const again = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['dog'], level: 'B2', exact: true }, cookie), env);
+    expect(await again.json()).toEqual({ meanings: [{ word: 'dog', meaning: 'simple dog' }] });
+    expect(db.usage.filter((u) => u.task === 'meanings' && u.ok === 1)).toHaveLength(1);
+  });
+
   it('meanings defaults to Baseten when configured and no provider flag is sent', async () => {
     const db = makeDb();
     const cookie = await signIn(db);

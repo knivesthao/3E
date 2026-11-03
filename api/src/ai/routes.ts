@@ -72,9 +72,13 @@ ai.post('/meanings', async (c) => {
   // English (the learner's stronger language); the word stays exact Chinese.
   const zh = isHskLevel(level);
   if (!zh && !isLevel(level)) return c.json(INVALID, 400);
+  // Exact-level mode (exact:true) skips the easier-level fallback chain so
+  // QA backfills write the requested level's own row instead of reusing a
+  // simpler gloss. Readers never need this; the chain serves them either way.
+  const exact = body.exact === true;
   const words = body.words as string[];
   const lang = zh ? 'zh' : 'en';
-  const chain: (Level | HskLevel)[] = zh ? easierHsk(level as HskLevel) : easierLevels(level as Level);
+  const chain: (Level | HskLevel)[] = exact ? [level] : zh ? easierHsk(level as HskLevel) : easierLevels(level as Level);
   // 1. Dictionary first: exact level preferred, then easier levels.
   const inWords = words.map(() => '?').join(',');
   const inLevels = chain.map(() => '?').join(',');
