@@ -7,8 +7,15 @@
 // so every call below stays on the Meta Model API. One distinct user per
 // book keeps each book under the daily per-user AI cap.
 //
-// Usage: node qa/make-books.mjs [--api http://localhost:8787] [--dry]
+// Usage: node qa/make-books.mjs [--api URL] [--dry] [--limit N] [--offset N]
+//   [--tags a,b] [--allow-wired] [--resume] [--shard i/n] [--ledger PATH]
 //   --dry prints the plan (providers + books) without spending anything.
+//   --resume continues ledgered partials/failed books on the SAME project
+//   (no duplicate drafts); published books are skipped.
+//   --shard i/n runs a disjoint slice for parallel jobs (e.g. three
+//   terminals: --shard 0/3, 1/3, 2/3). Each shard writes its own ledger
+//   file unless --ledger overrides it; qa/ledger.mjs merges them.
+//   BOOK_LEDGER env also overrides the ledger path.
 
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -345,10 +352,31 @@ if ((basetenWired || modalWired) && !ALLOW_WIRED) {
   process.exit(1);
 }
 const QA_DIR = dirname(fileURLToPath(import.meta.url));
-const LEDGER_PATH = join(QA_DIR, 'book-ledger.json');
 // Publish ledger: one entry per spec title. A partial (incomplete draft,
 // failed publish, crashed run) stays in the ledger so the next run with
 // --resume retries only what is not yet published.
+function saveLedger(ledger) {
+  writeFileSync(LEDGER_PATH, `${JSON.stringify(ledger, null, 2)}\n`);
+}
+const RESUME = flag('--resume');
+// Sharding: split the 30-book run across parallel jobs. --shard i/n takes
+// every book whose BOOKS index is congruent to i mod n, so shards are
+// disjoint and together cover everything. OFFSET/LIMIT apply within the
+// shard. Each shard gets its own ledger file by default (parallel jobs
+// must not share one JSON file); qa/ledger.mjs merges them for status.
+function parseShard(s) {
+  const m = /^(\d+)\/(\d+)$/.exec(s ?? '');
+  if (!m) return null;
+  const i = Number(m[1]);
+  const n = Number(m[2]);
+  if (!(n >= 1 && i >= 0 && i < n)) throw new Error(`bad --shard ${s}: want i/n with 0 <= i < n`);
+  return { i, n };
+}
+const SHARD = parseShard(opt('--shard', ''));
+const LEDGER_DEFAULT = SHARD
+  ? join(QA_DIR, `book-ledger-shard${SHARD.i}of${SHARD.n}.json`)
+  : join(QA_DIR, 'book-ledger.json');
+const LEDGER_PATH = process.env.BOOK_LEDGER ?? opt('--ledger', LEDGER_DEFAULT);
 function loadLedger() {
   try {
     return JSON.parse(readFileSync(LEDGER_PATH, 'utf8'));
@@ -356,17 +384,15 @@ function loadLedger() {
     return {};
   }
 }
-function saveLedger(ledger) {
-  writeFileSync(LEDGER_PATH, `${JSON.stringify(ledger, null, 2)}\n`);
-}
-const RESUME = flag('--resume');
 const ledger = loadLedger();
-let QUEUE = LIMIT > 0 ? BOOKS.slice(OFFSET, OFFSET + LIMIT) : BOOKS.slice(OFFSET);
+let QUEUE = SHARD ? BOOKS.filter((_, idx) => idx % SHARD.n === SHARD.i) : BOOKS.slice();
+QUEUE = LIMIT > 0 ? QUEUE.slice(OFFSET, OFFSET + LIMIT) : QUEUE.slice(OFFSET);
 if (RESUME) {
   const before = QUEUE.length;
   QUEUE = QUEUE.filter((b) => ledger[b.title]?.status !== 'published');
   console.log(`--resume: skipping ${before - QUEUE.length} already-published books`);
 }
+if (SHARD) console.log(`--shard ${SHARD.i}/${SHARD.n}: ${QUEUE.length} books in this shard (ledger: ${LEDGER_PATH})`);
 if (DRY) {
   console.log('\n--dry: plan only. Books that would be made:');
   for (const b of QUEUE) console.log(`  ${b.level}  ${b.title}  (${b.email}) [${ledger[b.title]?.status ?? 'new'}]`);
@@ -387,8 +413,10 @@ async function call(path, init = {}, email = '') {
     process.exit(1);
   }
   if (!res.ok) {
-    console.error(`\n${init.method ?? 'GET'} ${path} -> ${res.status}: ${(await res.text()).slice(0, 300)}`);
-    process.exit(1);
+    // HTTP errors throw so the per-book catch ledger-marks the failure and
+    // the run continues. Only an unreachable API or a spent daily cap
+    // aborts the whole run (nothing else can proceed).
+    throw new Error(`${init.method ?? 'GET'} ${path} -> ${res.status}: ${(await res.text()).slice(0, 300)}`);
   }
   return res.json();
 }
@@ -414,29 +442,55 @@ async function signIn(email) {
 }
 
 const results = [];
+async function tryGetProject(projectId) {
+  // Raw fetch (not call): a 404 here just means "start fresh", it must
+  // never abort the run.
+  const res = await fetch(`${API}/api/projects/${projectId}`, {
+    headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) },
+  }).catch(() => null);
+  if (!res || !res.ok) return null;
+  return res.json();
+}
+
 for (const spec of QUEUE) {
   console.log(`\n=== ${spec.level}  ${spec.title} ===`);
   // One bad book never kills the run: partials land in the ledger and the
-  // next --resume run retries them. Only a 429 (daily AI cap) aborts.
+  // next --resume run continues the SAME project (no duplicate drafts).
+  // Only an unreachable API or a 429 (daily AI cap) aborts.
   try {
   await signIn(spec.email);
-  const { project } = await call('/api/projects', {
-    method: 'POST',
-    body: JSON.stringify({ title: spec.title, level: spec.level }),
-  });
-  console.log(`project ${project.id}`);
-  ledger[spec.title] = { status: 'partial', level: spec.level, projectId: project.id, saved: [] };
+  let project;
+  let saved = [];
+  let artDone = [];
+  const prior = RESUME ? ledger[spec.title] : null;
+  if (prior?.projectId) {
+    const existing = await tryGetProject(prior.projectId);
+    if (existing?.project) {
+      project = existing.project;
+      saved = [...new Set([...(existing.scenes ?? []).map((s) => s.scene_number), ...(prior.saved ?? [])])].sort((a, b) => a - b);
+      artDone = prior.art ?? [];
+      console.log(`resuming project ${project.id}: saved [${saved.join(',')}] art [${artDone.join(',')}]`);
+    }
+  }
+  if (!project) {
+    const created = await call('/api/projects', {
+      method: 'POST',
+      body: JSON.stringify({ title: spec.title, level: spec.level }),
+    });
+    project = created.project;
+    console.log(`project ${project.id}`);
+    await call(`/api/projects/${project.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ cast_json: spec.cast }),
+    });
+    console.log('cast saved');
+  }
+  ledger[spec.title] = { status: 'partial', level: spec.level, projectId: project.id, saved, art: artDone };
   saveLedger(ledger);
-  await call(`/api/projects/${project.id}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ cast_json: spec.cast }),
-  });
-  console.log('cast saved');
 
   // Finish drafts all missing scenes; the level gate can reject individual
   // scenes, so retry until all 6 pass or we run out of patience. A short
   // draft never publishes (the server also 400s incomplete drafts).
-  let saved = [];
   let failed = [];
   for (let attempt = 1; attempt <= 4; attempt++) {
     const finish = await call('/api/ai/finish', {
@@ -448,14 +502,20 @@ for (const spec of QUEUE) {
     console.log(`finish try ${attempt}: saved [${saved.join(',')}] failed ${JSON.stringify(failed)}`);
     if (saved.length >= 6) break;
   }
-  ledger[spec.title] = { status: 'partial', level: spec.level, projectId: project.id, saved, missing: failed };
+  ledger[spec.title] = { status: 'partial', level: spec.level, projectId: project.id, saved, art: artDone, missing: failed };
   saveLedger(ledger);
   if (saved.length < 6) {
     console.error(`partial draft for ${spec.level} ${spec.title}: saved [${saved.join(',')}] missing ${JSON.stringify(failed)} — ledgered, continuing`);
     continue;
   }
 
+  // Art is per-scene idempotent but not free: skip scenes the ledger
+  // already recorded, so retries only pay for what is missing.
   for (const n of saved) {
+    if (artDone.includes(n)) {
+      console.log(`art scene ${n}: already done, skipping`);
+      continue;
+    }
     let ok = false;
     for (let attempt = 1; attempt <= 3 && !ok; attempt++) {
       try {
@@ -469,6 +529,9 @@ for (const spec of QUEUE) {
         if (attempt === 3) throw e;
       }
     }
+    artDone = [...new Set([...artDone, n])].sort((a, b) => a - b);
+    ledger[spec.title] = { status: 'partial', level: spec.level, projectId: project.id, saved, art: artDone, missing: failed };
+    saveLedger(ledger);
     console.log(`art scene ${n}: ok`);
   }
   const scenes = saved;
@@ -487,6 +550,7 @@ for (const spec of QUEUE) {
     projectId: project.id,
     bookId: pub.book.id,
     saved,
+    art: artDone,
     total: costs.totals.total,
     providers,
   };
