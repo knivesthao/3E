@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import app from './index';
+import { TASK_TIMEOUT_MS } from './ai/config';
 
 // In-memory D1 subset for the AI routes (extends the projects-test pattern
 // with ai_usage + jobs). Model calls are stubbed at fetch, never network.
@@ -707,5 +708,15 @@ describe('AI endpoints', () => {
     );
     expect(res.status).toBe(200);
     expect(((await res.json()) as { reply: string }).reply).toHaveLength(500);
+  });
+});
+
+describe('task timeouts', () => {
+  it('gives reasoning-backed tasks a 120s budget and keeps short tasks at 30s', () => {
+    expect(TASK_TIMEOUT_MS.draft).toBe(120_000);
+    expect(TASK_TIMEOUT_MS.check).toBe(120_000);
+    expect(TASK_TIMEOUT_MS.meanings).toBe(30_000);
+    expect(TASK_TIMEOUT_MS.quiz).toBe(30_000);
+    expect(TASK_TIMEOUT_MS.buddy).toBe(30_000);
   });
 });

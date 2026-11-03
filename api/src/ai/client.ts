@@ -1,5 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types';
-import { BASETEN_TASKS, TASK_MODEL, textCost } from './config';
+import { BASETEN_TASKS, TASK_MODEL, TASK_TIMEOUT_MS, textCost } from './config';
 import type { AiTask, BasetenConfig, ModalConfig } from './config';
 import { AiError, metaImage, metaSegment, metaText } from './meta';
 import type { ImageOut } from './meta';
@@ -37,9 +37,10 @@ export async function generate(
     const provider = useBt ? 'baseten' : 'meta-model-api';
     const start = Date.now();
     try {
+      const timeoutMs = TASK_TIMEOUT_MS[opts.task];
       const out = useBt
-        ? await basetenText(bt, opts.prompt, { json: opts.json })
-        : await metaText(opts.apiKey, model, opts.prompt, { json: opts.json, apiUrl: opts.apiUrl });
+        ? await basetenText(bt, opts.prompt, { json: opts.json, timeoutMs })
+        : await metaText(opts.apiKey, model, opts.prompt, { json: opts.json, apiUrl: opts.apiUrl, timeoutMs });
       const ms = Date.now() - start;
       if (opts.validate && !opts.validate(out.text)) {
         // Tokens were spent on an unusable reply: log it, retire a broken

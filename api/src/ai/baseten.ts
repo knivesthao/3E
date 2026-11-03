@@ -13,7 +13,7 @@ const TIMEOUT_MS = 30_000;
 export async function basetenText(
   cfg: { apiUrl: string; apiKey: string; model: string },
   prompt: string,
-  opts: { json?: boolean },
+  opts: { json?: boolean; timeoutMs?: number },
 ): Promise<TextOut> {
   const body: Record<string, unknown> = {
     model: cfg.model,
@@ -26,7 +26,7 @@ export async function basetenText(
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(opts.timeoutMs ?? TIMEOUT_MS),
     });
   } catch {
     throw new AiError('model unreachable', true);

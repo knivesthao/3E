@@ -28,7 +28,7 @@ export async function metaText(
   apiKey: string,
   model: string,
   prompt: string,
-  opts: { json?: boolean; apiUrl?: string },
+  opts: { json?: boolean; apiUrl?: string; timeoutMs?: number },
 ): Promise<TextOut> {
   const url = opts.apiUrl ?? `${BASE_URL}${DEFAULT_PATH}`;
   const body: Record<string, unknown> = {
@@ -42,7 +42,7 @@ export async function metaText(
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(opts.timeoutMs ?? TIMEOUT_MS),
     });
   } catch {
     throw new AiError('model unreachable', true);

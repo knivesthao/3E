@@ -72,6 +72,28 @@ export function modalConfig(env: {
 
 export type AiTask = 'draft' | 'check' | 'idea' | 'meanings' | 'simplify' | 'safety' | 'art' | 'isolate' | 'portrait' | 'quiz' | 'buddy' | 'keywords' | 'define';
 
+// Per-task outbound timeouts. Reasoning-backed text tasks (draft, check)
+// think for tens of seconds before answering — a 30s ceiling aborts healthy
+// calls and burns the whole two-attempt budget on timeouts. Long-form tasks
+// ride the same 120s budget as image generation; short tasks stay at 30s.
+const DEFAULT_TEXT_TIMEOUT_MS = 30_000;
+const LONG_TEXT_TIMEOUT_MS = 120_000;
+export const TASK_TIMEOUT_MS: Record<AiTask, number> = {
+  draft: LONG_TEXT_TIMEOUT_MS,
+  check: LONG_TEXT_TIMEOUT_MS,
+  idea: DEFAULT_TEXT_TIMEOUT_MS,
+  meanings: DEFAULT_TEXT_TIMEOUT_MS,
+  simplify: DEFAULT_TEXT_TIMEOUT_MS,
+  safety: DEFAULT_TEXT_TIMEOUT_MS,
+  art: LONG_TEXT_TIMEOUT_MS,
+  isolate: LONG_TEXT_TIMEOUT_MS,
+  portrait: LONG_TEXT_TIMEOUT_MS,
+  quiz: DEFAULT_TEXT_TIMEOUT_MS,
+  buddy: DEFAULT_TEXT_TIMEOUT_MS,
+  keywords: DEFAULT_TEXT_TIMEOUT_MS,
+  define: DEFAULT_TEXT_TIMEOUT_MS,
+};
+
 export const TASK_MODEL: Record<AiTask, string> = {
   draft: TEXT_MODEL,
   check: TEXT_MODEL,
