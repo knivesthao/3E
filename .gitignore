@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+*.local
+
+# Local video footage and renders (large, never commit)
+videos/

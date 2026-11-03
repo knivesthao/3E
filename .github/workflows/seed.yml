@@ -24,6 +24,10 @@ on:
         description: "Baseten token budget for this run"
         required: false
         default: "2000000"
+      shard:
+        description: "Disjoint split for parallel runs (e.g. 0/2, 1/2)"
+        required: false
+        default: ""
 
 jobs:
   seed:
@@ -32,12 +36,18 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Cache key
+        id: ckey
+        # Cache keys forbid commas — A1,A2 becomes A1_A2. The shard is part
+        # of the key so parallel splits resume independently, never clobbering.
+        run: echo "key=seed-progress-$(echo '${{ inputs.levels }} ${{ inputs.shard }}' | tr ', /' '__')" >> "$GITHUB_OUTPUT"
+
       - name: Restore seed progress
         uses: actions/cache/restore@v4
         with:
           path: qa/definitions-progress.json
           # One progress file per level set; a new set starts fresh.
-          key: seed-progress-${{ inputs.levels }}-
+          key: ${{ steps.ckey.outputs.key }}-
 
       - name: Seed definitions
         run: >
@@ -47,6 +57,7 @@ jobs:
           --levels ${{ inputs.levels }}
           --limit ${{ inputs.limit }}
           --max-tokens ${{ inputs.max-tokens }}
+          --shard ${{ inputs.shard }}
         env:
           BASETEN_API_KEY: ${{ secrets.BASETEN_API_KEY }}
 
@@ -55,7 +66,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: qa/definitions-progress.json
-          key: seed-progress-${{ inputs.levels }}-${{ github.run_id }}
+          key: ${{ steps.ckey.outputs.key }}-${{ github.run_number }}
 
       - name: Upload SQL dump
         if: always()

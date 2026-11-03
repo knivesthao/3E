@@ -1,0 +1,31 @@
+# 3E Baseten Truss template — DEVELOPMENT ONLY (no production).
+# Option B for getting a dev endpoint. Option A (recommended) is the
+# one-click library deploy; this file reproduces that shape as code.
+# Fill the weights revision from https://huggingface.co/meta-models/Muse-Glimmer-30B
+# then run: baseten model push --watch (creates a development deployment).
+model_name: 3e-glimmer-30b-dev
+model_metadata:
+  tags:
+    - openai-compatible
+base_image:
+  # Pinned vLLM with OpenAI-compatible server (from Baseten's first-model guide).
+  image: vllm/vllm-openai:v0.27.1
+docker_server:
+  start_command: vllm serve /models/glimmer --served-model-name meta-models/Muse-Glimmer-30B --host 0.0.0.0 --port 8000
+  readiness_endpoint: /health
+  liveness_endpoint: /health
+  predict_endpoint: /v1/chat/completions
+  server_port: 8000
+weights:
+  # TODO: pin the exact commit after your first working deploy.
+  - source: "hf://meta-models/Muse-Glimmer-30B@<revision>"
+    mount_location: /models/glimmer
+resources:
+  # Matches the library deployment: BF16 30B on a single H100.
+  accelerator: H100
+  use_gpu: true
+runtime:
+  predict_concurrency: 256
+# Cost control lives in the environment, not here: keep the development
+# environment at min_replicas 0 / max_replicas 1 and deactivate the
+# deployment when done. Idle H100 billed $9.75 for 90 min with 0 requests.

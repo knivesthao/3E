@@ -1,0 +1,22 @@
+# Local Worker env (gitignored). Copy to api/.dev.vars and fill in.
+# Wrangler reads api/.dev.vars for `wrangler dev --config api/wrangler.toml`.
+# The repo-root .dev.vars is NOT read by the Worker.
+MODEL_API_KEY=
+BASETEN_API_KEY=
+# Hackathon Model API (free $100 credits, no deployment): full
+# OpenAI-compatible chat URL + the hackathon-only model name.
+BASETEN_API_URL=https://inference.baseten.co/v1/chat/completions
+BASETEN_MODEL=meta-models/muse-spark-open-1026
+# Self-hosted Glimmer deployment (parked): a model endpoint URL like
+# https://model-<model-id>.api.baseten.co/environments/development/sync/v1/chat/completions
+# with BASETEN_MODEL=meta-models/Muse-Glimmer-30B
+# Modal SAM isolate (parked by default — leave empty for Meta fallback).
+# MODAL_API_URL is the `modal deploy` web endpoint URL.
+# MODAL_PROXY_TOKEN is "<token-id>.ws-<secret>" (never commit a real one).
+MODAL_API_URL=
+MODAL_PROXY_TOKEN=
+# Magic-link email (Resend free tier: 3,000/mo, 100/day — plenty for sign-ins).
+# Sign up at resend.com, verify a domain, then fill both in. With DEV_LINKS=true
+# (dev default) these stay empty and links come back in the API response.
+RESEND_API_KEY=
+EMAIL_FROM=3E <login@yourdomain.com>

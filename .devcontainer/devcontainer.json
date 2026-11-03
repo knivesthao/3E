@@ -1,0 +1,11 @@
+{
+  "name": "3E",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:22-bookworm",
+  "forwardPorts": [5173, 8787],
+  "portsAttributes": {
+    "5173": { "label": "Frontend", "onAutoForward": "openPreview" },
+    "8787": { "label": "API", "onAutoForward": "silent" }
+  },
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y git-lfs && npm install --no-audit --no-fund && echo Y | npx wrangler --config api/wrangler.toml d1 migrations apply DB --local",
+  "remoteUser": "node"
+}

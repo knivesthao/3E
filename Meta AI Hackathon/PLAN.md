@@ -319,77 +319,99 @@ Application copy for both: `milestones.md`.
 
 ### Step 1 — Scaffold + auth (Day 1)
 
-- [ ] Create a new empty repo (GitHub), do not copy any reference source.
-- [ ] Init `package.json` (React 18, Vite, TypeScript, Hono, react-router-dom).
-- [ ] Write `api/wrangler.toml` with `assets`, the AI binding, `[[d1_databases]]`, and a migrations dir.
-- [ ] Create the D1 database and apply `0001_init.sql` (schema above).
-- [ ] Build `users` + `sessions` auth: passwordless magic link (store only hashes); gate **all** routes
+- [x] Create a new empty repo (GitHub), do not copy any reference source.
+- [x] Init `package.json` (React 18, Vite, TypeScript, Hono, react-router-dom).
+- [x] Write `api/wrangler.toml` with `assets`, the AI binding, `[[d1_databases]]`, and a migrations dir.
+- [x] Create the D1 database and apply `0001_init.sql` (schema above).
+- [x] Build `users` + `sessions` auth: passwordless magic link (store only hashes); gate **all** routes
       behind it (no anonymous access).
-- [ ] Store `MODEL_API_KEY` as a Worker secret (`wrangler secret put`), never in code.
-- [ ] Add `GET /api/health` → `{ ok: true }`.
-- [ ] Create shell pages: `/` (library), `/studio` (creator), `/read/:id` (reader).
+- [x] Store `MODEL_API_KEY` as a Worker secret (`wrangler secret put`), never in code.
+- [x] Add `GET /api/health` → `{ ok: true }`.
+- [x] Create shell pages: `/` (library), `/studio` (creator), `/read/:id` (reader).
 
 ✅ **Done when:** `npm run dev` works, you can sign in, `/api/health` returns ok.
 
 ### Step 2 — Creator editor (Day 2)
 
-- [ ] `projects` + `scenes` CRUD API (list, create, update, delete, reorder).
-- [ ] Studio dashboard: list projects + "New comic".
-- [ ] Comic editor: add/reorder scenes, type narration, add per-scene speech bubbles.
-- [ ] Cast tab: define characters + places (`cast_json`).
-- [ ] Save/load drafts to D1.
+- [x] `projects` + `scenes` CRUD API (list, create, update, delete, reorder).
+- [x] Studio dashboard: list projects + "New comic".
+- [x] Comic editor: add/reorder scenes, type narration, add per-scene speech bubbles.
+- [x] Cast tab: define characters + places (`cast_json`).
+- [x] Save/load drafts to D1.
 
 ✅ **Done when:** you can write a full 6-scene story with bubbles, no AI, and reload it from the DB.
 
 ### Step 3 — Text AI + level check (Day 3)
 
-- [ ] Implement the `TextModel` interface (`models.md`) against the Meta Model API.
-- [ ] Wire the story pipeline: `muse-spark-1.3` drafts → `muse-spark-1.3` QA-validates (`prompts.md` §2).
-- [ ] Wire `POST /suggest/idea`, `/finish` ("3E Finish", a `kind='finish'` job), `/meanings`, `/simplify`.
-- [ ] Build the **level check** (`levels.ts` hard gate + `muse-spark-1.3` score) and **length check**.
-- [ ] Require a valid session on every AI endpoint; add a per-user daily generation counter (rate limit).
-- [ ] Log every attempt to `ai_usage` (provider, model, task, kind, op_id, attempt, tokens, cost_usd).
+- [x] Implement the `TextModel` interface (`models.md`) against the Meta Model API.
+- [x] Wire the story pipeline: `muse-spark-1.3` drafts → `muse-spark-1.3` QA-validates (`prompts.md` §2).
+- [x] Wire `POST /suggest/idea`, `/finish` ("3E Finish", a `kind='finish'` job), `/meanings`, `/simplify`.
+- [x] Build the **level check** (`levels.ts` hard gate + `muse-spark-1.3` score) and **length check**.
+- [x] Require a valid session on every AI endpoint; add a per-user daily generation counter (rate limit).
+- [x] Log every attempt to `ai_usage` (provider, model, task, kind, op_id, attempt, tokens, cost_usd).
       A retry reuses the `op_id` with `attempt + 1`.
 
 ✅ **Done when:** "3E Finish" writes valid, leveled scenes that pass the level + length check.
 
 ### Step 4 — Art + publish + reader (Day 4)
 
-- [ ] Implement `ImageModel` (Muse Image, `muse-image-1.0`) and `SegmentModel` (SAM 3.1, `sam-3.1`).
-- [ ] Art generation as a `kind='scene'` job with a per-scene "Generate" button.
-- [ ] **SAM 3.1 character consistency (required):** generate the character once, isolate it, and reuse
-      the cutout in every later scene so the character looks the same across the whole book.
-- [ ] (Optional) Muse Spark multimodal validation loop before showing a panel.
-- [ ] Build **manifest v2** packaging on publish → `books.manifest_json` + cover. Publish is explicit
-      (owner-only) and runs a Muse Spark safe/unsafe check on the text first.
-- [ ] Build the reader: swipe scenes, tap a word for its meaning, show `reading_level`.
+- [x] **4a (local, backend):** `ImageModel` (`muse-image-1.0`) + `SegmentModel`
+      (`sam-3.1`) adapters, config routing + prices, `kind='scene'` art-job pipeline,
+      R2 upload/storage. Done when a scene job returns stored panel URLs.
+- [x] **4b (local, backend):** publish endpoint (owner-only) + Muse Spark
+      safe/unsafe screen + **manifest v2** packaging → `books.manifest_json` +
+      cover. Done when a draft becomes a `books` row via one call.
+- [x] **4c (codespace, UI):** per-scene "Generate" button with job progress +
+      publish button wiring in the Editor. Needs 4a/4b contract. Done when art
+      and publish run from clicks.
+- [x] **4d (codespace, UI):** reader — swipe scenes, tap a word for its meaning
+      (`/meanings`), show `reading_level`. Needs 4b output shape (mock with a
+      fixture until then). Done when a published book reads swipeably.
+- [x] **4e (codespace/content):** prompt-template review + character-sheet
+      authoring — **anytime, needs nothing**. Phone preview of the reader needs
+      4d. Done when the character looks identical across all scenes on a phone.
+- [ ] (Optional, local) Muse Spark multimodal validation loop before showing a panel.
+- [x] **SAM 3.1 character consistency (required)** is covered by 4a + 4e together.
+
+Sub-steps run in parallel (local = backend on `local`, codespace = UI on
+`codespace`, human QA). UI builds against the API contract in
+`src/lib/api.ts` — 4a/4b land it first.
 
 ✅ **Done when:** a comic with art publishes and reads end-to-end, with one consistent character across
    all scenes.
 
 ### Step 5 — PWA + share → MVP DONE (Day 5)
 
-- [ ] PWA: manifest + service worker; save a book to IndexedDB for offline reading.
-- [ ] Chunked per-scene loading so the first scene shows fast.
-- [ ] Share link for a published book.
-- [ ] Admin cost view `/admin/costs`: grand total, first-try cost, retry overhead, cost by task, cost
-      by model, most-retried model/task, and cost per user/month — the queries in §Cost & usage tracking.
-      Read-only.
-- [ ] Record the first test book end-to-end (the demo seed).
+- [x] **5a (local, backend):** share backend — public read route for published
+      books; `/admin/costs` endpoints serving the §Cost & usage tracking queries.
+      Done when share URLs resolve and costs endpoints return ledger numbers.
+- [x] **5b (codespace, UI):** PWA shell (manifest + service worker, book saved to
+      IndexedDB for offline reading), chunked per-scene loading, share UI,
+      `/admin/costs` page (read-only). Needs 5a shapes. Done when the app
+      installs offline and a book reads from cache.
+- [ ] **5c (human):** record the first test book end-to-end (the demo seed) + QA.
+- [ ] **5d (codespace):** share-link check via public URL.
 
 ✅ **Done when:** **MVP DONE** — creator → leveled comic → publish → read → share, all working.
 
 ### Step 6 — UAT + dual reading (Days 6–7)
 
-- [ ] Get 2–3 real people to make test books; fix the bugs they hit.
-- [ ] Milestone — **dual reading**: a shared link where two readers stay in sync (Durable Objects or polling).
+- [x] **6a (local, backend):** dual-reading sync — shared link where two
+      readers stay in sync (polling first; Durable Objects only if polling
+      proves inadequate). Done when two sessions track one position.
+- [ ] **6b (human):** get 2–3 real people to make test books; file the bugs.
+- [x] **6c (codespace):** dual-device sync test over public URLs.
+- [ ] **6d (local):** fix the bugs from 6b. Runs after 6b reports land.
 
 ✅ **Done when:** test books are live and two devices can read one book together.
 
 ### Step 7 — Spotlight walkthrough + polish (Day 8)
 
-- [ ] Milestone — onboarding/spotlight walkthrough so a judge understands the app in 30 seconds.
-- [ ] Fix visual/UX rough edges.
+- [ ] **7a (codespace, UI):** onboarding/spotlight walkthrough so a judge
+      understands the app in 30 seconds.
+- [ ] **7b (codespace, UI):** visual/UX rough-edge fix pass.
+- [ ] **7c (human):** first-run test with a real user (they explain the app
+      back with no help) + UX issue list feeding 7b.
 
 ✅ **Done when:** a first-run user can explain the app back to you without help.
 
@@ -402,8 +424,10 @@ Application copy for both: `milestones.md`.
       4. Art + consistency (30s): Muse Image draws each scene, SAM 3.1 keeps the character identical.
       5. Cost (15s): `/admin/costs` — "this book cost $0.0X."
       6. Read (20s): publish → read on a phone → tap a word → (milestone) second device.
-- [ ] Write README + submission form.
-- [ ] Submit on the Cerebral Valley portal before the deadline.
+- [ ] **8a (human):** record the 2–3 min demo video (shot list above).
+- [ ] **8b (human):** write README + submission form, submit on the Cerebral
+      Valley portal before the deadline.
+- [ ] **8c (local):** tech support on demand — last fixes only, no features.
 
 ✅ **Done when:** submission is in before 9:00 AM Nov 5 (your time).
 
@@ -415,6 +439,56 @@ Application copy for both: `milestones.md`.
 - **JSON validation:** every structured AI reply is validated against its schema; retry once, then surface the error.
 - **Cost is visible:** every AI call lands in `ai_usage`; the admin view reads that table, never a guess.
 - **Small commits:** commit every ~2 hours with descriptive messages, so the git timeline proves the work.
+- **Tests run on CI only:** never `npm test`, `npm run typecheck`, or `npm run build` locally.
+  That is reserved for GitHub Actions on `develop`/`local`/`codespace` pushes. Write the tests, commit, push, read CI.
+- **Who does what (explicit):** tracks are named by branch, split backend/UI.
+  - **Local (this session, Mac checkout):** backend (`api/`, wrangler,
+    migrations, CI, gates) on the `local` branch, plus the API contract
+    (`src/lib/api.ts`), commits, plan checkoffs, reviews. Cannot push, run
+    authed CLIs, reach your localhost, or run Docker.
+  - **Codespace (when linked):** UI (`src/pages`, `src/components`, PWA shell,
+    styles) on the `codespace` branch, built against the API contract — plus
+    heavy/Linux-only jobs, public preview URLs, and pre-authenticated git.
+    Metered — deliberate use only: spin up, run, capture, stop/delete.
+    Smallest machine that works.
+  - **Human (you):** Zed as reference, QA/UAT in the browser, content and
+    pricing research, decisions, `git push`, billing, submissions. No routine
+    editing — no branch needed.
+  - Routing: local by default; codespace only for parallel slices,
+    Linux-only, heavy, public-URL, or authed-git jobs. Never two writers on
+    the same file at once; pull before starting, push when done. `develop` is
+    integration: work merges in via PR. CI gates every push to
+    `develop`/`local`/`codespace` and every PR targeting `develop`.
+
+## Where each step runs (parallel by default)
+
+Local owns backend, codespace owns UI — split on the `src/lib/api.ts`
+contract (local lands endpoints first, codespace builds UI against them).
+Merge via PR.
+
+| Step | Local (`local`) | Human | Codespace (`codespace`) |
+|---|---|---|---|
+| 1 — Scaffold + auth | Done | Done (verified) | — |
+| 2 — Creator editor | Done | Done (verified reload) | — |
+| 3 — Text AI + level check | Provider, gate, endpoints, ledger (+ Step 3 UI, done) | Container QA, pricing research | — |
+| 4 — Art + publish + reader | 4a, 4b | QA flows, prompt review | 4c, 4d, 4e preview |
+| 5 — PWA + share | 5a endpoints | Demo seed run, QA | 5b UI, 5d check |
+| 6 — UAT + dual reading | 6a, 6d | Testers, reports, dual-device pass | 6c session |
+| 7 — Walkthrough + polish | Support fixes | UX review, walkthrough, first-run test | 7a, 7b, phone check |
+| 8 — Demo + submit | 8c tech support | Video, form, submit | — |
+
+If a step lists no job for a track, that track sits the step out.
+
+## Parallel rules
+
+- A sub-step with no "Needs" runs **anytime**, on any track, in any order —
+  including before earlier steps finish. "Needs X" is the only gate.
+- Anytime work (start today): 4e content (prompt review, character sheet),
+  6b (line up testers — needs only the Step 2 editor), 7c prep (find a
+  first-run user), 8a prep (script from the shot list), Step 3 pricing research.
+- Gated work waits: 4e preview needs 4d; 5c needs the 4a–4d chain; 6d needs 6b
+  reports; 7b feeds off 7c findings; 4c needs the 4a/4b contract.
+- Critical path to MVP: 4a → 4b → 4c/4d → 5a → 5b. Everything else floats.
 
 ## Definition of done (the demo)
 

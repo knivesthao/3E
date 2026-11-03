@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+/* 3E theme: neutral by design. White surfaces, stone text, one dark
+   primary action color. No saturated hues anywhere, so nothing is
+   carried by color alone and nothing clashes with color sensitivity.
+   Status and errors always pair text labels with any visual cue. */
+
+@theme {
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: Georgia, "Times New Roman", serif;
+  /* Single muted accent, AAA-safe on white (teal-900 ≈ 9:1) and with white
+     text on solid fills. Muted enough for color sensitivity; meaning is
+     always carried by text labels, never by this hue alone. */
+  --color-accent-950: #123f3c;
+  --color-accent-900: #134e4a;
+  --color-accent-800: #115e59;
+  --color-accent-100: #ccfbf1;
+  --color-accent-50: #f0fdfa;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: #fff;
+  color: var(--color-stone-900);
+}
+
+/* Visible keyboard focus everywhere. Single dark rule so it reads on
+   both light surfaces and the dark primary button (offset pushes it
+   onto the surrounding background). */
+:focus-visible {
+  outline: 3px solid var(--color-stone-900);
+  outline-offset: 2px;
+}
+
+/* Touch targets and readable form text by default. In @layer base so a
+   utility like min-h-0 can still opt an element out (reader word buttons). */
+@layer base {
+  button,
+  input,
+  select,
+  textarea,
+  a {
+    min-height: 44px;
+  }
+}
+
+input,
+select,
+textarea {
+  font-size: 1rem;
+}
+
+/* Roomy native dropdown arrow (the default sits cramped against the edge).
+   Unlayered on purpose so padding-right wins over the px-3 utility. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2357534e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.875rem center;
+  background-size: 1rem 1rem;
+  padding-right: 2.75rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

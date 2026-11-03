@@ -1,0 +1,19 @@
+{
+  "$comment": "3E Modal image development endpoint record (dev-only). Secrets never live here. Deploy with modal deploy modal/image.py, then ./modal/link-image.sh <endpoint-url> (reuses the shared key).",
+  "status": "unparked on user request 2026-11-02: burn Modal credits before Meta $0.01/image",
+  "environment": "development",
+  "model": "stabilityai/sdxl-turbo",
+  "gpu": "T4",
+  "scaling": {
+    "minContainers": 0,
+    "maxContainers": 1,
+    "$comment": "Scale to zero: per-second billing means $0 idle. Cold starts reload weights."
+  },
+  "contract": {
+    "request": "{ prompt, width?, height?, auth }",
+    "response": "{ image_b64, content_type }"
+  },
+  "apiUrl": "https://knives-thao--3e-image-dev-draw.us-east.modal.run",
+  "coldStart_s": 54,
+  "warm_s": 7.2
+}

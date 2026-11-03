@@ -1,6 +1,6 @@
 ---
 name: test-and-review
-description: Test-and-review workflow for the 3E repo. Invoke after implementing a PLAN step or before committing: writes tests (never runs them until asked), then reviews the diff with emphasis on security, code reuse, and service decoupling. CI runs the tests on push.
+description: "Test-and-review workflow for the 3E repo. Write tests, then review the diff."
 ---
 
 # Test and review — 3E workflow

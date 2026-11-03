@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+*.local
+.git/
+.gitignore
+README.md
+docker/
+run.sh
+npm-debug.log

@@ -1,6 +1,6 @@
 ---
 name: post-commit-check
-description: Post-commit integrity check for the 3E repo. Invoke after a commit is pushed to GitHub: watches the CI run for that commit and reports whether anything broke, with failure details and a fix recommendation.
+description: "Post-commit integrity check for the 3E repo. Invoke after a commit is pushed to GitHub."
 ---
 
 # Post-commit check — 3E integrity watch

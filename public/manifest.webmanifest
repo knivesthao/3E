@@ -1,0 +1,10 @@
+{
+  "name": "3E — Leveled English Webcomics",
+  "short_name": "3E",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fff8ef",
+  "theme_color": "#b3541e",
+  "description": "English webcomics for learners, at your exact CEFR level.",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

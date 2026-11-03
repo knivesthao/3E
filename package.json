@@ -1,0 +1,46 @@
+{
+  "name": "3e",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:api": "wrangler dev --config api/wrangler.toml --port 8787 --remote",
+    "dev:api:local": "wrangler dev --config api/wrangler.toml --port 8787",
+    "db:migrate:local": "wrangler --config api/wrangler.toml d1 migrations apply DB --local && wrangler --config api/wrangler.toml d1 migrations apply LIBRARY_DB --local",
+    "db:migrate:remote": "wrangler --config api/wrangler.toml d1 migrations apply DB --remote && wrangler --config api/wrangler.toml d1 migrations apply LIBRARY_DB --remote",
+    "baseten:link": "./baseten/link-dev.sh",
+    "baseten:check": "test -f api/.dev.vars && grep -q '^BASETEN_API_URL=https\\?://' api/.dev.vars && grep -q '^BASETEN_API_KEY=...' api/.dev.vars && echo 'baseten dev wiring: present' || (echo 'baseten dev wiring: missing (run ./baseten/link-dev.sh <model-id>)' >&2; exit 1)",
+    "qa:seed": "node qa/seed.mjs",
+    "qa:definitions": "node qa/seed-definitions.mjs",
+    "modal:link": "./modal/link.sh",
+    "modal:check": "test -f api/.dev.vars && grep -q '^MODAL_API_URL=https\\?://' api/.dev.vars && grep -q '^MODAL_PROXY_TOKEN=..*' api/.dev.vars && echo 'modal dev wiring: present' || (echo 'modal dev wiring: missing (see modal/README.md)' >&2; exit 1)",
+    "build": "tsc --noEmit && vite build",
+    "build:native": "tsc --noEmit && vite build && cap sync",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/cli": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/ios": "^8.6.0",
+    "hono": "^4.6.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.27.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.0.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.3",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~5.6.0",
+    "vite": "^5.4.0",
+    "vitest": "^2.1.0",
+    "wrangler": "^4.0.0"
+  }
+}
