@@ -17,6 +17,7 @@ export function Words({
   plain = false,
   colorful = false,
   colorOffset = 0,
+  definedWords = null,
 }: {
   text: string;
   onTap: (word: string) => void;
@@ -31,6 +32,10 @@ export function Words({
   current?: number | null;
   // Plain display (flashcards): no tap underline, keeps read/listen glow.
   plain?: boolean;
+  // Defined-words gate: when the Reader knows which words have glosses,
+  // undefined words render as plain text instead of inviting a doomed
+  // lookup. Null/undefined = unknown: all content words stay tappable.
+  definedWords?: Set<string> | null;
   // Colorful display (flashcards only): each sounded chunk gets a dark,
   // high-contrast hue cycling from colorOffset, so syllables read as
   // separate color blocks. Reader pages stay black-on-white.
@@ -53,8 +58,8 @@ export function Words({
         const hl = isCur ? ' bg-amber-400' : isRead ? ' bg-yellow-300' : '';
         // Only content words invite a lookup; glue words render plainly
         // (but still highlight when read). Plain mode renders everything as
-        // text with the same highlights.
-        if (plain || !isContentWord(w)) {
+        // text with the same highlights. Words outside the defined set do too.
+        if (plain || !isContentWord(w) || (definedWords && !definedWords.has(w))) {
           const style =
             colorful && plain
               ? { color: CHUNK_COLORS[(colorOffset + idx) % CHUNK_COLORS.length] }

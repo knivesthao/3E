@@ -63,6 +63,25 @@ function tagsOf(row: { tags_json?: unknown }): string[] {
 // Same public gate as the share route so a second device on the link stays
 // in sync. First scene is the default until someone moves. Deliberately
 // NEVER edge-cached: polled every few seconds, freshness beats speed here.
+share.get('/:bookId/words', async (c) => {
+  // Defined-words map for the Reader: which words of this book have a
+  // dictionary gloss, so undefined words render as plain text instead of
+  // inviting a lookup that can only fail. Public (same gate as the book:
+  // reachability). Deliberately NOT edge-cached: one cheap D1 read per
+  // book-open, always fresh after republish, no bust wiring to forget.
+  const bookId = c.req.param('bookId');
+  const book = await c.env.LIBRARY_DB.prepare('SELECT id FROM books WHERE id = ?')
+    .bind(bookId)
+    .first<{ id: string }>();
+  if (!book) return c.json(NOT_FOUND, 404);
+  const { results } = await c.env.LIBRARY_DB.prepare(
+    'SELECT word FROM book_words WHERE book_id = ? AND defined = 1',
+  )
+    .bind(bookId)
+    .all<{ word: string }>();
+  return c.json({ words: [...new Set((results ?? []).map((r) => r.word))] });
+});
+
 share.get('/:bookId/position', async (c) => {
   const book = await c.env.LIBRARY_DB.prepare('SELECT id FROM books WHERE id = ?')
     .bind(c.req.param('bookId'))
