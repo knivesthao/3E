@@ -26,19 +26,26 @@ export async function generate(
   const model = TASK_MODEL[opts.task];
   // Self-hosted path (PLAN §Self-hosting): Glimmer on Baseten takes the text
   // tasks when configured; otherwise everything stays on the Meta Model API.
+  // Fallback: the first attempt rides the configured provider, but a failure
+  // (Baseten 402, outage, bad shape) retires it and the retry rides Meta
+  // instead of repeating the same broken call. Same two-attempt budget.
   const bt = opts.baseten && BASETEN_TASKS.includes(opts.task) ? opts.baseten : null;
-  const activeModel = bt ? bt.model : model;
-  const provider = bt ? 'baseten' : 'meta-model-api';
+  let btDead = false;
   for (let attempt = 1; attempt <= 2; attempt++) {
+    const useBt = !!bt && !btDead;
+    const activeModel = useBt ? bt.model : model;
+    const provider = useBt ? 'baseten' : 'meta-model-api';
     const start = Date.now();
     try {
-      const out = bt
+      const out = useBt
         ? await basetenText(bt, opts.prompt, { json: opts.json })
         : await metaText(opts.apiKey, model, opts.prompt, { json: opts.json, apiUrl: opts.apiUrl });
       const ms = Date.now() - start;
       if (opts.validate && !opts.validate(out.text)) {
-        // Tokens were spent on an unusable reply: log it, retry same op_id.
+        // Tokens were spent on an unusable reply: log it, retire a broken
+        // Baseten the same as a thrown error, retry same op_id.
         await logAttempt(db, opts, activeModel, 'text', attempt, out.inputTokens, out.outputTokens, false, 'invalid shape', ms, provider);
+        if (useBt) btDead = true;
         if (attempt === 2) break;
         continue;
       }
@@ -47,6 +54,12 @@ export async function generate(
     } catch (e) {
       const retryable = e instanceof AiError && e.retryable;
       await logAttempt(db, opts, activeModel, 'text', attempt, 0, 0, false, e instanceof Error ? e.message : 'failed', Date.now() - start, provider);
+      // A failed configured provider falls back to Meta next attempt even
+      // when the error itself is not retryable (e.g. Baseten 402).
+      if (useBt) {
+        btDead = true;
+        continue;
+      }
       if (!retryable || attempt === 2) break;
     }
   }
@@ -71,14 +84,17 @@ export async function generateArt(
   },
 ): Promise<{ bytes: ArrayBuffer; contentType: string; attempts: number }> {
   // Burn Modal credits first: image routes to the linked Modal endpoint
-  // when present, Meta otherwise. Masks are unaffected (generateMask).
+  // when present, Meta otherwise. A failed Modal retires for the op and the
+  // retry rides Meta (same fallback as text). Same two-attempt budget.
   const modalUrl = opts.modal?.imageApiUrl;
-  const model = modalUrl ? 'modal/sdxl-turbo' : TASK_MODEL.art;
-  const provider = modalUrl ? 'modal' : 'meta-model-api';
+  let modalDead = false;
   for (let attempt = 1; attempt <= 2; attempt++) {
+    const useModal = !!modalUrl && !modalDead;
+    const model = useModal ? 'modal/sdxl-turbo' : TASK_MODEL.art;
+    const provider = useModal ? 'modal' : 'meta-model-api';
     const start = Date.now();
     try {
-      const out = modalUrl
+      const out = useModal
         ? await modalImage(opts.modal as ModalConfig, modalUrl, opts.prompt, opts.size)
         : await metaImage(opts.apiKey, model, opts.prompt, {
         size: opts.size,
@@ -88,6 +104,7 @@ export async function generateArt(
       const ms = Date.now() - start;
       if (out.bytes.byteLength === 0 || !out.contentType.startsWith('image/')) {
         await logAttempt(db, { ...opts, task: opts.task ?? 'art' }, model, 'image', attempt, out.inputTokens, out.outputTokens, false, 'invalid shape', ms, provider);
+        if (useModal) modalDead = true;
         if (attempt === 2) break;
         continue;
       }
@@ -96,6 +113,10 @@ export async function generateArt(
     } catch (e) {
       const retryable = e instanceof AiError && e.retryable;
       await logAttempt(db, { ...opts, task: opts.task ?? 'art' }, model, 'image', attempt, 0, 0, false, e instanceof Error ? e.message : 'failed', Date.now() - start, provider);
+      if (useModal) {
+        modalDead = true;
+        continue;
+      }
       if (!retryable || attempt === 2) break;
     }
   }
@@ -119,11 +140,14 @@ export async function generateMask(
 ): Promise<{ bytes: ArrayBuffer; contentType: string; attempts: number }> {
   const model = TASK_MODEL.isolate;
   // Cost-efficient path: text-prompted SAM on Modal (per-second GPU,
-  // scale-to-zero) when configured; otherwise Meta Model API.
-  const useModal = !!opts.modal?.apiUrl;
-  const activeModel = useModal ? 'modal/sam-3.1' : model;
-  const provider = useModal ? 'modal' : 'meta-model-api';
+  // scale-to-zero) when configured; otherwise Meta Model API. A failed
+  // Modal retires for the op and the retry rides Meta.
+  const modalUrl = opts.modal?.apiUrl;
+  let modalDead = false;
   for (let attempt = 1; attempt <= 2; attempt++) {
+    const useModal = !!modalUrl && !modalDead;
+    const activeModel = useModal ? 'modal/sam-3.1' : model;
+    const provider = useModal ? 'modal' : 'meta-model-api';
     const start = Date.now();
     try {
       const out: ImageOut = useModal
@@ -143,6 +167,7 @@ export async function generateMask(
       const ms = Date.now() - start;
       if (out.bytes.byteLength === 0 || !out.contentType.startsWith('image/')) {
         await logAttempt(db, { ...opts, task: 'isolate' }, activeModel, 'segment', attempt, out.inputTokens, out.outputTokens, false, 'invalid shape', ms, provider);
+        if (useModal) modalDead = true;
         if (attempt === 2) break;
         continue;
       }
@@ -151,6 +176,10 @@ export async function generateMask(
     } catch (e) {
       const retryable = e instanceof AiError && e.retryable;
       await logAttempt(db, { ...opts, task: 'isolate' }, activeModel, 'segment', attempt, 0, 0, false, e instanceof Error ? e.message : 'failed', Date.now() - start, provider);
+      if (useModal) {
+        modalDead = true;
+        continue;
+      }
       if (!retryable || attempt === 2) break;
     }
   }

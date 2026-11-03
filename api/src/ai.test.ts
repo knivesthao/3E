@@ -503,6 +503,52 @@ describe('AI endpoints', () => {
     expect(db.usage.filter((u) => u.task === 'meanings' && u.ok === 1)).toHaveLength(1);
   });
 
+  it('meanings falls back to Meta when Baseten 402s', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const seen: string[] = [];
+    globalThis.fetch = (async (url: unknown, init?: { body?: unknown }) => {
+      const u = String(url);
+      seen.push(u);
+      if (u.includes('baseten.example')) return new Response('pay up', { status: 402 });
+      const body = JSON.parse((init?.body ?? '{}') as string) as { messages?: { content?: string }[] };
+      const payload = modelReply(body.messages?.[0]?.content ?? '');
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: typeof payload === 'string' ? payload : JSON.stringify(payload) } }],
+          usage: { prompt_tokens: 10, completion_tokens: 20 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }) as typeof fetch;
+    const env = { ...ENV(db), BASETEN_API_URL: 'https://baseten.example/v1', BASETEN_API_KEY: 'bk' };
+    const res = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['zebra'], level: 'A1' }, cookie), env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ meanings: [{ word: 'zebra', meaning: 'simple zebra' }] });
+    // One failed Baseten attempt, then the same op completes on Meta.
+    expect(seen).toHaveLength(2);
+    expect(seen[0]).toBe('https://baseten.example/v1');
+    expect(seen[1]).not.toContain('baseten.example');
+    expect(db.usage.filter((u) => u.task === 'meanings').map((u) => [u.provider, u.ok])).toEqual([
+      ['baseten', 0],
+      ['meta-model-api', 1],
+    ]);
+  });
+
+  it('meanings still fails when Meta falls over after Baseten', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    globalThis.fetch = (async (url: unknown) => {
+      if (String(url).includes('baseten.example')) return new Response('pay up', { status: 402 });
+      return new Response('down', { status: 500 });
+    }) as typeof fetch;
+    const env = { ...ENV(db), BASETEN_API_URL: 'https://baseten.example/v1', BASETEN_API_KEY: 'bk' };
+    const res = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['zebra'], level: 'A1' }, cookie), env);
+    expect(res.status).toBe(502);
+  });
+
   it('meanings defaults to Baseten when configured and no provider flag is sent', async () => {
     const db = makeDb();
     const cookie = await signIn(db);

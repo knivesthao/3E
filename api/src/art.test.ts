@@ -288,6 +288,38 @@ describe('Scene art endpoints', () => {
     expect(seg?.provider).toBe('meta-model-api');
   });
 
+  it('falls back to Meta art when Modal fails', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const env = ENV(db, { modal: true });
+    const uid = await userIdOf(cookie, env);
+    const pid = seedBook(db, uid);
+    const seen: string[] = [];
+    globalThis.fetch = (async (url: unknown, init?: { body?: unknown }) => {
+      const u = String(url);
+      seen.push(u);
+      if (u.includes('example.modal.run')) return new Response('down', { status: 502 });
+      const body = JSON.parse((init?.body ?? '{}') as string) as unknown;
+      const payload = artReply(body);
+      if (payload instanceof Response) return payload;
+      return new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const res = await app.request('/api/ai/art', json('POST', { projectId: pid, sceneNumber: 1 }, cookie), env);
+    expect(res.status).toBe(200);
+
+    const art = db.usage.filter((u) => u.task === 'art');
+    expect(art.map((u) => [u.provider, u.ok])).toEqual([
+      ['modal', 0],
+      ['meta-model-api', 1],
+    ]);
+    // The op retried on Meta instead of repeating the failed Modal call.
+    expect(seen.filter((u) => u.includes('example.modal.run'))).toHaveLength(1);
+  });
+
   it('draws the page cast: known names expand to looks, unknown names pass through', async () => {
     const db = makeDb();
     const cookie = await signIn(db);
