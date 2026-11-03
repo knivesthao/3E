@@ -6,7 +6,7 @@ import { basetenConfig } from './config';
 import type { BasetenConfig } from './config';
 import { FAILED, INVALID, finishJob, modelKey, overLimit, readJson } from './http';
 import { generate, parseJson } from './client';
-import { buddyPrompt, checkPrompt, checkPromptZh, draftPrompt, draftPromptZh, ideaPrompt, meaningsPrompt, meaningsPromptZh, quizPrompt, sceneActionText, simplifyPrompt } from './prompts';
+import { buddyPrompt, castNames, checkPrompt, checkPromptZh, draftPrompt, draftPromptZh, ideaPrompt, meaningsPrompt, meaningsPromptZh, quizPrompt, sceneActionText, simplifyPrompt } from './prompts';
 import { easierLevels } from '../levels';
 import { art } from './art';
 import { checkHsk, easierHsk, isHskLevel } from '../hsk';
@@ -23,25 +23,6 @@ export const ai = new Hono<{ Bindings: Bindings; Variables: Variables }>({ stric
 
 // Scene art (4a): POST /api/ai/art + GET /api/ai/art/:key, same session gate.
 ai.route('/art', art);
-
-function castNames(castJson: string): string[] {
-  try {
-    const v = JSON.parse(castJson) as unknown;
-    if (!isRecord(v)) return [];
-    const out: string[] = [];
-    for (const kind of ['characters', 'places']) {
-      const list = v[kind];
-      if (Array.isArray(list)) {
-        for (const e of list) {
-          if (isRecord(e) && typeof e.name === 'string') out.push(e.name);
-        }
-      }
-    }
-    return out;
-  } catch {
-    return [];
-  }
-}
 
 const isLevel = (v: unknown): v is Level =>
   v === 'A1' || v === 'A2' || v === 'B1' || v === 'B2' || v === 'C1' || v === 'C2';

@@ -189,6 +189,59 @@ Text:
 ${text}`;
 }
 
+// Publishing pipeline: keyword extraction + single-word definitions. The
+// level styles match the dictionary seeder (qa/seed-definitions.mjs), which
+// stays the bulk path; these prompts are the per-book trickle.
+export const LEVEL_STYLE: Record<string, string> = {
+  A1: 'a 6-year-old beginner. Use ONLY very easy everyday words in short sentences',
+  A2: 'a 7-year-old elementary learner. Use only easy everyday words',
+  B1: 'an intermediate young learner. Keep it clear and simple',
+  B2: 'an upper-intermediate young learner. Keep it clear, one short sentence',
+  C1: 'a proficient adult learner. One precise sentence, formal words allowed',
+  C2: 'a mastery-level adult learner. One precise sentence, rare words allowed',
+};
+
+export function keywordPrompt(level: string, scenesText: string): string {
+  return `List the important content words (nouns, verbs, adjectives) an English learner must know to read this ${level} story. Skip names, exclamations, and baby-talk sounds.
+
+Story:
+${scenesText}
+
+Reply with JSON only: {"words":["<lowercase word>", ...]} — at most 40, no duplicates, no definitions.`;
+}
+
+export function definePrompt(word: string, level: string): string {
+  const style = LEVEL_STYLE[level] ?? LEVEL_STYLE.B1;
+  return `Define this English word for ${style}.
+
+Word: ${word}
+
+Reply with JSON only: {"meaning":"<one short definition>"}.`;
+}
+
+// Cast names (characters + places) so the level gate never flags them as
+// hard words. Single copy: routes.ts and the publish pipeline share it.
+export function castNames(castJson: string): string[] {
+  try {
+    const v = JSON.parse(castJson) as unknown;
+    if (typeof v !== 'object' || v === null || Array.isArray(v)) return [];
+    const out: string[] = [];
+    for (const kind of ['characters', 'places']) {
+      const list = (v as Record<string, unknown>)[kind];
+      if (Array.isArray(list)) {
+        for (const e of list) {
+          if (typeof e === 'object' && e !== null && typeof (e as Record<string, unknown>).name === 'string') {
+            out.push(((e as Record<string, unknown>).name as string));
+          }
+        }
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 // Shared scene→prose join (finish QA text and art Action line). One copy.
 export function sceneActionText(
   narration: string,

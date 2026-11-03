@@ -14,6 +14,8 @@ function makeDb() {
   const books = new Map<string, Record<string, unknown>>();
   const usage: Record<string, unknown>[] = [];
   const jobs = new Map<string, Record<string, unknown>>();
+  const defs = new Map<string, Record<string, unknown>>();
+  const wordRows: Record<string, unknown>[] = [];
 
   const db = {
     usage,
@@ -21,6 +23,8 @@ function makeDb() {
     books,
     projects,
     scenes,
+    defs,
+    wordRows,
     seedProject(row: Record<string, unknown>) {
       projects.set(row.id as string, row);
     },
@@ -80,6 +84,15 @@ function makeDb() {
               if (q.startsWith('SELECT scene_number, image_key, mask_key FROM panels WHERE project_id')) {
                 return { results: panels.filter((x) => x.project_id === params[0]) };
               }
+              if (q.startsWith('SELECT word FROM definitions WHERE level = ? AND word IN')) {
+                const [level, ...words] = params as string[];
+                const set = new Set(words);
+                return {
+                  results: [...defs.values()]
+                    .filter((d) => d.level === level && set.has(d.word as string))
+                    .map((d) => ({ word: d.word })),
+                };
+              }
               return { results: [] };
             },
             run: async () => {
@@ -99,6 +112,10 @@ function makeDb() {
                 const [project_id, user_id, op_id, attempt, task, provider, model, kind, input_tokens, output_tokens, cost_usd, ms, ok, error, created_at] =
                   params as unknown[];
                 usage.push({ project_id, user_id, op_id, attempt, task, provider, model, kind, input_tokens, output_tokens, cost_usd, ms, ok, error, created_at });
+              } else if (q.startsWith('INSERT OR IGNORE INTO definitions')) {
+                const [word, level, lang, gloss, source, verified, created_at] = params as unknown[];
+                const k = `${word}|${level}|${lang}`;
+                if (!defs.has(k)) defs.set(k, { word, level, lang, gloss, source, verified, created_at });
               } else if (q.startsWith('INSERT INTO jobs')) {
                 const [id, user_id, project_id, payload, created_at, updated_at] = params as string[];
                 jobs.set(id, { id, user_id, project_id, kind: 'package', payload, status: 'running', created_at, updated_at });
@@ -130,7 +147,9 @@ type Db = ReturnType<typeof makeDb>;
 // Library-store stub (3e-books): owns ONLY the books table, sharing the
 // same in-memory map so assertions can verify publish landed in the
 // library and NOT in the app DB (whose stub answers null for books).
-function makeLibraryDb(books: Map<string, Record<string, unknown>>) {
+function makeLibraryDb(db: { books: Map<string, Record<string, unknown>>; wordRows: Record<string, unknown>[] }) {
+  const books = db.books;
+  const wordRows = db.wordRows;
   return {
     prepare(sql: string) {
       const q = sql.replace(/\s+/g, ' ').trim();
@@ -176,6 +195,13 @@ function makeLibraryDb(books: Map<string, Record<string, unknown>>) {
                 const [title, description, level, reading_level, tags_json, cover_url, manifest_json, updated_at, id] = params as unknown[];
                 const row = books.get(id as string);
                 if (row) Object.assign(row, { title, description, level, reading_level, tags_json, cover_url, manifest_json, updated_at });
+              } else if (q.startsWith('DELETE FROM book_words WHERE book_id = ? AND scene_number = ?')) {
+                for (let i = wordRows.length - 1; i >= 0; i--) {
+                  if (wordRows[i].book_id === params[0] && wordRows[i].scene_number === params[1]) wordRows.splice(i, 1);
+                }
+              } else if (q.startsWith('INSERT INTO book_words')) {
+                const [id, book_id, scene_number, word, level, defined, updated_at] = params as unknown[];
+                wordRows.push({ id, book_id, scene_number, word, level, defined, updated_at });
               }
               return { success: true };
             },
@@ -188,7 +214,7 @@ function makeLibraryDb(books: Map<string, Record<string, unknown>>) {
 
 const ENV = (db: Db, withKey = true, r2?: { art?: TestBucket; library?: TestBucket }) => ({
   DB: db as unknown as D1Database,
-  LIBRARY_DB: makeLibraryDb((db as unknown as { books: Map<string, Record<string, unknown>> }).books) as unknown as D1Database,
+  LIBRARY_DB: makeLibraryDb(db as unknown as { books: Map<string, Record<string, unknown>>; wordRows: Record<string, unknown>[] }) as unknown as D1Database,
   DEV_LINKS: 'true',
   ...(withKey ? { MODEL_API_KEY: 'test-key' } : {}),
   ...(r2?.art ? { ART: r2.art as unknown as R2Bucket } : {}),
@@ -223,6 +249,28 @@ function stubSafety(verdict: string) {
     )) as typeof fetch;
 }
 
+// Word pipeline: safety passes, every scene yields the same three words,
+// every define returns one gloss. The book therefore maps 6 scenes x 3
+// words and backfills all three glosses exactly once.
+function stubWordPipeline() {
+  globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+    const body = JSON.parse((init?.body ?? '{}') as string) as { messages?: { content: string }[] };
+    const content = body.messages?.[0]?.content ?? '';
+    let reply: string;
+    if (content.includes('Answer with exactly one word')) reply = 'safe';
+    else if (content.includes('List the important content words')) reply = JSON.stringify({ words: ['dog', 'cat', 'zebra'] });
+    else if (content.includes('Define this English word')) reply = JSON.stringify({ meaning: 'a test animal' });
+    else reply = 'safe';
+    return new Response(
+      JSON.stringify({
+        choices: [{ message: { content: reply } }],
+        usage: { prompt_tokens: 10, completion_tokens: 5 },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  }) as typeof fetch;
+}
+
 async function userIdOf(cookie: string, env: Env): Promise<string> {
   const me = (await (
     await app.request('/api/auth/me', { headers: { cookie } }, env)
@@ -240,16 +288,17 @@ function seedBook(db: Db, creatorId: string, level = 'A1') {
     level,
     purpose: 'learning',
     status: 'draft',
-    cast_json: '{"characters":[],"places":[]}',
+    cast_json: '{"characters":[{"name":"Noy"}],"places":[]}',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   });
-  db.seedScene(pid, 1, { narration: 'Noy walks to the rice field.', bubbles: [{ speaker: 'Noy', text: "Let's go!" }] });
-  db.seedScene(pid, 2, { narration: 'A red bird sings.', bubbles: [] });
-  db.seedScene(pid, 3, { narration: 'The sun is hot.', bubbles: [] });
-  db.seedScene(pid, 4, { narration: 'Noy drinks cold tea.', bubbles: [] });
-  db.seedScene(pid, 5, { narration: 'A white dog runs by.', bubbles: [] });
-  db.seedScene(pid, 6, { narration: 'Noy waves and goes home.', bubbles: [] });
+  // All words are A1-clean (Noy rides the cast exemption, like /finish drafts).
+  db.seedScene(pid, 1, { narration: 'Noy sees a red dog.', bubbles: [{ speaker: 'Noy', text: 'Run!' }] });
+  db.seedScene(pid, 2, { narration: 'A white cat drinks cold water.', bubbles: [] });
+  db.seedScene(pid, 3, { narration: 'The sun is hot and big.', bubbles: [] });
+  db.seedScene(pid, 4, { narration: 'A girl eats red food.', bubbles: [] });
+  db.seedScene(pid, 5, { narration: 'A boy is happy in school.', bubbles: [] });
+  db.seedScene(pid, 6, { narration: 'A dog and a cat go home.', bubbles: [] });
   return pid;
 }
 
@@ -409,6 +458,59 @@ describe('Publish endpoint', () => {
       books: { tags: string[] }[];
     };
     expect(kept.books[0].tags).toEqual(['verbs', 'adjectives']);
+  });
+
+  it('blocks self-written pages above the book level', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const env = ENV(db);
+    const uid = await userIdOf(cookie, env);
+    const pid = seedBook(db, uid);
+    for (const [, row] of [...db.scenes.entries()]) {
+      if ((row as { scene_number: number }).scene_number === 3) {
+        row.data_json = JSON.stringify({ narration: 'Photosynthesis baffles xenobiologists.', bubbles: [] });
+      }
+    }
+    stubSafety('safe');
+
+    const res = await app.request(`/api/projects/${pid}/publish`, json('POST', {}, cookie), env);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string; pages: { scene_number: number; unknown: string[] }[] };
+    expect(body.error).toBe('level too high');
+    expect(body.pages).toHaveLength(1);
+    expect(body.pages[0].scene_number).toBe(3);
+    expect(body.pages[0].unknown).toContain('photosynthesis');
+    expect(db.books.size).toBe(0);
+
+    const words = (await (
+      await app.request(`/api/projects/${pid}/words`, { headers: { cookie } }, env)
+    ).json()) as { flags: { scene_number: number }[]; unknown: { word: string; defined: boolean }[] };
+    expect(words.flags.map((f) => f.scene_number)).toEqual([3]);
+    expect(words.unknown.find((u) => u.word === 'photosynthesis')).toMatchObject({ defined: false });
+  });
+
+  it('syncs scene words and backfills missing glosses on publish', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const env = ENV(db);
+    const uid = await userIdOf(cookie, env);
+    const pid = seedBook(db, uid);
+    stubWordPipeline();
+
+    const res = await app.request(`/api/projects/${pid}/publish`, json('POST', {}, cookie), env);
+    expect(res.status).toBe(200);
+    const bookId = ((await res.json()) as { book: { id: string } }).book.id;
+
+    expect(db.wordRows).toHaveLength(18);
+    expect(new Set(db.wordRows.map((r) => r.word as string))).toEqual(new Set(['dog', 'cat', 'zebra']));
+    expect(db.wordRows.every((r) => r.book_id === bookId && r.defined === 1)).toBe(true);
+    expect(db.defs.size).toBe(3);
+    expect(db.defs.get('dog|A1|en')).toMatchObject({ gloss: 'a test animal', verified: 0 });
+
+    const words = (await (
+      await app.request(`/api/projects/${pid}/words`, { headers: { cookie } }, env)
+    ).json()) as { flags: unknown[]; unknown: { word: string; defined: boolean }[] };
+    expect(words.flags).toEqual([]);
   });
 
   it('unsafe content blocks publish with 422 and no book', async () => {

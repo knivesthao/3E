@@ -14,7 +14,7 @@ import {
 import type { AdminSpecs, AdminStats, BookCosts, ExamItemStat, MyActivity, Project, SeedJob } from '../lib/api';
 import { Alert, Badge, Button, Field, Page, inputClass } from '../components/ui';
 import { DetailsDeck } from './Details';
-import { DesignSection, FactorySection } from './Design';
+import { DesignSection, FactorySection, PipelineSection } from './Design';
 
 type Tab = 'costs' | 'specs' | 'content' | 'exam' | 'guardian' | 'details' | 'design' | 'jobs';
 
@@ -338,6 +338,7 @@ export default function Admin() {
       ) : tab === 'design' ? (
         <>
           <DesignSection />
+          <PipelineSection />
           <FactorySection />
         </>
       ) : (

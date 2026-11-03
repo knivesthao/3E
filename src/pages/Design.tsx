@@ -232,3 +232,38 @@ export function FactorySection() {
     </div>
   );
 }
+
+export function PipelineSection() {
+  return (
+    <div className="mt-6">
+      <DiagramShell
+        title="Publishing pipeline: from draft to library"
+        viewBox="0 0 960 810"
+        ariaLabel="Publishing pipeline diagram: draft, AI finish, gates, safety, and publish flow top to bottom; publish branches into keyword extraction, dictionary mapping, and backfill; the library serves readers."
+        caption="Solid lines are the publish path. Word sync runs inside publish but only re-reads scenes edited since the last publish; flagged pages return to the author instead of shipping."
+      >
+        <Box x={20} y={30} w={240} h={100} title="Draft" lines={['Studio or self-written', 'level + cast picked', '6+ scenes']} />
+        <Box x={20} y={160} w={240} h={100} title="AI finish" lines={['Baseten text draft', 'gate per batch', 'retry ≤4']} />
+        <Box x={20} y={290} w={240} h={100} title="Gates" lines={['complete 1..N', 'level per scene', '400 + page flags']} />
+        <Box x={20} y={420} w={240} h={100} title="Safety" lines={['Baseten screen', 'unsafe → 422', 'runs pre-spend']} />
+        <Box x={20} y={550} w={240} h={100} title="Publish" lines={['manifest + tags', 'book row in library', 'art copy']} />
+        <Box x={20} y={680} w={240} h={100} title="Library" lines={['shared 3e-books', 'R2 art, edge-cached', 'no partials']} />
+
+        <Box x={300} y={550} w={180} h={100} title="Keywords" lines={['AI reads CHANGED scenes', '≤40 words each', '1 call / scene']} />
+        <Box x={500} y={550} w={180} h={100} title="Map" lines={['DB-first lookup', 'defined vs missing', '$0']} />
+        <Box x={700} y={550} w={240} h={100} title="Backfill + book_words" lines={['≤50 glosses / publish', 'INSERT OR IGNORE', 'scene→word rows']} />
+        <Box x={300} y={680} w={240} h={100} title="Readers" lines={['leveled books', 'flashcards + exams', 'listen on-device']} />
+
+        <Arrow x1={140} y1={130} x2={140} y2={160} />
+        <Arrow x1={140} y1={260} x2={140} y2={290} />
+        <Arrow x1={140} y1={390} x2={140} y2={420} />
+        <Arrow x1={140} y1={520} x2={140} y2={550} />
+        <Arrow x1={140} y1={650} x2={140} y2={680} />
+        <Arrow x1={260} y1={600} x2={300} y2={600} label="changed scenes" />
+        <Arrow x1={480} y1={600} x2={500} y2={600} />
+        <Arrow x1={680} y1={600} x2={700} y2={600} />
+        <Arrow x1={260} y1={730} x2={300} y2={730} label="reads" />
+      </DiagramShell>
+    </div>
+  );
+}

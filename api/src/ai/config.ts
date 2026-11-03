@@ -30,7 +30,7 @@ export const GLIMMER_MODEL = 'meta-models/Muse-Glimmer-30B';
 
 // Text tasks served by Glimmer when Baseten is configured (PLAN
 // §Self-hosting). Art/segment stay on the Meta Model API.
-export const BASETEN_TASKS: AiTask[] = ['draft', 'check', 'idea', 'meanings', 'simplify', 'safety'];
+export const BASETEN_TASKS: AiTask[] = ['draft', 'check', 'idea', 'meanings', 'simplify', 'safety', 'keywords', 'define'];
 
 export interface BasetenConfig {
   apiUrl: string;
@@ -70,7 +70,7 @@ export function modalConfig(env: {
   };
 }
 
-export type AiTask = 'draft' | 'check' | 'idea' | 'meanings' | 'simplify' | 'safety' | 'art' | 'isolate' | 'portrait' | 'quiz' | 'buddy';
+export type AiTask = 'draft' | 'check' | 'idea' | 'meanings' | 'simplify' | 'safety' | 'art' | 'isolate' | 'portrait' | 'quiz' | 'buddy' | 'keywords' | 'define';
 
 export const TASK_MODEL: Record<AiTask, string> = {
   draft: TEXT_MODEL,
@@ -84,6 +84,8 @@ export const TASK_MODEL: Record<AiTask, string> = {
   portrait: IMAGE_MODEL,
   quiz: TEXT_MODEL,
   buddy: TEXT_MODEL,
+  keywords: TEXT_MODEL,
+  define: TEXT_MODEL,
 };
 
 // Per-user daily cap across AI endpoints (Step 3 + secure-coding rules).

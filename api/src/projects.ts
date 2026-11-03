@@ -10,6 +10,7 @@ import {
 } from './validate';
 import { isFocusTag } from './levels';
 import type { FocusTag } from './levels';
+import { flagHardPages, lookupDefined, syncBookWords } from './ai/words';
 import { generate } from './ai/client';
 import { collectPublishKeys, copyArtToLibrary } from './ai/art';
 import { bustShareCache } from './cache';
@@ -137,6 +138,38 @@ projects.get('/:id', async (c) => {
   return c.json({ project, scenes: results });
 });
 
+// Owner word report (publishing pipeline visibility): per-scene hard pages
+// plus which of their unknown words already have dictionary definitions.
+// Deterministic and AI-free — the same gate publish enforces.
+projects.get('/:id/words', async (c) => {
+  const project = await ownProject(c.env.DB, c.req.param('id'), c.get('userId'));
+  if (!project) return c.json(NOT_FOUND, 404);
+  const { results: sceneRows } = await c.env.DB.prepare(
+    'SELECT * FROM scenes WHERE project_id = ? ORDER BY scene_number ASC',
+  )
+    .bind(project.id)
+    .all<SceneRow>();
+  const scenes: { scene_number: number; narration: string; bubbles: { speaker: string; text: string }[] }[] = [];
+  for (const s of sceneRows) {
+    let data: unknown;
+    try {
+      data = JSON.parse(s.data_json) as unknown;
+    } catch {
+      return c.json(INVALID, 400);
+    }
+    const parsed = validateSceneData(data);
+    if (!parsed.ok) return c.json(INVALID, 400);
+    scenes.push({ scene_number: s.scene_number, narration: parsed.value.narration, bubbles: parsed.value.bubbles });
+  }
+  const flags = flagHardPages(scenes, project.level, project.cast_json);
+  const unknown = [...new Set(flags.flatMap((f) => f.unknown))];
+  const defined = await lookupDefined(c.env.DB, unknown, project.level);
+  return c.json({
+    flags,
+    unknown: unknown.map((w) => ({ word: w, defined: defined.has(w) })),
+  });
+});
+
 // Reader (Step 4d): owner-only fetch of the published book + manifest v2
 // for one project. 404 until the draft has been published once.
 projects.get('/:id/book', async (c) => {
@@ -228,7 +261,7 @@ projects.post('/:id/publish', async (c) => {
     .bind(project.id)
     .all<SceneRow>();
   if (sceneRows.length === 0) return c.json(INVALID, 400);
-  const scenes: { scene_number: number; narration: string; bubbles: { speaker: string; text: string }[]; characters: string[] }[] = [];
+  const scenes: { scene_number: number; narration: string; bubbles: { speaker: string; text: string }[]; characters: string[]; updated_at: string }[] = [];
   for (const s of sceneRows) {
     let data: unknown;
     try {
@@ -238,7 +271,7 @@ projects.post('/:id/publish', async (c) => {
     }
     const parsed = validateSceneData(data);
     if (!parsed.ok) return c.json(INVALID, 400);
-    scenes.push({ scene_number: s.scene_number, narration: parsed.value.narration, bubbles: parsed.value.bubbles, characters: parsed.value.characters });
+    scenes.push({ scene_number: s.scene_number, narration: parsed.value.narration, bubbles: parsed.value.bubbles, characters: parsed.value.characters, updated_at: s.updated_at });
   }
   // No partial books: the draft must cover scenes 1..target contiguously,
   // where the target mirrors the /finish minimum (6) or the highest drafted
@@ -248,6 +281,11 @@ projects.post('/:id/publish', async (c) => {
   const missingScenes: number[] = [];
   for (let n = 1; n <= sceneTarget; n++) if (!haveScenes.has(n)) missingScenes.push(n);
   if (missingScenes.length > 0) return c.json({ error: 'incomplete draft', missing: missingScenes }, 400);
+  // Self-written scenes bypass /finish, so publish runs the deterministic
+  // level gate itself — before any AI spend. Pages above the book's level
+  // block the publish with their offending words (the flags ARE the report).
+  const hardPages = flagHardPages(scenes, project.level, project.cast_json);
+  if (hardPages.length > 0) return c.json({ error: 'level too high', pages: hardPages }, 400);
 
   const jobId = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -363,6 +401,28 @@ projects.post('/:id/publish', async (c) => {
       c.env.LIBRARY_ART,
       collectPublishKeys(panelRows, project.cast_json),
     );
+    // Word map (auxiliary — never blocks the publish): only scenes edited
+    // since the last publish are re-read by AI; missing glosses backfill
+    // into the dictionary under the same cap as every other AI call.
+    try {
+      await syncBookWords(
+        library,
+        db,
+        {
+          apiKey,
+          userId,
+          projectId: project.id,
+          opId: crypto.randomUUID(),
+          apiUrl: c.env.AI_API_URL,
+          baseten: basetenConfig(c.env),
+        },
+        { id: bookId, level: project.level, castJson: project.cast_json },
+        scenes,
+        existing ? existing.published_at : null,
+      );
+    } catch {
+      // Next publish re-syncs; the book itself is already stored.
+    }
     await db
       .prepare("UPDATE projects SET status = 'published', updated_at = ? WHERE id = ?")
       .bind(stamp, project.id)
