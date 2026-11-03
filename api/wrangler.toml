@@ -36,32 +36,9 @@ migrations_dir = "migrations-library"
 # pre-prod checklist.
 DEV_LINKS = "true"
 
-# Production: dev magic links die here even if forgotten elsewhere.
-# Secrets (MODEL_API_KEY, RESEND_API_KEY, EMAIL_FROM, Baseten/Modal keys) are
-# NEVER in this file — set with `wrangler secret put <NAME> --env production`.
-# Bindings must be repeated here: top-level bindings are NOT inherited by
-# environments, so without these the --env production CI steps find no DB.
-# Same shared IDs as development (user decision Nov 2026): one live dataset.
-[[env.production.d1_databases]]
-binding = "DB"
-database_name = "3e-db"
-database_id = "848c861b-e7a4-4fa8-a6ad-a09fab9c343f"
-migrations_dir = "migrations"
-
-[[env.production.d1_databases]]
-binding = "LIBRARY_DB"
-database_name = "3e-books"
-database_id = "c6a76db2-b682-44c5-92e9-9903c20f9f73"
-migrations_dir = "migrations-library"
-
-[[env.production.r2_buckets]]
-binding = "ART"
-bucket_name = "3e-art"
-
-[[env.production.r2_buckets]]
-binding = "LIBRARY_ART"
-bucket_name = "3e-library"
-
+# Production: intentionally unconfigured until funding. No prod worker,
+# no prod bindings, no prod deploys — the demo lives on the dev worker.
+# Secrets are NEVER in this file.
 [env.production.vars]
 DEV_LINKS = "false"
 
