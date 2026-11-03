@@ -307,7 +307,7 @@ const TAB_LABEL: Record<Tab, string> = {
   content: 'Content',
   exam: 'Exam items',
   guardian: 'Guardian',
-  details: 'Details',
+  details: 'Pitch',
   design: 'Design',
   jobs: 'Seed jobs',
 };

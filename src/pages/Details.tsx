@@ -112,6 +112,25 @@ const SLIDES: Slide[] = [
     ],
     foot: 'Try it: open the Library, read a book, take the practice exam.',
   },
+  {
+    kicker: 'Slide 10 · Traction — built on free credits',
+    title: 'Books for cents, not dollars',
+    points: [
+      'A finished 6-scene book — drafted, level-gated, illustrated, published — costs about $0.17 in AI.',
+      'A 10,800-word dictionary across levels A1–C2 backs every tap-to-define in the Reader.',
+      'The launch library is publishing itself right now through the automated pipeline — watch each book land in the Costs tab.',
+    ],
+  },
+  {
+    kicker: 'Slide 11 · Ready for funding',
+    title: 'Raising to launch',
+    points: [
+      'Flashcards and books are live in the app today — this is a product, not a prototype.',
+      'Next step: public launch with the full 30-book library; the Mandarin track is already in the pipeline.',
+      'Then scale what works: more levels, more languages, classrooms — the pipeline makes books for cents.',
+    ],
+    foot: 'Talk to us after the demo.',
+  },
 ];
 
 export function DetailsDeck() {
