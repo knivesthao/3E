@@ -151,11 +151,11 @@ const SLIDES: Slide[] = [
   },
   {
     kicker: 'Slide 14 · Ready for funding',
-    title: 'Raising to launch',
+    title: 'A prototype ready to pilot',
     points: [
-      'Flashcards and books are live in the app today — this is a product, not a prototype.',
-      'Next step: public launch with the full 30-book library; the Mandarin track is already in the pipeline.',
-      'Then scale what works: more levels, more languages, classrooms — the pipeline makes books for cents.',
+      'Working product, ready for launch: a growing library of leveled books, 10 flashcard decks from phonics to C2 words, and 10,800+ definitions matched to level.',
+      'Next step: pilot classes with English learners here in Laos, together with a local company running distribution and marketing.',
+      'We are raising to launch the pilot and fill the 30-book library — come read with us.',
     ],
     foot: 'Talk to us after the demo.',
   },
