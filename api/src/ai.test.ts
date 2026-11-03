@@ -452,6 +452,56 @@ describe('AI endpoints', () => {
     expect(db.usage.filter((u) => u.task === 'meanings' && u.ok === 1)).toHaveLength(1);
   });
 
+  it("meanings honors provider:meta, routing around a configured Baseten", async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const seen: string[] = [];
+    globalThis.fetch = (async (url: unknown, init?: { body?: unknown }) => {
+      seen.push(String(url));
+      const body = JSON.parse((init?.body ?? '{}') as string) as { messages?: { content?: string }[] };
+      const prompt = body.messages?.[0]?.content ?? '';
+      const words = [...prompt.matchAll(/(?:^| )(\d+)\. (.+)$/gm)].map((m) => m[2]);
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ meanings: words.map((w) => ({ word: w, meaning: `meta ${w}` })) }) } }],
+          usage: { prompt_tokens: 10, completion_tokens: 20 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }) as typeof fetch;
+    const env = { ...ENV(db), BASETEN_API_URL: 'https://baseten.example/v1', BASETEN_API_KEY: 'bk' };
+    const res = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['zebra'], level: 'A1', provider: 'meta' }, cookie), env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ meanings: [{ word: 'zebra', meaning: 'meta zebra' }] });
+    // The call rode the Meta route, never the configured Baseten deployment.
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).not.toContain('baseten.example');
+    expect(db.usage.filter((u) => u.task === 'meanings').map((u) => u.provider)).toEqual(['meta-model-api']);
+  });
+
+  it('meanings defaults to Baseten when configured and no provider flag is sent', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const seen: string[] = [];
+    globalThis.fetch = (async (url: unknown) => {
+      seen.push(String(url));
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ meanings: [{ word: 'zebra', meaning: 'simple zebra' }] }) } }],
+          usage: { prompt_tokens: 10, completion_tokens: 20 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }) as typeof fetch;
+    const env = { ...ENV(db), BASETEN_API_URL: 'https://baseten.example/v1', BASETEN_API_KEY: 'bk' };
+    const res = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['zebra'], level: 'A1' }, cookie), env);
+    expect(res.status).toBe(200);
+    expect(seen).toEqual(['https://baseten.example/v1']);
+    expect(db.usage.filter((u) => u.task === 'meanings').map((u) => u.provider)).toEqual(['baseten']);
+  });
+
   it('meanings serves Mandarin glosses from the zh dictionary with no model call', async () => {
     const db = makeDb();
     db.seedDefinitions([

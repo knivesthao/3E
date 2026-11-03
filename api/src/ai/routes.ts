@@ -105,6 +105,10 @@ ai.post('/meanings', async (c) => {
     if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
     const wordsList = missing.map((w, i) => `${i + 1}. ${w}`).join('\n');
     try {
+      // Explicit per-request provider escape hatch: provider:'meta' routes
+      // around a down Baseten (no silent fallback — the caller opts into
+      // Meta spend). Used by the dictionary top-up when Baseten 402s.
+      const forceMeta = body.provider === 'meta';
       const { text } = await generate(c.env.DB, {
         apiKey,
         userId: c.get('userId'),
@@ -114,7 +118,7 @@ ai.post('/meanings', async (c) => {
         prompt: zh ? meaningsPromptZh(level as HskLevel, wordsList) : meaningsPrompt(level as Level, wordsList),
         json: true,
         apiUrl: c.env.AI_API_URL,
-        baseten: basetenConfig(c.env),
+        baseten: forceMeta ? null : basetenConfig(c.env),
         validate: (t) => {
           const v = parseJson(t, isRecord);
           if (!v || !Array.isArray(v.meanings) || v.meanings.length !== missing.length) return false;
