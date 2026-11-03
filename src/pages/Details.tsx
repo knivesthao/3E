@@ -102,16 +102,25 @@ const SLIDES: Slide[] = [
   },
   {
     kicker: 'Slide 9 · How 3E answers it',
-    title: 'Leveled comics, made for pennies',
+    title: 'A full learning path, not just stories',
     points: [
       'Every book is written to a CEFR level (A1–B2), enforced by level word lists and a 90% gate — not vibes.',
-      'AI draws flat-style panels plus reusable characters and places, so one cast stars across many books.',
-      'The Reader coaches out loud: read-aloud scoring and listen mode, all processed on-device — free and private.',
-      'A practice exam in the Library tab tracks real A1-level progress, with guidance instead of a certificate.',
+      'Start where you are: the alphabet and phonics, then vocabulary flashcards, then real books — every step at your CEFR level (A1–B2).',
+      'Practice exams in the Cambridge Movers format prepare learners for real certification, with guidance instead of a certificate.',
+      'Every book matches your level, and the app learns from how you read — building a personal plan around the words you need, from nouns to verbs.',
+      'Progress feels like fun, not homework: each webcomic you finish measurably lifts your English.',
     ],
   },
   {
-    kicker: 'Slide 10 · The real-world path',
+    kicker: 'Slide 10 · The demo',
+    title: 'Enough talking — watch it work',
+    points: [
+      'A learner opens a book at their level, taps a word they don’t know, and hears Pip read the page aloud.',
+      'Then a Movers-style quiz checks the story actually landed — the loop from reading to proof in one minute.',
+    ],
+  },
+  {
+    kicker: 'Slide 11 · The real-world path',
     title: 'Built to survive contact with reality',
     points: [
       'Cost-efficient by design: cheap text models for writing, metered image calls for art, idle GPUs parked — every call logged in the Admin panel.',
@@ -121,7 +130,7 @@ const SLIDES: Slide[] = [
     ],
   },
   {
-    kicker: 'Slide 11 · The impact case',
+    kicker: 'Slide 12 · The impact case',
     title: 'What changes if this works',
     points: [
       'Every learner gets stories matched to their reading level, in a language path they can follow.',
@@ -132,7 +141,7 @@ const SLIDES: Slide[] = [
     foot: 'Try it: open the Library, read a book, take the practice exam.',
   },
   {
-    kicker: 'Slide 12 · Traction — built on free credits',
+    kicker: 'Slide 13 · Traction — built on free credits',
     title: 'Books for cents, not dollars',
     points: [
       'A finished 6-scene book — drafted, level-gated, illustrated, published — costs about $0.17 in AI.',
@@ -141,7 +150,7 @@ const SLIDES: Slide[] = [
     ],
   },
   {
-    kicker: 'Slide 13 · Ready for funding',
+    kicker: 'Slide 14 · Ready for funding',
     title: 'Raising to launch',
     points: [
       'Flashcards and books are live in the app today — this is a product, not a prototype.',
