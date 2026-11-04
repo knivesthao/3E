@@ -243,6 +243,46 @@ export interface CatalogBook {
 
 export const listBooks = () => api<{ books: CatalogBook[] }>('/api/share/books');
 
+// Student enrollment: classes the signed-in learner belongs to, each with
+// its ordered curriculum of published books.
+export interface EnrolledClassBook {
+  book_id: string;
+  position: number;
+  title: string;
+  level: string;
+  cover_url: string | null;
+}
+
+export interface EnrolledClass {
+  id: string;
+  name: string;
+  level: string;
+  books: EnrolledClassBook[];
+}
+
+export const listMyClasses = () => api<{ classes: EnrolledClass[] }>('/api/me/classes');
+
+// Personal shelf: books the learner saved for later. Assigned class books
+// come from listMyClasses; finished books stay in getMyActivity.
+export interface ShelfBook {
+  id: string;
+  title: string;
+  level: string;
+  cover_url: string | null;
+  added_at: string;
+}
+
+export const listShelf = () => api<{ books: ShelfBook[] }>('/api/me/shelf');
+
+export const saveShelfBook = (bookId: string) =>
+  api<{ saved: true }>('/api/me/shelf', {
+    method: 'POST',
+    body: JSON.stringify({ bookId }),
+  });
+
+export const removeShelfBook = (bookId: string) =>
+  api<{ ok: true }>(`/api/me/shelf/${encodeURIComponent(bookId)}`, { method: 'DELETE' });
+
 // Defined-words map for the Reader (publish-computed): words with a gloss
 // stay tappable, the rest render as plain text. Empty = unknown, and the
 // Reader keeps the legacy all-tappable behavior.
