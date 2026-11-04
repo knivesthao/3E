@@ -26,6 +26,16 @@ export function levelsInCatalog(books: CatalogBook[]): string[] {
   return LEVELS.filter((l) => seen.has(l));
 }
 
+// Move one entry within an ordered id list (curriculum reorder). Out of
+// range moves are ignored so buttons at the ends stay harmless.
+export function moveItem(ids: string[], from: number, to: number): string[] {
+  if (from < 0 || from >= ids.length || to < 0 || to >= ids.length || from === to) return ids;
+  const next = [...ids];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item!);
+  return next;
+}
+
 // Assigned books across enrolled classes, deduplicated by book with the
 // class names that assigned it. Curriculum order is preserved per class.
 export interface AssignedBook extends EnrolledClassBook {

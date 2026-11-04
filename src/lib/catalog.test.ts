@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assignedBooks, filterCatalog, levelsInCatalog } from './catalog';
+import { assignedBooks, filterCatalog, levelsInCatalog, moveItem } from './catalog';
 import type { CatalogBook, EnrolledClass } from './api';
 
 const book = (title: string, level: string, tags?: CatalogBook['tags']): CatalogBook => ({
@@ -87,5 +87,15 @@ describe('assignedBooks', () => {
 
   it('returns an empty shelf when enrolled in nothing', () => {
     expect(assignedBooks([])).toEqual([]);
+  });
+});
+
+describe('moveItem', () => {
+  it('moves entries up and down, ignoring out-of-range moves', () => {
+    expect(moveItem(['a', 'b', 'c'], 0, 2)).toEqual(['b', 'c', 'a']);
+    expect(moveItem(['a', 'b', 'c'], 2, 0)).toEqual(['c', 'a', 'b']);
+    expect(moveItem(['a', 'b'], 0, 0)).toEqual(['a', 'b']);
+    expect(moveItem(['a', 'b'], -1, 1)).toEqual(['a', 'b']);
+    expect(moveItem(['a', 'b'], 0, 5)).toEqual(['a', 'b']);
   });
 });

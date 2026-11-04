@@ -283,6 +283,65 @@ export const saveShelfBook = (bookId: string) =>
 export const removeShelfBook = (bookId: string) =>
   api<{ ok: true }>(`/api/me/shelf/${encodeURIComponent(bookId)}`, { method: 'DELETE' });
 
+// Teacher class management. Only teachers (their own classes) and admins
+// can call these; the server enforces ownership.
+export interface TeacherClass {
+  id: string;
+  name: string;
+  level: string;
+  teacher_email?: string;
+  student_count: number;
+  book_count: number;
+}
+
+export interface ClassStudent {
+  id: string;
+  email: string;
+  added_at: string;
+}
+
+export interface ClassBook {
+  book_id: string;
+  position: number;
+  title: string;
+  level: string;
+  cover_url: string | null;
+}
+
+export interface ClassDetail {
+  cls: { id: string; teacher_id: string; name: string; level: string };
+  students: ClassStudent[];
+  books: ClassBook[];
+}
+
+export const listClasses = () => api<{ classes: TeacherClass[] }>('/api/classes');
+
+export const createClass = (name: string, level: string) =>
+  api<{ cls: ClassDetail['cls']; books: { book_id: string; position: number }[] }>('/api/classes', {
+    method: 'POST',
+    body: JSON.stringify({ name, level }),
+  });
+
+export const getClass = (id: string) => api<ClassDetail>(`/api/classes/${id}`);
+
+export const renameClass = (id: string, name: string) =>
+  api<ClassDetail>(`/api/classes/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) });
+
+export const enrollStudent = (id: string, email: string) =>
+  api<{ added: true; user_id: string }>(`/api/classes/${id}/students`, {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+
+export const removeStudent = (id: string, userId: string) =>
+  api<{ ok: true }>(`/api/classes/${id}/students/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+
+export const replaceClassBooks = (id: string, bookIds: string[]) =>
+  api<{ books: { book_id: string; position: number }[] }>(`/api/classes/${id}/books`, {
+    method: 'POST',
+    body: JSON.stringify({ bookIds }),
+  });
+
 // Defined-words map for the Reader (publish-computed): words with a gloss
 // stay tappable, the rest render as plain text. Empty = unknown, and the
 // Reader keeps the legacy all-tappable behavior.
