@@ -421,6 +421,10 @@ export interface SeedJob {
 
 export const listSeedJobs = () => api<{ jobs: SeedJob[] }>('/api/admin/seed-jobs');
 
+export type ExamLevel = 'A1' | 'A2' | 'B1' | 'B2';
+
+export const EXAM_LEVELS: ExamLevel[] = ['A1', 'A2', 'B1', 'B2'];
+
 export interface ExamQuestion {
   id: string;
   part: 1 | 2 | 3 | 4;
@@ -440,6 +444,7 @@ export interface ExamItemStat {
 export const getExamItems = () => api<{ items: ExamItemStat[] }>('/api/admin/exam-items');
 
 export interface ExamResult {
+  level: ExamLevel;
   score: number;
   total: number;
   passed: boolean;
@@ -448,11 +453,46 @@ export interface ExamResult {
   missedWords: string[];
 }
 
-export const getExam = () =>
-  api<{ questions: ExamQuestion[]; total: number; passMark: number }>('/api/exam');
+export const getExam = (level: ExamLevel = 'A1') =>
+  api<{ level: ExamLevel; questions: ExamQuestion[]; total: number; passMark: number }>(
+    `/api/exam?level=${level}`,
+  );
 
-export const getExamBest = () =>
-  api<{ attempts: number; best: number | null; total: number; passMark: number }>('/api/exam/best');
+export const getExamBest = (level: ExamLevel = 'A1') =>
+  api<{ level: ExamLevel; attempts: number; best: number | null; total: number; passMark: number }>(
+    `/api/exam/best?level=${level}`,
+  );
+
+export interface ExamAttempt {
+  id: string;
+  level: ExamLevel;
+  score: number;
+  total: number;
+  passed: boolean;
+  created_at: string;
+}
+
+export interface ExamAttemptItem {
+  id: string;
+  part: 1 | 2 | 3 | 4;
+  section: 'words' | 'grammar' | 'reading';
+  prompt: string;
+  passage?: string;
+  options: string[];
+  choice: number | null;
+  answer: number;
+  correct: boolean;
+  explanation: string;
+}
+
+export interface ExamAttemptDetail extends ExamAttempt {
+  items: ExamAttemptItem[];
+}
+
+export const getExamHistory = (level?: ExamLevel) =>
+  api<{ attempts: ExamAttempt[] }>(level ? `/api/exam/history?level=${level}` : '/api/exam/history');
+
+export const getExamAttempt = (id: string) => api<ExamAttemptDetail>(`/api/exam/history/${id}`);
 
 // CEFR word lists (the same arrays the server level-gate enforces) plus the
 // closed book-focus vocabulary — the client never hardcodes either.
@@ -491,8 +531,8 @@ export interface MyActivity {
 
 export const getMyActivity = () => api<MyActivity>('/api/me/activity');
 
-export const submitExam = (form: string[], answers: { id: string; choice: number }[]) =>
-  api<ExamResult>('/api/exam/submit', { method: 'POST', body: JSON.stringify({ form, answers }) });
+export const submitExam = (level: ExamLevel, form: string[], answers: { id: string; choice: number }[]) =>
+  api<ExamResult>('/api/exam/submit', { method: 'POST', body: JSON.stringify({ level, form, answers }) });
 
 export const getBookCosts = (projectId: string) =>
   api<BookCosts>(`/api/admin/costs/book?projectId=${encodeURIComponent(projectId)}`);
