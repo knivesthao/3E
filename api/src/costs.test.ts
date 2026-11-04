@@ -75,21 +75,32 @@ function makeDb() {
                 };
               }
               if (q.startsWith('SELECT p.level')) {
-                const daily = q.includes('%Y-%m-%d');
-                const len = daily ? 10 : 7;
                 const by = new Map<string, Usage[]>();
                 for (const u of usage) {
                   if (!u.project_id) continue;
                   const level = projects.get(u.project_id)?.level;
                   if (!level) continue;
-                  const k = `${level}|${u.created_at.slice(0, len)}`;
+                  const k = `${level}|${u.created_at.slice(0, 7)}`;
                   by.set(k, [...(by.get(k) ?? []), u]);
                 }
                 return {
                   results: [...by.entries()].map(([k, rs]) => {
-                    const [level, period] = k.split('|');
-                    const cost = rs.reduce((a, u) => a + u.cost_usd, 0);
-                    return daily ? { level, day: period, cost } : { level, month: period, cost };
+                    const [level, month] = k.split('|');
+                    return { level, month, cost: rs.reduce((a, u) => a + u.cost_usd, 0) };
+                  }),
+                };
+              }
+              if (q.startsWith("SELECT COALESCE(p.level, 'Unlinked')")) {
+                const by = new Map<string, Usage[]>();
+                for (const u of usage) {
+                  const level = u.project_id ? projects.get(u.project_id)?.level ?? 'Unlinked' : 'Unlinked';
+                  const k = `${level}|${u.created_at.slice(0, 10)}`;
+                  by.set(k, [...(by.get(k) ?? []), u]);
+                }
+                return {
+                  results: [...by.entries()].map(([k, rs]) => {
+                    const [level, day] = k.split('|');
+                    return { level, day, cost: rs.reduce((a, u) => a + u.cost_usd, 0) };
                   }),
                 };
               }
@@ -258,8 +269,9 @@ describe('GET /api/admin/costs/overview', () => {
     seed('a1-book', 0.01, '2026-11-03T10:00:00.000Z');
     seed('a1-book', 0.02, '2026-11-04T10:00:00.000Z');
     seed('b2-book', 0.05, '2026-11-04T11:00:00.000Z');
-    // Project-less dictionary lookups stay out of the book series.
+    // Project-less lookups and deleted-draft spend stay visible as Unlinked.
     seed('', 9.99, '2026-11-04T12:00:00.000Z');
+    seed('deleted-draft', 1.5, '2026-11-03T13:00:00.000Z');
     const res = await app.request('/api/admin/costs/overview', { headers: { cookie } }, ENV(db));
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
@@ -267,13 +279,18 @@ describe('GET /api/admin/costs/overview', () => {
       by_level_month: { level: string; month: string; cost: number }[];
       by_level_day: { level: string; day: string; cost: number }[];
     };
-    expect(body.by_level_day).toHaveLength(3);
+    expect(body.by_level_day).toHaveLength(5);
     const a1 = body.by_level_day.filter((r) => r.level === 'A1').sort((a, b) => (a.day < b.day ? -1 : 1));
     expect(a1).toMatchObject([
       { day: '2026-11-03', cost: 0.01 },
       { day: '2026-11-04', cost: 0.02 },
     ]);
     expect(body.by_level_day.find((r) => r.level === 'B2')).toMatchObject({ day: '2026-11-04', cost: 0.05 });
+    const unlinked = body.by_level_day.filter((r) => r.level === 'Unlinked').sort((a, b) => (a.day < b.day ? -1 : 1));
+    expect(unlinked).toMatchObject([
+      { day: '2026-11-03', cost: 1.5 },
+      { day: '2026-11-04', cost: 9.99 },
+    ]);
     expect(body.by_level_month).toHaveLength(2);
   });
 });

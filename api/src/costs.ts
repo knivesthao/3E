@@ -96,12 +96,13 @@ costs.get('/overview', async (c) => {
      WHERE u.project_id IS NOT NULL AND u.project_id != ''
      GROUP BY p.level, month ORDER BY month DESC`,
   ).all();
-  // Same series at day grain for the line graphs.
+  // Same series at day grain for the line graphs. LEFT JOIN so every
+  // ledger dollar shows: deleted/failed drafts and project-less lookups
+  // land in 'Unlinked' instead of vanishing from the totals.
   const days = await c.env.DB.prepare(
-    `SELECT p.level AS level, strftime('%Y-%m-%d', u.created_at) AS day, SUM(u.cost_usd) AS cost
-     FROM ai_usage u JOIN projects p ON p.id = u.project_id
-     WHERE u.project_id IS NOT NULL AND u.project_id != ''
-     GROUP BY p.level, day ORDER BY day DESC`,
+    `SELECT COALESCE(p.level, 'Unlinked') AS level, strftime('%Y-%m-%d', u.created_at) AS day, SUM(u.cost_usd) AS cost
+     FROM ai_usage u LEFT JOIN projects p ON p.id = u.project_id
+     GROUP BY level, day ORDER BY day DESC`,
   ).all();
   return c.json({ by_user_month: rows.results, by_level_month: levels.results, by_level_day: days.results });
 });
