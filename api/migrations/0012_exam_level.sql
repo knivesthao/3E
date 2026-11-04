@@ -1,0 +1,1 @@
+ALTER TABLE exam_attempts ADD COLUMN level TEXT NOT NULL DEFAULT 'A1';
