@@ -10,6 +10,7 @@ import {
   newToken,
 } from './auth';
 import { sendMagicLink } from './email';
+import { isRole } from './roles';
 import { projects } from './projects';
 import { admin } from './admin';
 import { exam } from './exam';
@@ -61,13 +62,15 @@ app.use('/api/*', async (c, next) => {
   const raw = getCookie(c, SESSION_COOKIE);
   if (!raw) return c.json({ error: 'unauthorized' }, 401);
   const row = await c.env.DB.prepare(
-    'SELECT users.id, users.email, sessions.expires_at FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.id_hash = ?',
+    'SELECT users.id, users.email, users.role, sessions.expires_at FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.id_hash = ?',
   )
     .bind(await hashToken(raw))
-    .first<{ id: string; email: string; expires_at: number }>();
+    .first<{ id: string; email: string; role: unknown; expires_at: number }>();
   if (!row || row.expires_at < Date.now()) return c.json({ error: 'unauthorized' }, 401);
   c.set('userId', row.id);
   c.set('userEmail', row.email);
+  // Fail closed: only a known role is trusted; legacy/unknown values read as student.
+  c.set('userRole', isRole(row.role) ? row.role : 'student');
   return next();
 });
 
@@ -94,9 +97,9 @@ app.post('/api/auth/request-link', async (c) => {
   if (!userId) {
     userId = crypto.randomUUID();
     await c.env.DB.prepare(
-      "INSERT INTO users (id, email, name, role, created_at) VALUES (?, ?, '', 'creator', ?)",
+      "INSERT INTO users (id, email, name, role, created_at) VALUES (?, ?, ?, ?, ?)",
     )
-      .bind(userId, email, new Date(now).toISOString())
+      .bind(userId, email, '', 'student', new Date(now).toISOString())
       .run();
   }
   await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND expires_at < ?')
@@ -149,7 +152,9 @@ app.get('/api/auth/verify', async (c) => {
   return c.redirect('/');
 });
 
-app.get('/api/auth/me', (c) => c.json({ user: { id: c.get('userId'), email: c.get('userEmail') } }));
+app.get('/api/auth/me', (c) =>
+  c.json({ user: { id: c.get('userId'), email: c.get('userEmail'), role: c.get('userRole') } }),
+);
 
 // Word lists for level flashcard decks. Same arrays the level gate
 // enforces, served as data so the client never imports server code

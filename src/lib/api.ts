@@ -28,8 +28,10 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+export type UserRole = 'student' | 'teacher' | 'creator' | 'admin';
+
 export const getMe = () =>
-  api<{ user: { id: string; email: string } }>('/api/auth/me');
+  api<{ user: { id: string; email: string; role: UserRole } }>('/api/auth/me');
 
 export const requestLink = (email: string) =>
   api<{ ok: true; devLink?: string; emailed?: boolean }>('/api/auth/request-link', {
