@@ -1,0 +1,51 @@
+{
+  "The Lost Kite": {
+    "status": "partial",
+    "level": "A2",
+    "projectId": "398c6a28-8bb6-4269-b67d-87d827eda2a3",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "missing": []
+  },
+  "The Empty House": {
+    "status": "partial",
+    "level": "B2",
+    "projectId": "2fce7991-3429-445e-a34d-1ce92f4a4588",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "missing": []
+  },
+  "A Field Guide to Forgetting": {
+    "level": "C2",
+    "status": "failed",
+    "error": "POST /api/projects -> 500: Internal Server Error"
+  }
+}

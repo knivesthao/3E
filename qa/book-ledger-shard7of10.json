@@ -1,0 +1,58 @@
+{
+  "The Red Bus": {
+    "status": "published",
+    "level": "A1",
+    "projectId": "c090b7c4-bb23-425e-bd28-a16b3904841a",
+    "bookId": "66a491e9-b1dd-4a70-b5a8-76cc4d12c0fa",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.24620825,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "Climbing the Hill": {
+    "status": "partial",
+    "level": "B2",
+    "projectId": "07084ef3-9e9c-4724-b253-b7916c6e6782",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      6
+    ],
+    "art": [],
+    "missing": [
+      {
+        "scene_number": 5,
+        "reason": "Text is below B2 level with A1-A2 vocabulary and very short sentences. No sentences over 15 words."
+      }
+    ]
+  },
+  "Harbor of Echoes": {
+    "level": "C2",
+    "status": "failed",
+    "error": "POST /api/projects -> 500: Internal Server Error"
+  }
+}

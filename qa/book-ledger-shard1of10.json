@@ -1,0 +1,62 @@
+{
+  "Night Market": {
+    "status": "published",
+    "level": "A1",
+    "projectId": "c2bf8e61-573f-4fde-89ec-7348190fd33f",
+    "bookId": "f2c2de78-7a1d-4c25-bc98-805e01e9d0b1",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.4550595,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "The River Boat": {
+    "status": "stalled",
+    "level": "A2",
+    "projectId": "efa7cc5d-d442-4f47-b241-9932c6c05589",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "missing": [],
+    "error": "POST /api/projects/efa7cc5d-d442-4f47-b241-9932c6c05589/publish -> 422: {\"error\":\"unsafe content\"}"
+  },
+  "Salt and Stone": {
+    "level": "C1",
+    "status": "failed",
+    "error": "POST /api/projects -> 500: Internal Server Error"
+  }
+}

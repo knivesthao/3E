@@ -1,0 +1,61 @@
+{
+  "The New School": {
+    "status": "published",
+    "level": "B1",
+    "projectId": "40140d4a-8632-41bc-b341-7b07fc1da045",
+    "bookId": "0831a314-eb2f-4c9b-8eea-8b58b2df7924",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.24427025,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "Saturday Market": {
+    "status": "partial",
+    "level": "B1",
+    "projectId": "9e722437-74ee-453c-810f-0d871373bea0",
+    "saved": [
+      1,
+      4,
+      5,
+      6
+    ],
+    "art": [],
+    "missing": [
+      {
+        "scene_number": 2,
+        "reason": "out of level: apples, bananas, piece"
+      },
+      {
+        "scene_number": 3,
+        "reason": "out of level: bananas, children, much"
+      }
+    ]
+  },
+  "Crossing at Dawn": {
+    "level": "C1",
+    "status": "failed",
+    "error": "POST /api/projects -> 500: Internal Server Error"
+  }
+}

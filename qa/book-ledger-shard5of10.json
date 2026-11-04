@@ -1,0 +1,61 @@
+{
+  "Sunny Park": {
+    "status": "published",
+    "level": "A1",
+    "projectId": "5518efbd-a261-41f5-a7d0-955a1450d233",
+    "bookId": "37fe65c9-2a56-41a9-b6a0-6f6195ba96f8",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.45827425,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "A Letter for Sam": {
+    "status": "partial",
+    "level": "B1",
+    "projectId": "b3cad03b-5717-463d-9d3c-858fb5f94738",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "missing": []
+  },
+  "An Atlas of Small Hours": {
+    "level": "C2",
+    "status": "failed",
+    "error": "POST /api/projects -> 500: Internal Server Error"
+  }
+}

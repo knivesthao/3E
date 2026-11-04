@@ -1,0 +1,61 @@
+{
+  "Rain Day": {
+    "status": "published",
+    "level": "A1",
+    "projectId": "b2e31528-ca1c-444f-abd7-97a36bd43228",
+    "bookId": "a86ac618-6b55-4fb5-accf-a085195ae4e8",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.387192,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "The Night Train": {
+    "status": "partial",
+    "level": "B2",
+    "projectId": "6ac5b6aa-fed4-4997-be07-91b922f6d19e",
+    "saved": [
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [],
+    "missing": [
+      {
+        "scene_number": 1,
+        "reason": "Text is below B2 level; vocabulary and grammar are A1-A2. No sentence is over 15 words."
+      },
+      {
+        "scene_number": 2,
+        "reason": "Story is below B2 level. All sentences are under 15 words with A1 vocabulary and no complex idioms."
+      }
+    ]
+  },
+  "The Weight of Light": {
+    "level": "C2",
+    "status": "failed",
+    "error": "POST /api/projects -> 500: Internal Server Error"
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "A Trip to the Lake": {
+    "status": "published",
+    "level": "A2",
+    "projectId": "f394e7ae-b9af-4647-9b81-5c80b41eb1ea",
+    "bookId": "26763f1a-d887-4a8e-a6a2-adb5bc8d4c99",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.33983325,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "The Old Lighthouse": {
+    "status": "published",
+    "level": "B1",
+    "projectId": "293a33ca-e139-41ba-9b2a-d0ad492c5be0",
+    "bookId": "b72159e6-136d-4252-971d-66d284e45995",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.148943,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "The Winter Archive": {
+    "level": "C1",
+    "status": "failed",
+    "error": "POST /api/projects -> 500: Internal Server Error"
+  }
+}

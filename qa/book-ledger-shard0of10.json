@@ -1,0 +1,71 @@
+{
+  "Red Cat": {
+    "status": "published",
+    "level": "A1",
+    "projectId": "5bae8a85-8c03-4cae-8795-247879ce489c",
+    "bookId": "826e6706-742b-4063-85c8-563eafb6d76f",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.173148,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "A Snowy Day": {
+    "status": "published",
+    "level": "A2",
+    "projectId": "4de21cce-edd2-46ba-9494-5a736291e6cc",
+    "bookId": "05bebbdb-136f-4f67-8a5e-8281d002d38c",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.3205865,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "The Cartographer": {
+    "level": "C1",
+    "status": "failed",
+    "error": "POST /api/projects -> 500: Internal Server Error"
+  }
+}

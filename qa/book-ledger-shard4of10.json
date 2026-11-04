@@ -1,0 +1,48 @@
+{
+  "Letters from the City": {
+    "status": "partial",
+    "level": "B2",
+    "projectId": "55b86f11-1ee3-42e3-a4e3-539a402ff668",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "missing": []
+  },
+  "The Broken Bicycle": {
+    "status": "partial",
+    "level": "B1",
+    "projectId": "ac1ac6dc-3f60-44dc-bd4c-7af25f7f3d4e",
+    "saved": [
+      1,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [],
+    "missing": [
+      {
+        "scene_number": 2,
+        "reason": "out of level: opens, toolbox, fix, hmm, difficult, need"
+      }
+    ]
+  },
+  "The Glass Garden": {
+    "level": "C1",
+    "status": "failed",
+    "error": "POST /api/projects -> 500: Internal Server Error"
+  }
+}
