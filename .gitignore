@@ -6,3 +6,8 @@ dist/
 
 # Local video footage and renders (large, never commit)
 videos/
+
+# Vite cache
+.vite/
+# Python caches
+__pycache__/

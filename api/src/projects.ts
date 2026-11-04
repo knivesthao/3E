@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Bindings, Variables } from './types';
+import { requireRole } from './roles';
 import {
   isRecord,
   validateProjectCreate,
@@ -9,7 +10,8 @@ import {
   validateSceneOrder,
 } from './validate';
 import { isFocusTag } from './levels';
-import type { FocusTag } from './levels';
+import type { FocusTag, Level } from './levels';
+import { buildQuiz } from './ai/quiz';
 import { flagHardPages, lookupDefined, syncBookWords } from './ai/words';
 import { generate } from './ai/client';
 import { collectPublishKeys, copyArtToLibrary } from './ai/art';
@@ -20,8 +22,15 @@ import { AiError } from './ai/meta';
 import { safetyPrompt, sceneActionText } from './ai/prompts';
 
 // All routes inherit the session gate from index.ts (owner = session user).
-// Missing-or-foreign resources all return 404 so ids can't be probed.
+// Studio drafting is creator/admin-only; students learn from published
+// books. Missing-or-foreign resources all return 404 so ids can't be probed.
 export const projects = new Hono<{ Bindings: Bindings; Variables: Variables }>({ strict: false });
+
+projects.use(async (c, next) => {
+  const denied = requireRole(c, ['creator', 'admin']);
+  if (denied) return denied;
+  return next();
+});
 
 export interface ProjectRow {
   id: string;
@@ -32,6 +41,8 @@ export interface ProjectRow {
   purpose: string;
   status: string;
   cast_json: string;
+  tags_json: string;
+  quiz_json: string;
   created_at: string;
   updated_at: string;
 }
@@ -105,11 +116,13 @@ projects.post('/', async (c) => {
     purpose: parsed.value.purpose,
     status: 'draft',
     cast_json: '{"characters":[],"places":[]}',
+    tags_json: JSON.stringify(parsed.value.tags),
+    quiz_json: '[]',
     created_at: now,
     updated_at: now,
   };
   await c.env.DB.prepare(
-    'INSERT INTO projects (id, creator_id, title, description, level, purpose, status, cast_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO projects (id, creator_id, title, description, level, purpose, status, cast_json, tags_json, quiz_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
   )
     .bind(
       project.id,
@@ -120,6 +133,8 @@ projects.post('/', async (c) => {
       project.purpose,
       project.status,
       project.cast_json,
+      project.tags_json,
+      project.quiz_json,
       project.created_at,
       project.updated_at,
     )
@@ -317,6 +332,39 @@ projects.post('/:id/publish', async (c) => {
     if (text.trim().toLowerCase() !== 'safe') {
       await finishJob(db, jobId, 'failed', null, 'unsafe content');
       return c.json({ error: 'unsafe content' }, 422);
+    }
+
+    // Static quiz: written once here, served forever. Best-effort — a quiz
+    // failure must not sink the book; the endpoint backfills once on the
+    // first view, and the next republish regenerates from the new scenes.
+    try {
+      const story = scenes
+        .slice(0, 6)
+        .map((s) => sceneActionText(s.narration, s.bubbles))
+        .filter((s) => s !== '')
+        .join('\n\n')
+        .slice(0, 3000);
+      if (story !== '') {
+        const questions = await buildQuiz(
+          db,
+          {
+            apiKey,
+            userId,
+            projectId: project.id,
+            opId: crypto.randomUUID(),
+            apiUrl: c.env.AI_API_URL,
+            baseten: basetenConfig(c.env),
+          },
+          project.level as Level,
+          story,
+        );
+        await db
+          .prepare('UPDATE projects SET quiz_json = ? WHERE id = ?')
+          .bind(JSON.stringify({ questions }), project.id)
+          .run();
+      }
+    } catch {
+      // Backfilled on first quiz view; the book itself is already stored.
     }
 
     const { results: panelRows } = await db

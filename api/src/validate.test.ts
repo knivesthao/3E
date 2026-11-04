@@ -11,8 +11,22 @@ describe('validateProjectCreate', () => {
   it('accepts a minimal valid body and defaults purpose/description', () => {
     expect(validateProjectCreate({ title: 'My Comic', level: 'A1' })).toEqual({
       ok: true,
-      value: { title: 'My Comic', level: 'A1', purpose: 'learning', description: '' },
+      value: { title: 'My Comic', level: 'A1', purpose: 'learning', description: '', tags: [] },
     });
+  });
+
+  it('accepts closed-vocabulary focus tags, deduped and capped', () => {
+    expect(validateProjectCreate({ title: 'T', level: 'A1', tags: ['verbs', 'nouns'] })).toEqual({
+      ok: true,
+      value: { title: 'T', level: 'A1', purpose: 'learning', description: '', tags: ['verbs', 'nouns'] },
+    });
+    expect(validateProjectCreate({ title: 'T', level: 'A1', tags: ['verbs', 'verbs'] })).toEqual({
+      ok: true,
+      value: { title: 'T', level: 'A1', purpose: 'learning', description: '', tags: ['verbs'] },
+    });
+    expect(validateProjectCreate({ title: 'T', level: 'A1', tags: ['verbs', 'hocus'] }).ok).toBe(false);
+    expect(validateProjectCreate({ title: 'T', level: 'A1', tags: ['nouns', 'verbs', 'adjectives', 'nouns'] }).ok).toBe(false);
+    expect(validateProjectCreate({ title: 'T', level: 'A1', tags: 'verbs' }).ok).toBe(false);
   });
 
   it('rejects missing title, bad level, and bad purpose', () => {

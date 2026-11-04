@@ -2,12 +2,13 @@ import { Hono } from 'hono';
 import type { Bindings, Variables } from './types';
 import { isRecord } from './validate';
 import { recordMiss } from './misses';
+import { BANKS, BANK_WORDS, EXAM_LEVELS, type ExamLevel } from './exam-banks';
 
-// Fixed A1 sample test: hand-written bank mirroring published A1 task
-// families (Cambridge A1 Movers Reading & Writing: word definitions,
-// yes/no judgments, dialogue responses, gap-fill). Original items only —
-// format inspiration, never copied content. Server-side grading, $0 per
-// attempt. Practice only, not a certificate.
+// Level-parameterized exams: one exam per CEFR level, each generated from
+// its bank (rotating 3-per-part forms, 12 items per form). Users may take any
+// level; every attempt is stored with its level so the history below can
+// replay what was taken, when, how it scored, and each question for review.
+// Practice only, not a certificate. Server-side grading, $0 per attempt.
 
 export interface ExamQuestion {
   id: string;
@@ -34,78 +35,37 @@ const PART_SECTION: Record<number, ExamQuestion['section']> = {
   4: 'grammar',
 };
 
-type Item = [id: string, prompt: string, options: string[], answer: number, explanation: string, passage?: string];
-
-const PART1: Item[] = [
-  ['p1a', 'It says meow.', ['A cat', 'A dog', 'A bird', 'A fish'], 0, 'A cat says meow.'],
-  ['p1b', 'You read it.', ['A house', 'A school', 'Water', 'A book'], 3, 'You read a book.'],
-  ['p1c', 'It is hot and you see it in the day.', ['Rain', 'Water', 'A bird', 'The sun'], 3, 'The sun is hot and in the day sky.'],
-  ['p1d', 'You drink it. It is in a glass.', ['Food', 'Water', 'A school', 'Rain'], 1, 'You drink water.'],
-  ['p1e', 'It says woof. It runs.', ['A cat', 'A bird', 'A dog', 'A fish'], 2, 'A dog says woof.'],
-  ['p1f', 'You live in it.', ['A school', 'A book', 'Water', 'A house'], 3, 'You live in a house.'],
-];
-
-const STORY =
-  'Anna has a small red cat. The cat is happy. In the morning, Anna and the cat run in the sun. ' +
-  'The cat drinks water. At night, the cat is in the house. Anna is happy.';
-
-const PART2: Item[] = [
-  ['p2a', 'The cat is big.', ['Yes', 'No'], 1, 'The story says: a small red cat.', STORY],
-  ['p2b', 'Anna and the cat run in the morning.', ['Yes', 'No'], 0, 'The story says: in the morning they run in the sun.', STORY],
-  ['p2c', 'The cat drinks milk.', ['Yes', 'No'], 1, 'The story says: the cat drinks water.', STORY],
-  ['p2d', 'At night, the cat is in the house.', ['Yes', 'No'], 0, 'The story says: at night the cat is in the house.', STORY],
-  ['p2e', 'Anna is sad.', ['Yes', 'No'], 1, 'The story says: Anna is happy.', STORY],
-  ['p2f', 'The cat is red.', ['Yes', 'No'], 0, 'The story says: a small red cat.', STORY],
-];
-
-const PART3: Item[] = [
-  ['p3a', 'Hello! What is your name? ___', ['My name is Ana', 'It is blue', 'I am ten'], 0, '"My name is Ana" answers the name question.'],
-  ['p3b', 'Is this your book? No, ___.', ['it is not', 'I am ten', 'it is blue'], 0, '"No, it is not" answers the yes/no question.'],
-  ['p3c', 'Where is the cat? ___.', ['It is in the house', 'It is blue', 'I am happy'], 0, '"It is in the house" answers the where question.'],
-  ['p3d', 'Do you like rain? No, ___.', ['I do not', 'it is hot', 'I am a boy'], 0, '"No, I do not" answers the do question.'],
-  ['p3e', 'How are you? ___.', ['I am happy', 'It is a dog', 'You are Sam'], 0, '"I am happy" answers the how question.'],
-  ['p3f', 'What color is the sun? ___.', ['It is yellow', 'It is a dog', 'I am ten'], 0, '"It is yellow" answers the color question.'],
-];
-
-const PART4: Item[] = [
-  ['p4a', 'A ___ says meow.', ['dog', 'rain', 'sun', 'cat'], 3, 'A cat says meow.'],
-  ['p4b', 'She ___ water every day.', ['eat', 'run', 'drinks', 'walk'], 2, 'With she, add -s: she drinks.'],
-  ['p4c', 'They drink ___ every day.', ['rain', 'run', 'blue', 'water'], 3, 'They drink water.'],
-  ['p4d', 'Hello! My name ___ Ana.', ['am', 'are', 'be', 'is'], 3, 'My name is Ana.'],
-  ['p4e', 'I see ___ dogs. One and one.', ['three', 'blue', 'run', 'two'], 3, 'One and one is two.'],
-  ['p4f', 'We ___ to school in the morning.', ['goes', 'went', 'is', 'go'], 3, 'With we, use go: we go.'],
-];
-
-function buildBank(): ExamQuestion[] {
-  const out: ExamQuestion[] = [];
-  for (const [part, items] of [[1, PART1], [2, PART2], [3, PART3], [4, PART4]] as const) {
-    for (const [id, prompt, options, answer, explanation, passage] of items) {
-      out.push({ id, part, section: PART_SECTION[part], prompt, options, answer, explanation, ...(passage ? { passage } : {}) });
-    }
-  }
-  return out;
+function toQuestions(level: ExamLevel): ExamQuestion[] {
+  return BANKS[level].map((q) => ({
+    id: q.id,
+    part: q.part,
+    section: PART_SECTION[q.part],
+    prompt: q.prompt,
+    options: q.options,
+    answer: q.answer,
+    explanation: q.explanation,
+    ...(q.passage ? { passage: q.passage } : {}),
+  }));
 }
 
-export const QUESTIONS = buildBank();
-const byId = new Map(QUESTIONS.map((q) => [q.id, q]));
-
-// Vocabulary each item tests (dictionary-form lemmas). Missed items record
-// these as word misses so the My Words deck drills exactly what the exam
-// exposed. Keep in sync with the bank above when items change.
-const ITEM_WORDS: Record<string, string[]> = {
-  p1a: ['cat'], p1b: ['book'], p1c: ['sun'], p1d: ['water'], p1e: ['dog'], p1f: ['house'],
-  p2a: ['big', 'small'], p2b: ['run', 'morning'], p2c: ['drink', 'water'],
-  p2d: ['night', 'house'], p2e: ['sad', 'happy'], p2f: ['red'],
-  p3a: ['name'], p3b: ['book'], p3c: ['house'], p3d: ['like'],
-  p3e: ['happy'], p3f: ['yellow'],
-  p4a: ['cat'], p4b: ['drink'], p4c: ['water'], p4d: ['name'],
-  p4e: ['two', 'three'], p4f: ['go'],
+const BANK_BY_LEVEL: Record<ExamLevel, ExamQuestion[]> = {
+  A1: toQuestions('A1'),
+  A2: toQuestions('A2'),
+  B1: toQuestions('B1'),
+  B2: toQuestions('B2'),
 };
 
-function pickForm(): ExamQuestion[] {
+const byId = new Map<ExamLevel, Map<string, ExamQuestion>>(
+  EXAM_LEVELS.map((level) => [level, new Map(BANK_BY_LEVEL[level].map((q) => [q.id, q]))]),
+);
+
+// A1 surface kept for existing consumers (feedback summary, old tests).
+export const QUESTIONS = BANK_BY_LEVEL.A1;
+
+function pickForm(level: ExamLevel): ExamQuestion[] {
   const form: ExamQuestion[] = [];
   for (let part: 1 | 2 | 3 | 4 = 1; part <= 4; part = (part + 1) as 1 | 2 | 3 | 4) {
-    const pool = QUESTIONS.filter((q) => q.part === part);
+    const pool = BANK_BY_LEVEL[level].filter((q) => q.part === part);
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [pool[i], pool[j]] = [pool[j], pool[i]];
@@ -115,24 +75,112 @@ function pickForm(): ExamQuestion[] {
   return form;
 }
 
+// Level comes only from this allowlist; anything else is a 400.
+function levelFrom(c: { req: { query: (name: string) => string | undefined } }): ExamLevel | null {
+  const raw = c.req.query('level');
+  if (!raw) return 'A1';
+  return (EXAM_LEVELS as string[]).includes(raw) ? (raw as ExamLevel) : null;
+}
+
+function passedFor(score: number, total: number): boolean {
+  return total > 0 && score >= Math.ceil(total * PASS_RATE);
+}
+
 export const exam = new Hono<{ Bindings: Bindings; Variables: Variables }>({ strict: false });
 
 // Questions only — answers stay server-side. A fresh 12-item form per call.
 exam.get('/', (c) => {
+  const level = levelFrom(c);
+  if (!level) return c.json({ error: 'unknown level' }, 400);
   return c.json({
-    questions: pickForm().map(({ answer, ...q }) => q),
+    level,
+    questions: pickForm(level).map(({ answer, ...q }) => q),
     total: FORM_SIZE,
     passMark: PASS_MARK,
   });
 });
 
 exam.get('/best', async (c) => {
+  const level = levelFrom(c);
+  if (!level) return c.json({ error: 'unknown level' }, 400);
   const row = await c.env.DB.prepare(
-    'SELECT COUNT(*) AS n, MAX(score) AS best FROM exam_attempts WHERE user_id = ?',
+    'SELECT COUNT(*) AS n, MAX(score) AS best FROM exam_attempts WHERE user_id = ? AND level = ?',
   )
-    .bind(c.get('userId'))
+    .bind(c.get('userId'), level)
     .first<{ n: number | null; best: number | null }>();
-  return c.json({ attempts: row?.n ?? 0, best: row?.best ?? null, total: FORM_SIZE, passMark: PASS_MARK });
+  return c.json({ level, attempts: row?.n ?? 0, best: row?.best ?? null, total: FORM_SIZE, passMark: PASS_MARK });
+});
+
+// Attempt history: what was taken, when, and how it scored. Newest first.
+exam.get('/history', async (c) => {
+  const raw = c.req.query('level');
+  const level = raw ? ((EXAM_LEVELS as string[]).includes(raw) ? (raw as ExamLevel) : null) : null;
+  if (raw && !level) return c.json({ error: 'unknown level' }, 400);
+  const { results } = await c.env.DB.prepare(
+    level
+      ? 'SELECT id, level, score, total, created_at FROM exam_attempts WHERE user_id = ? AND level = ? ORDER BY created_at DESC, rowid DESC'
+      : 'SELECT id, level, score, total, created_at FROM exam_attempts WHERE user_id = ? ORDER BY created_at DESC, rowid DESC',
+  )
+    .bind(...(level ? [c.get('userId'), level] : [c.get('userId')]))
+    .all<{ id: string; level: string; score: number; total: number; created_at: string }>();
+  return c.json({
+    attempts: (results ?? []).map((r) => ({
+      id: r.id,
+      level: r.level,
+      score: r.score,
+      total: r.total,
+      passed: passedFor(r.score, r.total),
+      created_at: r.created_at,
+    })),
+  });
+});
+
+// One attempt with every question, the taker's choice, and the key —
+// everything needed to go back and review. Owner-only.
+exam.get('/history/:id', async (c) => {
+  const row = await c.env.DB.prepare(
+    'SELECT id, level, score, total, answers_json, created_at FROM exam_attempts WHERE id = ? AND user_id = ?',
+  )
+    .bind(c.req.param('id'), c.get('userId'))
+    .first<{ id: string; level: string; score: number; total: number; answers_json: string; created_at: string }>();
+  if (!row) return c.json({ error: 'not found' }, 404);
+  const level = (EXAM_LEVELS as string[]).includes(row.level) ? (row.level as ExamLevel) : 'A1';
+  const lookup = byId.get(level) ?? new Map<string, ExamQuestion>();
+  let stored: { form?: string[]; review?: { id: string; correct: boolean; answer: number; explanation: string }[]; choices?: Record<string, number> };
+  try {
+    stored = JSON.parse(row.answers_json) as typeof stored;
+  } catch {
+    return c.json({ error: 'unreadable attempt' }, 500);
+  }
+  const choices = stored.choices ?? {};
+  const items = (stored.review ?? [])
+    .map((r) => {
+      const q = lookup.get(r.id);
+      if (!q) return null;
+      const choice = typeof choices[r.id] === 'number' ? (choices[r.id] as number) : null;
+      return {
+        id: q.id,
+        part: q.part,
+        section: q.section,
+        prompt: q.prompt,
+        ...(q.passage ? { passage: q.passage } : {}),
+        options: q.options,
+        choice,
+        answer: r.answer,
+        correct: r.correct,
+        explanation: r.explanation,
+      };
+    })
+    .filter((x) => x !== null);
+  return c.json({
+    id: row.id,
+    level,
+    score: row.score,
+    total: row.total,
+    passed: passedFor(row.score, row.total),
+    created_at: row.created_at,
+    items,
+  });
 });
 
 exam.post('/submit', async (c) => {
@@ -145,23 +193,30 @@ exam.post('/submit', async (c) => {
   if (!isRecord(body) || !Array.isArray(body.form) || !Array.isArray(body.answers)) {
     return c.json({ error: 'invalid request' }, 400);
   }
+  const rawLevel = typeof body.level === 'string' ? body.level : 'A1';
+  if (!(EXAM_LEVELS as string[]).includes(rawLevel)) return c.json({ error: 'unknown level' }, 400);
+  const level = rawLevel as ExamLevel;
+  const lookup = byId.get(level) as Map<string, ExamQuestion>;
+  const bankSize = BANK_BY_LEVEL[level].length;
   const form = body.form as unknown[];
-  if (form.length === 0 || form.length > QUESTIONS.length) return c.json({ error: 'invalid request' }, 400);
+  if (form.length === 0 || form.length > bankSize) return c.json({ error: 'invalid request' }, 400);
   const formSet = new Set<string>();
   for (const id of form) {
-    if (typeof id !== 'string' || !byId.has(id) || formSet.has(id)) return c.json({ error: 'invalid request' }, 400);
+    if (typeof id !== 'string' || !lookup.has(id) || formSet.has(id)) return c.json({ error: 'invalid request' }, 400);
     formSet.add(id);
   }
   const seen = new Set<string>();
+  const choices: Record<string, number> = {};
   let score = 0;
   const review: { id: string; correct: boolean; answer: number; explanation: string }[] = [];
   for (const a of body.answers as unknown[]) {
     if (!isRecord(a) || typeof a.id !== 'string' || typeof a.choice !== 'number') {
       return c.json({ error: 'invalid request' }, 400);
     }
-    const q = byId.get(a.id);
+    const q = lookup.get(a.id);
     if (!q || !formSet.has(a.id) || seen.has(a.id)) return c.json({ error: 'invalid request' }, 400);
     seen.add(a.id);
+    choices[a.id] = a.choice;
     const correct = a.choice === q.answer;
     if (correct) score += 1;
     review.push({ id: q.id, correct, answer: q.answer, explanation: q.explanation });
@@ -169,32 +224,35 @@ exam.post('/submit', async (c) => {
   // Served but unanswered counts as missed.
   for (const id of formSet) {
     if (!seen.has(id)) {
-      const q = byId.get(id) as ExamQuestion;
+      const q = lookup.get(id) as ExamQuestion;
       review.push({ id, correct: false, answer: q.answer, explanation: q.explanation });
     }
   }
   const now = new Date().toISOString();
   await c.env.DB.prepare(
-    'INSERT INTO exam_attempts (id, user_id, score, total, answers_json, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    'INSERT INTO exam_attempts (id, user_id, score, total, answers_json, created_at, level) VALUES (?, ?, ?, ?, ?, ?, ?)',
   )
-    .bind(crypto.randomUUID(), c.get('userId'), score, formSet.size, JSON.stringify({ form: [...formSet], review }), now)
+    .bind(crypto.randomUUID(), c.get('userId'), score, formSet.size, JSON.stringify({ form: [...formSet], review, choices }), now, level)
     .run();
-  const passed = score >= Math.ceil(formSet.size * PASS_RATE);
-  const weak = [...new Set(review.filter((r) => !r.correct).map((r) => byId.get(r.id)?.section ?? ''))];
+  const passed = passedFor(score, formSet.size);
+  const weak = [...new Set(review.filter((r) => !r.correct).map((r) => lookup.get(r.id)?.section ?? ''))];
   // Missed items feed the word-miss loop: the My Words deck drills these.
   const missedWords = [
-    ...new Set(review.filter((r) => !r.correct).flatMap((r) => ITEM_WORDS[r.id] ?? [])),
+    ...new Set(review.filter((r) => !r.correct).flatMap((r) => BANK_WORDS[level][r.id] ?? [])),
   ];
   for (const w of missedWords) {
-    await recordMiss(c.env.DB, c.get('userId'), w, 'A1', 'exam');
+    await recordMiss(c.env.DB, c.get('userId'), w, level, 'exam');
   }
   return c.json({
+    level,
     score,
     total: formSet.size,
     passed,
     message: passed
-      ? 'Ready for A1. Try a B1 book next, or a real certificate such as LanguageCert ESOL A1.'
-      : `Keep practicing${weak.length ? ` — focus on: ${weak.join(', ')}` : ''}. Reread an A1 book, then try again.`,
+      ? level === 'A1'
+        ? 'Ready for A1. Try a B1 book next, or a real certificate such as LanguageCert ESOL A1.'
+        : `Ready for ${level}. Try a ${level} book next, or a real ${level} certificate.`
+      : `Keep practicing${weak.length ? ` — focus on: ${weak.join(', ')}` : ''}. Reread a ${level} book, then try again.`,
     review,
     missedWords,
   });

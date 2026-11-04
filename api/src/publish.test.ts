@@ -7,7 +7,8 @@ import { makeBucket, type TestBucket } from './test-utils';
 // In-memory D1 subset for the publish route (projects/scenes/panels seeded
 // directly, books + jobs + ai_usage tracked). Model calls stubbed at fetch.
 function makeDb() {
-  const users = new Map<string, { id: string; email: string }>();
+  // Suite exercises creator flows; signup defaults live in roles.test.ts.
+  const users = new Map<string, { id: string; email: string; role: string }>();
   const sessions = new Map<string, { user_id: string; expires_at: number }>();
   const projects = new Map<string, Record<string, unknown>>();
   const scenes = new Map<string, Record<string, unknown>>();
@@ -58,7 +59,7 @@ function makeDb() {
                 const s = sessions.get(params[0] as string);
                 if (!s) return null;
                 const u = users.get(s.user_id);
-                return u ? { id: u.id, email: u.email, expires_at: s.expires_at } : null;
+                return u ? { id: u.id, email: u.email, role: u.role, expires_at: s.expires_at } : null;
               }
               if (q.startsWith('SELECT * FROM projects WHERE id = ? AND creator_id')) {
                 const r = projects.get(params[0] as string);
@@ -107,7 +108,7 @@ function makeDb() {
             run: async () => {
               if (q.startsWith('INSERT INTO users')) {
                 const [id, email] = params as string[];
-                users.set(id, { id, email });
+                users.set(id, { id, email, role: 'creator' });
               } else if (q.startsWith('INSERT INTO sessions')) {
                 const [h, uid, exp] = params as [string, string, number];
                 sessions.set(h, { user_id: uid, expires_at: exp });
@@ -136,6 +137,10 @@ function makeDb() {
                 const [updated_at, id] = params as [string, string];
                 const row = projects.get(id);
                 if (row) Object.assign(row, { status: 'published', updated_at });
+              } else if (q.startsWith('UPDATE projects SET quiz_json')) {
+                const [quiz_json, id] = params as [string, string];
+                const row = projects.get(id);
+                if (row) row.quiz_json = quiz_json;
               } else if (q.startsWith('UPDATE projects SET title')) {
                 const [title, description, level, purpose, cast_json, updated_at, id] = params as string[];
                 const row = projects.get(id);
@@ -378,6 +383,56 @@ describe('Publish endpoint', () => {
     expect(safety).toHaveLength(1);
     expect(safety[0].ok).toBe(1);
     expect(safety[0].model).toBe('muse-spark-1.3');
+  });
+
+  // Quiz pipeline: safety passes, the quiz builds once, views pay nothing.
+  function stubQuizPipeline() {
+    globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse((init?.body ?? '{}') as string) as { messages?: { content: string }[] };
+      const content = body.messages?.[0]?.content ?? '';
+      const reply = content.includes('quiz writer')
+        ? JSON.stringify({
+          questions: [1, 2, 3, 4, 5, 6].map((n) => ({
+            prompt: `Question ${n} about the story?`,
+            options: ['A cat', 'A dog', 'A bird'],
+            answer: n % 3,
+            explanation: `Because of question ${n}.`,
+          })),
+        })
+        : 'safe';
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: reply } }],
+          usage: { prompt_tokens: 50, completion_tokens: 10 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }) as typeof fetch;
+  }
+
+  it('publish writes the quiz once and quiz views never pay again', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const env = ENV(db);
+    const uid = await userIdOf(cookie, env);
+    const pid = seedBook(db, uid);
+    stubQuizPipeline();
+
+    const res = await app.request(`/api/projects/${pid}/publish`, json('POST', {}, cookie), env);
+    expect(res.status).toBe(200);
+    expect(db.usage.filter((u) => u.task === 'quiz')).toHaveLength(1);
+    const stored = db.projects.get(pid)?.quiz_json as string | undefined;
+    expect(typeof stored).toBe('string');
+    expect((JSON.parse(stored as string) as { questions: unknown[] }).questions).toHaveLength(6);
+
+    globalThis.fetch = (() => {
+      throw new Error('must not call the model');
+    }) as unknown as typeof fetch;
+    const quiz = await app.request('/api/ai/quiz', json('POST', { projectId: pid }, cookie), env);
+    expect(quiz.status).toBe(200);
+    const body = (await quiz.json()) as { questions: unknown[] };
+    expect(body.questions).toHaveLength(6);
+    expect(db.usage.filter((u) => u.task === 'quiz')).toHaveLength(1);
   });
 
   it('copies panel art into the library bucket on publish', async () => {

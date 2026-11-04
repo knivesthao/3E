@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Bindings, Variables } from './types';
 import { ownProject } from './projects';
+import { requireRole } from './roles';
 
 // Admin cost ledger (Step 5a) — the §Cost & usage tracking queries over
 // ai_usage. Session-gated by index.ts like every other /api/* route;
@@ -11,6 +12,8 @@ const NOT_FOUND = { error: 'not found' } as const;
 const INVALID = { error: 'invalid request' } as const;
 
 costs.get('/book', async (c) => {
+  const denied = requireRole(c, ['creator', 'admin']);
+  if (denied) return denied;
   const projectId = c.req.query('projectId') ?? '';
   if (projectId === '' || projectId.length > 100) return c.json(INVALID, 400);
   const project = await ownProject(c.env.DB, projectId, c.get('userId'));
@@ -78,9 +81,28 @@ costs.get('/book', async (c) => {
 });
 
 costs.get('/overview', async (c) => {
+  const denied = requireRole(c, ['admin']);
+  if (denied) return denied;
   const rows = await c.env.DB.prepare(
     `SELECT user_id, strftime('%Y-%m', created_at) AS month, SUM(cost_usd) AS cost
      FROM ai_usage GROUP BY user_id, month ORDER BY month DESC`,
   ).all();
-  return c.json({ by_user_month: rows.results });
+  // Book-attributable spend by CEFR level (joins the draft's project).
+  // Project-less calls (dictionary lookups without a book) stay only in
+  // the per-user totals — the graph filters book spend.
+  const levels = await c.env.DB.prepare(
+    `SELECT p.level AS level, strftime('%Y-%m', u.created_at) AS month, SUM(u.cost_usd) AS cost
+     FROM ai_usage u JOIN projects p ON p.id = u.project_id
+     WHERE u.project_id IS NOT NULL AND u.project_id != ''
+     GROUP BY p.level, month ORDER BY month DESC`,
+  ).all();
+  // Same series at day grain for the line graphs. LEFT JOIN so every
+  // ledger dollar shows: deleted/failed drafts and project-less lookups
+  // land in 'Unlinked' instead of vanishing from the totals.
+  const days = await c.env.DB.prepare(
+    `SELECT COALESCE(p.level, 'Unlinked') AS level, strftime('%Y-%m-%d', u.created_at) AS day, SUM(u.cost_usd) AS cost
+     FROM ai_usage u LEFT JOIN projects p ON p.id = u.project_id
+     GROUP BY level, day ORDER BY day DESC`,
+  ).all();
+  return c.json({ by_user_month: rows.results, by_level_month: levels.results, by_level_day: days.results });
 });

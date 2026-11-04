@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { BrowserRouter, NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { UserMenu } from './components/UserMenu';
+import { Dialog } from './components/Dialog';
+import { Button } from './components/ui';
 import Library from './pages/Library';
 import Studio from './pages/Studio';
 import Editor from './pages/Editor';
@@ -13,22 +15,73 @@ import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
 import About from './pages/About';
 import SignIn from './pages/SignIn';
+import InviteSignup from './pages/InviteSignup';
+import Classes from './pages/Classes';
 import { getMe, logout } from './lib/api';
+import type { UserRole } from './lib/api';
+import { canAccess, effectiveRole } from './lib/access';
+import type { Surface } from './lib/access';
 
-function Guard({ email, children }: { email: string | null; children: ReactNode }) {
+const PREVIEW_KEY = 'e3-role-preview';
+
+function loadPreview(): UserRole | null {
+  try {
+    const v = sessionStorage.getItem(PREVIEW_KEY);
+    return v === 'student' || v === 'teacher' || v === 'creator' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function Guard({
+  email,
+  role,
+  surface,
+  children,
+}: {
+  email: string | null;
+  role: UserRole | null;
+  surface: Surface;
+  children: ReactNode;
+}) {
   if (email === null) return <Navigate to="/signin" replace />;
+  if (!canAccess(surface, role)) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
 export default function App() {
   const [email, setEmail] = useState<string | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
+  const [preview, setPreview] = useState<UserRole | null>(loadPreview);
+  const [lensOpen, setLensOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
+  // Admin "view as" lens. The real session (and every server-side role
+  // check) never changes; only navigation and route guards see the lens.
+  const viewRole = effectiveRole(role, preview);
+
+  function setLens(next: UserRole | null, to: string) {
+    setPreview(next);
+    try {
+      if (next) sessionStorage.setItem(PREVIEW_KEY, next);
+      else sessionStorage.removeItem(PREVIEW_KEY);
+    } catch {
+      // Private mode: the lens still works for this page load.
+    }
+    navigate(to);
+  }
+
   useEffect(() => {
     getMe()
-      .then((me) => setEmail(me.user.email))
-      .catch(() => setEmail(null))
+      .then((me) => {
+        setEmail(me.user.email);
+        setRole(me.user.role);
+      })
+      .catch(() => {
+        setEmail(null);
+        setRole(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -37,6 +90,13 @@ export default function App() {
       await logout();
     } finally {
       setEmail(null);
+      setRole(null);
+      setPreview(null);
+      try {
+        sessionStorage.removeItem(PREVIEW_KEY);
+      } catch {
+        // Ignore storage failures on sign-out.
+      }
       navigate('/signin');
     }
   }
@@ -67,16 +127,30 @@ export default function App() {
           >
             Library
           </NavLink>
-          <NavLink
-            to="/studio"
-            className={({ isActive }) =>
-              isActive
-                ? 'border-b-2 border-accent-900 pb-0.5 font-semibold text-stone-900'
-                : 'text-stone-600 underline decoration-stone-300 underline-offset-4 hover:decoration-stone-500'
-            }
-          >
-            Studio
-          </NavLink>
+          {canAccess('classes', viewRole) ? (
+            <NavLink
+              to="/classes"
+              className={({ isActive }) =>
+                isActive
+                  ? 'border-b-2 border-accent-900 pb-0.5 font-semibold text-stone-900'
+                  : 'text-stone-600 underline decoration-stone-300 underline-offset-4 hover:decoration-stone-500'
+              }
+            >
+              Classes
+            </NavLink>
+          ) : null}
+          {canAccess('studio', viewRole) ? (
+            <NavLink
+              to="/studio"
+              className={({ isActive }) =>
+                isActive
+                  ? 'border-b-2 border-accent-900 pb-0.5 font-semibold text-stone-900'
+                  : 'text-stone-600 underline decoration-stone-300 underline-offset-4 hover:decoration-stone-500'
+              }
+            >
+              Studio
+            </NavLink>
+          ) : null}
           <NavLink
             to="/about"
             className={({ isActive }) =>
@@ -92,7 +166,16 @@ export default function App() {
               <UserMenu
                 email={email}
                 onSignOut={signOut}
-                items={[{ label: 'Admin', onSelect: () => navigate('/admin') }]}
+                items={
+                  role === 'admin'
+                    ? [
+                        ...(viewRole === 'admin'
+                          ? [{ label: 'Dashboard', onSelect: () => navigate('/admin') }]
+                          : [{ label: 'Dashboard · exit preview', onSelect: () => setLens(null, '/admin') }]),
+                        { label: 'View as…', onSelect: () => setLensOpen(true) },
+                      ]
+                    : []
+                }
               />
             ) : (
               <NavLink
@@ -109,20 +192,69 @@ export default function App() {
           </span>
         </div>
       </nav>
+      {lensOpen && role === 'admin' ? (
+        <Dialog
+          title="View as"
+          description="Preview the app through another role's screens. Your admin session never changes."
+          onClose={() => setLensOpen(false)}
+        >
+          <div className="flex flex-col gap-2">
+            {(
+              [
+                { lens: 'student' as const, label: 'Student', to: '/' },
+                { lens: 'teacher' as const, label: 'Teacher', to: '/classes' },
+                { lens: 'creator' as const, label: 'Creator', to: '/studio' },
+              ]
+            ).map((o) => (
+              <Button
+                key={o.lens}
+                variant={viewRole === o.lens ? 'primary' : 'secondary'}
+                onClick={() => {
+                  setLens(o.lens, o.to);
+                  setLensOpen(false);
+                }}
+              >
+                {o.label}
+                {viewRole === o.lens ? ' · current' : ''}
+              </Button>
+            ))}
+            {preview !== null ? (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setLens(null, '/admin');
+                  setLensOpen(false);
+                }}
+              >
+                Back to Dashboard
+              </Button>
+            ) : null}
+          </div>
+        </Dialog>
+      ) : null}
       <Routes>
         <Route path="/signin" element={<SignIn />} />
+        <Route path="/signup/:code" element={<InviteSignup />} />
         <Route
           path="/"
           element={
-            <Guard email={email}>
+            <Guard email={email} role={viewRole} surface="library">
               <Library />
+            </Guard>
+          }
+        />
+        <Route
+          path="/classes"
+          element={
+            <Guard email={email} role={viewRole} surface="classes">
+              <Classes />
             </Guard>
           }
         />
         <Route
           path="/studio"
           element={
-            <Guard email={email}>
+            <Guard email={email} role={viewRole} surface="studio">
               <Studio />
             </Guard>
           }
@@ -130,7 +262,7 @@ export default function App() {
         <Route
           path="/studio/:id"
           element={
-            <Guard email={email}>
+            <Guard email={email} role={viewRole} surface="studio">
               <Editor />
             </Guard>
           }
@@ -138,7 +270,7 @@ export default function App() {
         <Route
           path="/read/:id"
           element={
-            <Guard email={email}>
+            <Guard email={email} role={viewRole} surface="library">
               <Reader />
             </Guard>
           }
@@ -147,7 +279,7 @@ export default function App() {
         <Route
           path="/practice/:id"
           element={
-            <Guard email={email}>
+            <Guard email={email} role={viewRole} surface="library">
               <Flashcards />
             </Guard>
           }
@@ -155,7 +287,7 @@ export default function App() {
         <Route
           path="/practice/alphabet"
           element={
-            <Guard email={email}>
+            <Guard email={email} role={viewRole} surface="library">
               <Flashcards />
             </Guard>
           }
@@ -166,7 +298,7 @@ export default function App() {
         <Route
           path="/admin"
           element={
-            <Guard email={email}>
+            <Guard email={email} role={viewRole} surface="admin">
               <Admin />
             </Guard>
           }
@@ -175,7 +307,7 @@ export default function App() {
         <Route
           path="/exam"
           element={
-            <Guard email={email}>
+            <Guard email={email} role={viewRole} surface="library">
               <Exam />
             </Guard>
           }

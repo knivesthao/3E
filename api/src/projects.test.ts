@@ -4,7 +4,8 @@ import app from './index';
 
 // Minimal in-memory D1 for route tests (subset of the API the routes use).
 function makeDb() {
-  const users = new Map<string, { id: string; email: string }>();
+  // Suite exercises creator flows; signup defaults live in roles.test.ts.
+  const users = new Map<string, { id: string; email: string; role: string }>();
   const sessions = new Map<string, { user_id: string; expires_at: number }>();
   const projects = new Map<string, Record<string, unknown>>();
   const scenes = new Map<string, Record<string, unknown>>();
@@ -23,7 +24,7 @@ function makeDb() {
   const runQuery = (q: string, p: unknown[]) => {
     if (q.startsWith('INSERT INTO users')) {
       const [id, email] = p as string[];
-      users.set(id, { id, email });
+      users.set(id, { id, email, role: 'creator' });
     } else if (q.startsWith('INSERT INTO sessions')) {
       const [h, uid, exp] = p as [string, string, number];
       sessions.set(h, { user_id: uid, expires_at: exp });
@@ -34,9 +35,9 @@ function makeDb() {
     } else if (q.startsWith('DELETE FROM sessions WHERE id_hash')) {
       sessions.delete(p[0] as string);
     } else if (q.startsWith('INSERT INTO projects')) {
-      const [id, creator_id, title, description, level, purpose, status, cast_json, created_at, updated_at] =
+      const [id, creator_id, title, description, level, purpose, status, cast_json, tags_json, quiz_json, created_at, updated_at] =
         p as string[];
-      projects.set(id, { id, creator_id, title, description, level, purpose, status, cast_json, created_at, updated_at });
+      projects.set(id, { id, creator_id, title, description, level, purpose, status, cast_json, tags_json, quiz_json, created_at, updated_at });
     } else if (q.startsWith('UPDATE projects SET updated_at')) {
       const row = projects.get(p[1] as string);
       if (row) row.updated_at = p[0];
@@ -85,7 +86,7 @@ function makeDb() {
       const s = sessions.get(p[0] as string);
       if (!s) return null;
       const u = users.get(s.user_id);
-      return u ? { id: u.id, email: u.email, expires_at: s.expires_at } : null;
+      return u ? { id: u.id, email: u.email, role: u.role, expires_at: s.expires_at } : null;
     }
     if (q.startsWith('SELECT * FROM projects WHERE id = ? AND creator_id')) {
       const r = projects.get(p[0] as string);
@@ -212,6 +213,20 @@ describe('projects CRUD + owner isolation', () => {
     const del = await app.request(`/api/projects/${project.id}`, { method: 'DELETE', headers: { cookie: alice } }, env);
     expect(del.status).toBe(200);
     expect((await app.request(`/api/projects/${project.id}`, { headers: { cookie: alice } }, env)).status).toBe(404);
+  });
+
+  it('stores focus tags at create and rejects bad ones', async () => {
+    const db = makeDb();
+    const env = ENV(db);
+    const alice = await signIn(db, 'alice@example.com');
+    const created = await app.request(
+      '/api/projects', json('POST', { title: 'Verbs', level: 'A1', tags: ['verbs', 'nouns'] }, alice), env);
+    expect(created.status).toBe(201);
+    const { project } = (await created.json()) as { project: { id: string; tags_json: string } };
+    expect(JSON.parse(project.tags_json)).toEqual(['verbs', 'nouns']);
+    expect((await app.request('/api/projects', json('POST', { title: 'Bad', level: 'A1', tags: ['hocus'] }, alice), env)).status).toBe(400);
+    expect((await app.request(
+      '/api/projects', json('POST', { title: 'Many', level: 'A1', tags: ['nouns', 'verbs', 'adjectives', 'nouns'] }, alice), env)).status).toBe(400);
   });
 });
 

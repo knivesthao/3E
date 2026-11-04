@@ -11,22 +11,26 @@ type Usage = {
 };
 
 function makeDb() {
-  const users = new Map<string, { id: string; email: string }>();
+  // Suite exercises creator flows; signup defaults live in roles.test.ts.
+  const users = new Map<string, { id: string; email: string; role: string }>();
   const sessions = new Map<string, { user_id: string; expires_at: number }>();
-  const projects = new Map<string, { id: string; creator_id: string }>();
+  const projects = new Map<string, { id: string; creator_id: string; level: string }>();
   const usage: Usage[] = [];
   return {
     usage,
-    seedProject(id: string, creator_id: string) {
-      projects.set(id, { id, creator_id });
+    seedProject(id: string, creator_id: string, level = 'A1') {
+      projects.set(id, { id, creator_id, level });
+    },
+    setRole(userId: string, role: string) {
+      const u = [...users.values()].find((x) => x.id === userId);
+      if (u) u.role = role;
     },
     seedUsage(row: Omit<Usage, 'created_at'> & { created_at?: string }) {
       usage.push({ created_at: new Date().toISOString(), ...row });
     },
     prepare(sql: string) {
       const q = sql.replace(/\s+/g, ' ').trim();
-      return {
-        bind(...params: unknown[]) {
+      const query = (...params: unknown[]) => {
           const projectId = params[0] as string;
           const rows = usage.filter((u) => u.project_id === projectId);
           return {
@@ -42,7 +46,7 @@ function makeDb() {
                 const s = sessions.get(params[0] as string);
                 if (!s) return null;
                 const u = users.get(s.user_id);
-                return u ? { id: u.id, email: u.email, expires_at: s.expires_at } : null;
+                return u ? { id: u.id, email: u.email, role: u.role, expires_at: s.expires_at } : null;
               }
               if (q.startsWith('SELECT * FROM projects WHERE id = ?')) {
                 const r = projects.get(params[0] as string);
@@ -57,6 +61,49 @@ function makeDb() {
               return null;
             },
             all: async () => {
+              if (q.startsWith('SELECT user_id, strftime')) {
+                const by = new Map<string, Usage[]>();
+                for (const u of usage) {
+                  const k = `${u.user_id}|${u.created_at.slice(0, 7)}`;
+                  by.set(k, [...(by.get(k) ?? []), u]);
+                }
+                return {
+                  results: [...by.entries()].map(([k, rs]) => {
+                    const [user_id, month] = k.split('|');
+                    return { user_id, month, cost: rs.reduce((a, u) => a + u.cost_usd, 0) };
+                  }),
+                };
+              }
+              if (q.startsWith('SELECT p.level')) {
+                const by = new Map<string, Usage[]>();
+                for (const u of usage) {
+                  if (!u.project_id) continue;
+                  const level = projects.get(u.project_id)?.level;
+                  if (!level) continue;
+                  const k = `${level}|${u.created_at.slice(0, 7)}`;
+                  by.set(k, [...(by.get(k) ?? []), u]);
+                }
+                return {
+                  results: [...by.entries()].map(([k, rs]) => {
+                    const [level, month] = k.split('|');
+                    return { level, month, cost: rs.reduce((a, u) => a + u.cost_usd, 0) };
+                  }),
+                };
+              }
+              if (q.startsWith("SELECT COALESCE(p.level, 'Unlinked')")) {
+                const by = new Map<string, Usage[]>();
+                for (const u of usage) {
+                  const level = u.project_id ? projects.get(u.project_id)?.level ?? 'Unlinked' : 'Unlinked';
+                  const k = `${level}|${u.created_at.slice(0, 10)}`;
+                  by.set(k, [...(by.get(k) ?? []), u]);
+                }
+                return {
+                  results: [...by.entries()].map(([k, rs]) => {
+                    const [level, day] = k.split('|');
+                    return { level, day, cost: rs.reduce((a, u) => a + u.cost_usd, 0) };
+                  }),
+                };
+              }
               if (q.startsWith('SELECT task, SUM(cost_usd)')) {
                 const by = new Map<string, Usage[]>();
                 for (const u of rows) by.set(u.task, [...(by.get(u.task) ?? []), u]);
@@ -104,7 +151,7 @@ function makeDb() {
             run: async () => {
               if (q.startsWith('INSERT INTO users')) {
                 const [id, email] = params as [string, string, ...unknown[]];
-                users.set(id, { id, email });
+                users.set(id, { id, email, role: 'creator' });
               } else if (q.startsWith('INSERT INTO sessions')) {
                 const [h, uid, exp] = params as [string, string, number];
                 sessions.set(h, { user_id: uid, expires_at: exp });
@@ -118,7 +165,12 @@ function makeDb() {
               return { success: true };
             },
           };
-        },
+      };
+      return {
+        bind: (...params: unknown[]) => query(...params),
+        first: () => query().first(),
+        all: () => query().all(),
+        run: () => query().run(),
       };
     },
   };
@@ -197,5 +249,48 @@ describe('GET /api/admin/costs/book', () => {
     const body = (await res.json()) as { totals: { total: number }; attempts: unknown[] };
     expect(body.totals.total).toBeCloseTo(0.01);
     expect(body.attempts).toHaveLength(1);
+  });
+});
+
+describe('GET /api/admin/costs/overview', () => {
+  it('is admin-only and reports book spend by level and day', async () => {
+    const db = makeDb();
+    const { cookie, userId } = await signIn(db);
+    expect((await app.request('/api/admin/costs/overview', { headers: { cookie } }, ENV(db))).status).toBe(403);
+    db.setRole(userId, 'admin');
+    db.seedProject('a1-book', userId, 'A1');
+    db.seedProject('b2-book', userId, 'B2');
+    const seed = (project_id: string, cost: number, created_at: string) =>
+      db.seedUsage({
+        project_id, user_id: userId, op_id: `${project_id}-${created_at}`, attempt: 1, task: 'draft',
+        provider: 'meta-model-api', model: 'muse-spark-1.3', input_tokens: 1, output_tokens: 1,
+        cost_usd: cost, ms: 10, ok: 1, error: null, created_at,
+      });
+    seed('a1-book', 0.01, '2026-11-03T10:00:00.000Z');
+    seed('a1-book', 0.02, '2026-11-04T10:00:00.000Z');
+    seed('b2-book', 0.05, '2026-11-04T11:00:00.000Z');
+    // Project-less lookups and deleted-draft spend stay visible as Unlinked.
+    seed('', 9.99, '2026-11-04T12:00:00.000Z');
+    seed('deleted-draft', 1.5, '2026-11-03T13:00:00.000Z');
+    const res = await app.request('/api/admin/costs/overview', { headers: { cookie } }, ENV(db));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      by_user_month: { user_id: string; month: string; cost: number }[];
+      by_level_month: { level: string; month: string; cost: number }[];
+      by_level_day: { level: string; day: string; cost: number }[];
+    };
+    expect(body.by_level_day).toHaveLength(5);
+    const a1 = body.by_level_day.filter((r) => r.level === 'A1').sort((a, b) => (a.day < b.day ? -1 : 1));
+    expect(a1).toMatchObject([
+      { day: '2026-11-03', cost: 0.01 },
+      { day: '2026-11-04', cost: 0.02 },
+    ]);
+    expect(body.by_level_day.find((r) => r.level === 'B2')).toMatchObject({ day: '2026-11-04', cost: 0.05 });
+    const unlinked = body.by_level_day.filter((r) => r.level === 'Unlinked').sort((a, b) => (a.day < b.day ? -1 : 1));
+    expect(unlinked).toMatchObject([
+      { day: '2026-11-03', cost: 1.5 },
+      { day: '2026-11-04', cost: 9.99 },
+    ]);
+    expect(body.by_level_month).toHaveLength(2);
   });
 });

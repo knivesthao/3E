@@ -1,0 +1,10 @@
+{
+  "Red Cat": {
+    "status": "failed",
+    "level": "A1",
+    "projectId": "5bae8a85-8c03-4cae-8795-247879ce489c",
+    "saved": [],
+    "art": [],
+    "error": "POST /api/ai/finish -> 502: {\"error\":\"ai failed\"}"
+  }
+}

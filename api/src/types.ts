@@ -22,4 +22,5 @@ export type Bindings = {
   RESEND_API_KEY?: string;
   EMAIL_FROM?: string;
 };
-export type Variables = { userId: string; userEmail: string };
+import type { Role } from './roles';
+export type Variables = { userId: string; userEmail: string; userRole: Role };

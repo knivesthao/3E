@@ -13,6 +13,7 @@ import type { Level } from './levels';
 import { isHskLevel } from './hsk';
 import type { HskLevel } from './hsk';
 import { isRecord } from './validate';
+import { requireRole } from './roles';
 
 // Local narrow guard (routes.ts and validate.ts each carry their own).
 const isLevel = (v: unknown): v is Level =>
@@ -20,10 +21,17 @@ const isLevel = (v: unknown): v is Level =>
 
 // Admin overview (Specs + Content tabs). Session-gated by index.ts like
 // every other /api/* route. Aggregate counts only — no PII, and never
-// any secret material: Baseten wiring is reported as a boolean.
+// any secret material: Baseten wiring is reported as a boolean. Every route
+// below is additionally admin-only (per-route, so the separately mounted
+// /api/admin/costs router keeps its own creator/admin rules). The UserMenu
+// link is hidden for other roles, but the gate that matters lives here.
 export const admin = new Hono<{ Bindings: Bindings; Variables: Variables }>({ strict: false });
 
+const ADMIN_ONLY: readonly ['admin'] = ['admin'];
+
 admin.get('/specs', (c) => {
+  const denied = requireRole(c, ADMIN_ONLY);
+  if (denied) return denied;
   return c.json({
     models: {
       text: TEXT_MODEL,
@@ -42,6 +50,8 @@ admin.get('/specs', (c) => {
 // stored answer JSON (supports both the legacy answers-only shape and
 // the current form+answers shape). Drives bank rotation decisions.
 admin.get('/exam-items', async (c) => {
+  const denied = requireRole(c, ADMIN_ONLY);
+  if (denied) return denied;
   const { results } = await c.env.DB.prepare('SELECT answers_json FROM exam_attempts').all<{
     answers_json: string;
   }>();
@@ -92,6 +102,8 @@ admin.get('/exam-items', async (c) => {
 });
 
 admin.get('/stats', async (c) => {
+  const denied = requireRole(c, ADMIN_ONLY);
+  if (denied) return denied;
   const db = c.env.DB;
   const counts: Record<string, number> = {};
   for (const table of ['users', 'projects', 'scenes', 'panels', 'jobs', 'ai_usage'] as const) {
@@ -112,6 +124,8 @@ admin.get('/stats', async (c) => {
 // the dictionary. INSERT OR IGNORE keeps reseeds idempotent: existing rows
 // (hand-fixed or already verified) always win over the incoming batch.
 admin.post('/definitions', async (c) => {
+  const denied = requireRole(c, ADMIN_ONLY);
+  if (denied) return denied;
   if (c.env.DEV_LINKS !== 'true') return c.json({ error: 'not found' }, 404);
   let body: unknown;
   try {
@@ -154,6 +168,8 @@ function seedScope(levels: string[], shard: string): string {
 }
 
 admin.post('/seed-jobs', async (c) => {
+  const denied = requireRole(c, ADMIN_ONLY);
+  if (denied) return denied;
   if (c.env.DEV_LINKS !== 'true') return c.json({ error: 'not found' }, 404);
   let body: unknown;
   try {
@@ -194,6 +210,8 @@ admin.post('/seed-jobs', async (c) => {
 });
 
 admin.get('/seed-jobs', async (c) => {
+  const denied = requireRole(c, ADMIN_ONLY);
+  if (denied) return denied;
   if (c.env.DEV_LINKS !== 'true') return c.json({ error: 'not found' }, 404);
   const { results } = await c.env.DB.prepare(
     'SELECT scope, levels, shard, status, total, done, missed_json, error, run_url, started_at, updated_at FROM seed_jobs ORDER BY updated_at DESC LIMIT 50',
@@ -217,6 +235,8 @@ admin.get('/seed-jobs', async (c) => {
 // Resume source of truth: words already defined for these levels, so a rerun
 // (or a lost progress file) only generates what's actually missing.
 admin.get('/done-words', async (c) => {
+  const denied = requireRole(c, ADMIN_ONLY);
+  if (denied) return denied;
   if (c.env.DEV_LINKS !== 'true') return c.json({ error: 'not found' }, 404);
   const levels = (c.req.query('levels') ?? '').split(',').map((s) => s.trim().toUpperCase()).filter(isLevel);
   if (levels.length === 0) return c.json({ error: 'invalid request' }, 400);

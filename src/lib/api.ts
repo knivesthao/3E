@@ -28,13 +28,15 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-export const getMe = () =>
-  api<{ user: { id: string; email: string } }>('/api/auth/me');
+export type UserRole = 'student' | 'teacher' | 'creator' | 'admin';
 
-export const requestLink = (email: string) =>
+export const getMe = () =>
+  api<{ user: { id: string; email: string; role: UserRole } }>('/api/auth/me');
+
+export const requestLink = (email: string, inviteCode?: string) =>
   api<{ ok: true; devLink?: string; emailed?: boolean }>('/api/auth/request-link', {
     method: 'POST',
-    body: JSON.stringify({ email }),
+    body: JSON.stringify(inviteCode ? { email, inviteCode } : { email }),
   });
 
 export const logout = () => api<{ ok: true }>('/api/auth/logout', { method: 'POST' });
@@ -241,6 +243,125 @@ export interface CatalogBook {
 
 export const listBooks = () => api<{ books: CatalogBook[] }>('/api/share/books');
 
+// Student enrollment: classes the signed-in learner belongs to, each with
+// its ordered curriculum of published books.
+export interface EnrolledClassBook {
+  book_id: string;
+  position: number;
+  title: string;
+  level: string;
+  cover_url: string | null;
+}
+
+export interface EnrolledClass {
+  id: string;
+  name: string;
+  level: string;
+  books: EnrolledClassBook[];
+  words: string[];
+}
+
+export const listMyClasses = () => api<{ classes: EnrolledClass[] }>('/api/me/classes');
+
+// Personal shelf: books the learner saved for later. Assigned class books
+// come from listMyClasses; finished books stay in getMyActivity.
+export interface ShelfBook {
+  id: string;
+  title: string;
+  level: string;
+  cover_url: string | null;
+  added_at: string;
+}
+
+export const listShelf = () => api<{ books: ShelfBook[] }>('/api/me/shelf');
+
+export const saveShelfBook = (bookId: string) =>
+  api<{ saved: true }>('/api/me/shelf', {
+    method: 'POST',
+    body: JSON.stringify({ bookId }),
+  });
+
+export const removeShelfBook = (bookId: string) =>
+  api<{ ok: true }>(`/api/me/shelf/${encodeURIComponent(bookId)}`, { method: 'DELETE' });
+
+// Teacher class management. Only teachers (their own classes) and admins
+// can call these; the server enforces ownership.
+export interface TeacherClass {
+  id: string;
+  name: string;
+  level: string;
+  teacher_email?: string;
+  student_count: number;
+  book_count: number;
+}
+
+export interface ClassStudent {
+  id: string;
+  email: string;
+  added_at: string;
+}
+
+export interface ClassBook {
+  book_id: string;
+  position: number;
+  title: string;
+  level: string;
+  cover_url: string | null;
+}
+
+export interface ClassDetail {
+  cls: { id: string; teacher_id: string; name: string; level: string };
+  students: ClassStudent[];
+  books: ClassBook[];
+  words: string[];
+}
+
+export const listClasses = () => api<{ classes: TeacherClass[] }>('/api/classes');
+
+export const createClass = (name: string, level: string) =>
+  api<{ cls: ClassDetail['cls']; books: { book_id: string; position: number }[]; words: string[] }>('/api/classes', {
+    method: 'POST',
+    body: JSON.stringify({ name, level }),
+  });
+
+export const getClass = (id: string) => api<ClassDetail>(`/api/classes/${id}`);
+
+export interface ClassActivityEntry {
+  user_id: string;
+  email: string;
+  days_active: number;
+  streak: number;
+  finished: number;
+  last_active: string | null;
+}
+
+export const getClassActivity = (id: string) =>
+  api<{ activity: ClassActivityEntry[] }>(`/api/classes/${id}/activity`);
+
+export const renameClass = (id: string, name: string) =>
+  api<ClassDetail>(`/api/classes/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) });
+
+export const enrollStudent = (id: string, email: string) =>
+  api<{ added: true; user_id: string }>(`/api/classes/${id}/students`, {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+
+export const removeStudent = (id: string, userId: string) =>
+  api<{ ok: true }>(`/api/classes/${id}/students/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+
+export const replaceClassWords = (id: string, words: string[]) =>
+  api<{ words: string[] }>(`/api/classes/${id}/words`, {
+    method: 'POST',
+    body: JSON.stringify({ words }),
+  });
+
+export const replaceClassBooks = (id: string, bookIds: string[]) =>
+  api<{ books: { book_id: string; position: number }[] }>(`/api/classes/${id}/books`, {
+    method: 'POST',
+    body: JSON.stringify({ bookIds }),
+  });
+
 // Defined-words map for the Reader (publish-computed): words with a gloss
 // stay tappable, the rest render as plain text. Empty = unknown, and the
 // Reader keeps the legacy all-tappable behavior.
@@ -320,6 +441,10 @@ export interface SeedJob {
 
 export const listSeedJobs = () => api<{ jobs: SeedJob[] }>('/api/admin/seed-jobs');
 
+export type ExamLevel = 'A1' | 'A2' | 'B1' | 'B2';
+
+export const EXAM_LEVELS: ExamLevel[] = ['A1', 'A2', 'B1', 'B2'];
+
 export interface ExamQuestion {
   id: string;
   part: 1 | 2 | 3 | 4;
@@ -339,6 +464,7 @@ export interface ExamItemStat {
 export const getExamItems = () => api<{ items: ExamItemStat[] }>('/api/admin/exam-items');
 
 export interface ExamResult {
+  level: ExamLevel;
   score: number;
   total: number;
   passed: boolean;
@@ -347,11 +473,46 @@ export interface ExamResult {
   missedWords: string[];
 }
 
-export const getExam = () =>
-  api<{ questions: ExamQuestion[]; total: number; passMark: number }>('/api/exam');
+export const getExam = (level: ExamLevel = 'A1') =>
+  api<{ level: ExamLevel; questions: ExamQuestion[]; total: number; passMark: number }>(
+    `/api/exam?level=${level}`,
+  );
 
-export const getExamBest = () =>
-  api<{ attempts: number; best: number | null; total: number; passMark: number }>('/api/exam/best');
+export const getExamBest = (level: ExamLevel = 'A1') =>
+  api<{ level: ExamLevel; attempts: number; best: number | null; total: number; passMark: number }>(
+    `/api/exam/best?level=${level}`,
+  );
+
+export interface ExamAttempt {
+  id: string;
+  level: ExamLevel;
+  score: number;
+  total: number;
+  passed: boolean;
+  created_at: string;
+}
+
+export interface ExamAttemptItem {
+  id: string;
+  part: 1 | 2 | 3 | 4;
+  section: 'words' | 'grammar' | 'reading';
+  prompt: string;
+  passage?: string;
+  options: string[];
+  choice: number | null;
+  answer: number;
+  correct: boolean;
+  explanation: string;
+}
+
+export interface ExamAttemptDetail extends ExamAttempt {
+  items: ExamAttemptItem[];
+}
+
+export const getExamHistory = (level?: ExamLevel) =>
+  api<{ attempts: ExamAttempt[] }>(level ? `/api/exam/history?level=${level}` : '/api/exam/history');
+
+export const getExamAttempt = (id: string) => api<ExamAttemptDetail>(`/api/exam/history/${id}`);
 
 // CEFR word lists (the same arrays the server level-gate enforces) plus the
 // closed book-focus vocabulary — the client never hardcodes either.
@@ -390,14 +551,30 @@ export interface MyActivity {
 
 export const getMyActivity = () => api<MyActivity>('/api/me/activity');
 
-export const submitExam = (form: string[], answers: { id: string; choice: number }[]) =>
-  api<ExamResult>('/api/exam/submit', { method: 'POST', body: JSON.stringify({ form, answers }) });
+export const submitExam = (level: ExamLevel, form: string[], answers: { id: string; choice: number }[]) =>
+  api<ExamResult>('/api/exam/submit', { method: 'POST', body: JSON.stringify({ level, form, answers }) });
 
 export const getBookCosts = (projectId: string) =>
   api<BookCosts>(`/api/admin/costs/book?projectId=${encodeURIComponent(projectId)}`);
 
+export interface CostsLevelMonth {
+  level: string;
+  month: string;
+  cost: number;
+}
+
+export interface CostsLevelDay {
+  level: string;
+  day: string;
+  cost: number;
+}
+
 export const getCostsOverview = () =>
-  api<{ by_user_month: { user_id: string; month: string; cost: number }[] }>('/api/admin/costs/overview');
+  api<{
+    by_user_month: { user_id: string; month: string; cost: number }[];
+    by_level_month: CostsLevelMonth[];
+    by_level_day: CostsLevelDay[];
+  }>('/api/admin/costs/overview');
 
 export const aiMeanings = (words: string[], level: string) =>
   api<{ meanings: { word: string; meaning: string }[] }>('/api/ai/meanings', {

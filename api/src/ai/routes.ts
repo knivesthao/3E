@@ -6,13 +6,14 @@ import { basetenConfig } from './config';
 import type { BasetenConfig } from './config';
 import { FAILED, INVALID, finishJob, modelKey, limitCheck, readJson } from './http';
 import { generate, parseJson } from './client';
-import { buddyPrompt, castNames, checkPrompt, checkPromptZh, draftPrompt, draftPromptZh, ideaPrompt, meaningsPrompt, meaningsPromptZh, quizPrompt, sceneActionText, simplifyPrompt } from './prompts';
+import { buddyPrompt, castNames, checkPrompt, checkPromptZh, draftPrompt, draftPromptZh, ideaPrompt, meaningsPrompt, meaningsPromptZh, sceneActionText, simplifyPrompt } from './prompts';
+import { buildQuiz, parseStoredQuiz } from './quiz';
 import { easierLevels } from '../levels';
 import { art } from './art';
 import { checkHsk, easierHsk, isHskLevel } from '../hsk';
 import type { HskLevel } from '../hsk';
-import { checkLevel } from '../levels';
-import type { Level } from '../levels';
+import { checkFocus, checkLevel, isFocusTag } from '../levels';
+import type { FocusTag, Level } from '../levels';
 import { ownProject } from '../projects';
 import type { ProjectRow } from '../projects';
 import { isRecord, validateSceneData } from '../validate';
@@ -221,12 +222,18 @@ ai.post('/quiz', async (c) => {
   const project = await ownProject(c.env.DB, body.projectId, c.get('userId'));
   if (!project) return c.json({ error: 'not found' }, 404);
   if (!isLevel(project.level) && !isHskLevel(project.level)) return c.json(INVALID, 400);
+  const db = c.env.DB;
+  // Static serve: quizzes are written once at publish, so students never
+  // pay for a quiz view — no key, quota, or model call on this path.
+  const stored = parseStoredQuiz((project as { quiz_json?: unknown }).quiz_json);
+  if (stored) return c.json({ questions: stored });
+  // Legacy books predate stored quizzes: generate once, store, then serve.
+  // After this call the book behaves like every published one.
   const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
   const limited = await limitCheck(c.env.DB, c.get('userId'));
   if (limited) return c.json(limited, 429);
 
-  const db = c.env.DB;
   const { results: rows } = await db
     .prepare('SELECT * FROM scenes WHERE project_id = ? ORDER BY scene_number ASC')
     .bind(project.id)
@@ -251,36 +258,24 @@ ai.post('/quiz', async (c) => {
   if (story === '') return c.json(INVALID, 400);
 
   try {
-    const { text } = await generate(db, {
-      apiKey,
-      userId: c.get('userId'),
-      projectId: project.id,
-      opId: crypto.randomUUID(),
-      task: 'quiz',
-      prompt: quizPrompt(project.level as Level, story),
-      json: true,
-      apiUrl: c.env.AI_API_URL,
-      validate: (t) => {
-        const v = parseJson(t, isRecord);
-        if (!v || !Array.isArray(v.questions)) return false;
-        const qs = v.questions as unknown[];
-        if (qs.length < 4 || qs.length > 8) return false;
-        return qs.every((q) => {
-          if (!isRecord(q)) return false;
-          if (typeof q.prompt !== 'string' || q.prompt === '' || q.prompt.length > 300) return false;
-          if (!Array.isArray(q.options) || q.options.length < 2 || q.options.length > 4) return false;
-          if (!q.options.every((o: unknown) => typeof o === 'string' && o !== '' && o.length <= 100)) return false;
-          if (typeof q.answer !== 'number' || !Number.isInteger(q.answer) || q.answer < 0 || q.answer >= q.options.length) {
-            return false;
-          }
-          return typeof q.explanation === 'string' && q.explanation !== '' && q.explanation.length <= 300;
-        });
+    const questions = await buildQuiz(
+      db,
+      {
+        apiKey,
+        userId: c.get('userId'),
+        projectId: project.id,
+        opId: crypto.randomUUID(),
+        apiUrl: c.env.AI_API_URL,
+        baseten: basetenConfig(c.env),
       },
-    });
-    const v = parseJson(text, isRecord) as {
-      questions: { prompt: string; options: string[]; answer: number; explanation: string }[];
-    };
-    return c.json({ questions: v.questions });
+      project.level as Level,
+      story,
+    );
+    await db
+      .prepare('UPDATE projects SET quiz_json = ? WHERE id = ?')
+      .bind(JSON.stringify({ questions }), project.id)
+      .run();
+    return c.json({ questions });
   } catch (e) {
     if (e instanceof AiError) return c.json(FAILED, 502);
     throw e;
@@ -390,6 +385,18 @@ const isCheckReply = (v: unknown): v is { passed: boolean; reason: string } => {
   return typeof v.reason === 'string' || v.reason === undefined;
 };
 
+// Drill focus rides the project (closed vocabulary, validated at create).
+// Old rows predate the column: unparseable tags mean a general book.
+export function projectFocus(tagsJson: unknown): FocusTag[] {
+  if (typeof tagsJson !== 'string') return [];
+  try {
+    const v = JSON.parse(tagsJson) as unknown;
+    return Array.isArray(v) ? v.filter(isFocusTag) : [];
+  } catch {
+    return [];
+  }
+}
+
 async function draftMissing(
   db: D1Database,
   ctx: { apiKey: string; userId: string; projectId: string; opId: string; apiUrl?: string; baseten?: BasetenConfig | null },
@@ -405,6 +412,8 @@ async function draftMissing(
     castJson: project.cast_json,
     scenesJson: JSON.stringify(scenesSoFar),
     newWordsJson: '[]',
+    // HSK books carry no English POS focus.
+    ...(zh ? {} : { focus: projectFocus(project.tags_json) }),
   };
   const { text } = await generate(db, {
     ...ctx,
@@ -504,6 +513,21 @@ ai.post('/finish', async (c) => {
         const reason = !check.passed ? check.reason || 'qa rejected' : `out of level: ${gate.unknown.join(', ')}`;
         failed.push({ scene_number: n, reason });
         continue;
+      }
+      // Drill focus: every tagged book must actually drill. Free,
+      // deterministic token counting — no model call, no new failure mode
+      // beyond a retry, which the 12-try draft budget already absorbs.
+      if (!zh) {
+        const focusFail = projectFocus(project.tags_json)
+          .map((tag) => ({ tag, focus: checkFocus(story, level as Level, tag) }))
+          .find((r) => !r.focus.passed);
+        if (focusFail) {
+          failed.push({
+            scene_number: n,
+            reason: `needs more ${focusFail.tag} words (found ${focusFail.focus.found}, need ${focusFail.focus.need})`,
+          });
+          continue;
+        }
       }
       const stamp = new Date().toISOString();
       await db

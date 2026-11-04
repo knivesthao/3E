@@ -10,12 +10,16 @@ import {
   newToken,
 } from './auth';
 import { sendMagicLink } from './email';
+import { isRole } from './roles';
+import { invites, redeemInviteForSignup } from './invites';
+import { classes } from './classes';
+import { student } from './student';
 import { projects } from './projects';
 import { admin } from './admin';
 import { exam } from './exam';
 import { misses } from './misses';
 import { progress } from './progress';
-import { finishedBooks } from './shelf';
+import { summarizeActivity } from './activity';
 import { ai } from './ai/routes';
 import { share } from './share';
 import { costs } from './costs';
@@ -61,13 +65,15 @@ app.use('/api/*', async (c, next) => {
   const raw = getCookie(c, SESSION_COOKIE);
   if (!raw) return c.json({ error: 'unauthorized' }, 401);
   const row = await c.env.DB.prepare(
-    'SELECT users.id, users.email, sessions.expires_at FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.id_hash = ?',
+    'SELECT users.id, users.email, users.role, sessions.expires_at FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.id_hash = ?',
   )
     .bind(await hashToken(raw))
-    .first<{ id: string; email: string; expires_at: number }>();
+    .first<{ id: string; email: string; role: unknown; expires_at: number }>();
   if (!row || row.expires_at < Date.now()) return c.json({ error: 'unauthorized' }, 401);
   c.set('userId', row.id);
   c.set('userEmail', row.email);
+  // Fail closed: only a known role is trusted; legacy/unknown values read as student.
+  c.set('userRole', isRole(row.role) ? row.role : 'student');
   return next();
 });
 
@@ -85,6 +91,16 @@ app.post('/api/auth/request-link', async (c) => {
       ? (body as { email: string }).email.trim().toLowerCase()
       : '';
   if (!isValidEmail(email)) return c.json({ error: 'invalid request' }, 400);
+  const inviteCode =
+    typeof (body as { inviteCode?: unknown } | null)?.inviteCode === 'string'
+      ? (body as { inviteCode: string }).inviteCode
+      : '';
+  if (inviteCode !== '') {
+    // Invited signup consumes the code before any session is minted. All
+    // invite failures share one generic error so codes cannot be probed.
+    const redeemed = await redeemInviteForSignup(c.env.DB, inviteCode, email, Date.now());
+    if (!redeemed.ok) return c.json({ error: 'invalid request' }, 400);
+  }
 
   const now = Date.now();
   const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?')
@@ -94,9 +110,9 @@ app.post('/api/auth/request-link', async (c) => {
   if (!userId) {
     userId = crypto.randomUUID();
     await c.env.DB.prepare(
-      "INSERT INTO users (id, email, name, role, created_at) VALUES (?, ?, '', 'creator', ?)",
+      "INSERT INTO users (id, email, name, role, created_at) VALUES (?, ?, ?, ?, ?)",
     )
-      .bind(userId, email, new Date(now).toISOString())
+      .bind(userId, email, '', 'student', new Date(now).toISOString())
       .run();
   }
   await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND expires_at < ?')
@@ -149,7 +165,9 @@ app.get('/api/auth/verify', async (c) => {
   return c.redirect('/');
 });
 
-app.get('/api/auth/me', (c) => c.json({ user: { id: c.get('userId'), email: c.get('userEmail') } }));
+app.get('/api/auth/me', (c) =>
+  c.json({ user: { id: c.get('userId'), email: c.get('userEmail'), role: c.get('userRole') } }),
+);
 
 // Word lists for level flashcard decks. Same arrays the level gate
 // enforces, served as data so the client never imports server code
@@ -162,35 +180,14 @@ app.get('/api/levels', (c) =>
 
 // Self activity (shelf + streaks): distinct active days from exam attempts
 // plus page turns the user made, and books whose shared position the user
-// left on the final page. Derived from existing tables — zero extra writes.
-// Streak counts back from today, so reading today already extends it.
+// left on the final page. Shared with teacher class tracking.
 app.get('/api/me/activity', async (c) => {
-  const uid = c.get('userId');
-  const db = c.env.DB;
-  const [examRows, readRows] = await Promise.all([
-    db
-      .prepare('SELECT DISTINCT substr(created_at, 1, 10) AS day FROM exam_attempts WHERE user_id = ?')
-      .bind(uid)
-      .all<{ day: string }>(),
-    db
-      .prepare('SELECT DISTINCT substr(updated_at, 1, 10) AS day FROM reading_sync WHERE updated_by = ?')
-      .bind(uid)
-      .all<{ day: string }>(),
-  ]);
-  const daySet = new Set(
-    [...(examRows.results ?? []), ...(readRows.results ?? [])].map((r) => r.day),
+  const { days, streak, totalDays, finished } = await summarizeActivity(
+    c.env.DB,
+    c.env.LIBRARY_DB,
+    c.get('userId'),
   );
-  const days = [...daySet].sort();
-  let streak = 0;
-  const cursor = new Date();
-  while (daySet.has(cursor.toISOString().slice(0, 10))) {
-    streak++;
-    cursor.setUTCDate(cursor.getUTCDate() - 1);
-  }
-  // Finished books via the shared shelf helper (same fetch-then-match
-  // across the app/library DB boundary the summary endpoint uses).
-  const { finished } = await finishedBooks(db, c.env.LIBRARY_DB, uid);
-  return c.json({ days, streak, totalDays: days.length, finished });
+  return c.json({ days, streak, totalDays, finished });
 });
 
 app.post('/api/auth/logout', async (c) => {
@@ -205,7 +202,10 @@ app.post('/api/auth/logout', async (c) => {
 });
 
 app.route('/api/projects', projects);
+app.route('/api/classes', classes);
+app.route('/api/me', student);
 app.route('/api/admin', admin);
+app.route('/api/admin/invites', invites);
 app.route('/api/exam', exam);
 app.route('/api/misses', misses);
 app.route('/api/progress', progress);

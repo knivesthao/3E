@@ -7,7 +7,8 @@ import { DAILY_AI_LIMIT } from './ai/config';
 // answers for the stats tables, and exam_attempts rows for item stats.
 // Specs needs no DB at all.
 function makeDb(counts: Record<string, number>, examRows: string[] = []) {
-  const users = new Map<string, { id: string; email: string }>();
+  // Suite exercises admin flows; signup defaults live in roles.test.ts.
+  const users = new Map<string, { id: string; email: string; role: string }>();
   const sessions = new Map<string, { user_id: string; expires_at: number }>();
   const defs = new Map<string, Record<string, unknown>>();
   const seedJobs = new Map<string, Record<string, unknown>>();
@@ -45,7 +46,7 @@ function makeDb(counts: Record<string, number>, examRows: string[] = []) {
                 const s = sessions.get(params[0] as string);
                 if (!s) return null;
                 const u = users.get(s.user_id);
-                return u ? { id: u.id, email: u.email, expires_at: s.expires_at } : null;
+                return u ? { id: u.id, email: u.email, role: u.role, expires_at: s.expires_at } : null;
               }
               if (q.startsWith('SELECT COUNT(*) AS n FROM')) {
                 const table = q.split('FROM ')[1];
@@ -68,7 +69,7 @@ function makeDb(counts: Record<string, number>, examRows: string[] = []) {
           });
         } else if (q.startsWith('INSERT INTO users')) {
           const [id, email] = params as [string, string, ...unknown[]];
-          users.set(id, { id, email });
+          users.set(id, { id, email, role: 'admin' });
         } else if (q.startsWith('INSERT INTO sessions')) {
           const [id_hash, user_id, expires_at] = params as [string, string, number];
           sessions.set(id_hash, { user_id, expires_at });
