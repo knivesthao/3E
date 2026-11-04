@@ -58,6 +58,7 @@ jobs:
           --limit ${{ inputs.limit }}
           --max-tokens ${{ inputs.max-tokens }}
           --shard ${{ inputs.shard }}
+          --job-url ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         env:
           BASETEN_API_KEY: ${{ secrets.BASETEN_API_KEY }}
 
