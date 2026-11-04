@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import app from './index';
+import { CONSECUTIVE_FAIL_LIMIT } from './ai/config';
 import { makeBucket } from './test-utils';
 
 // In-memory D1 subset for the art routes (projects/scenes seeded directly,
@@ -25,10 +26,9 @@ function makeDb() {
       const id = crypto.randomUUID();
       scenes.set(id, { id, project_id: projectId, scene_number: sceneNumber, data_json: JSON.stringify(data), updated_at: new Date().toISOString() });
     },
-    seedUsage(userId: string, n: number) {
-      const day = new Date().toISOString();
+    seedFailures(userId: string, n: number) {
       for (let i = 0; i < n; i++) {
-        usage.push({ user_id: userId, task: 'art', created_at: day, attempt: 1, ok: 1 });
+        usage.push({ user_id: userId, task: 'art', created_at: new Date(Date.now() + i).toISOString(), attempt: 1, ok: 0 });
       }
     },
     prepare(sql: string) {
@@ -70,7 +70,18 @@ function makeDb() {
               }
               return null;
             },
-            all: async () => ({ results: [] }),
+            all: async () => {
+              if (q.startsWith('SELECT ok FROM ai_usage WHERE user_id')) {
+                // Streak check: insertion order is chronological in the double.
+                const rows = usage
+                  .filter((u) => u.user_id === params[0])
+                  .reverse()
+                  .slice(0, CONSECUTIVE_FAIL_LIMIT)
+                  .map((u) => ({ ok: u.ok }));
+                return { results: rows };
+              }
+              return { results: [] };
+            },
             run: async () => {
               if (q.startsWith('INSERT INTO users')) {
                 const [id, email] = params as string[];
@@ -288,6 +299,38 @@ describe('Scene art endpoints', () => {
     expect(seg?.provider).toBe('meta-model-api');
   });
 
+  it('falls back to Meta art when Modal fails', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const env = ENV(db, { modal: true });
+    const uid = await userIdOf(cookie, env);
+    const pid = seedBook(db, uid);
+    const seen: string[] = [];
+    globalThis.fetch = (async (url: unknown, init?: { body?: unknown }) => {
+      const u = String(url);
+      seen.push(u);
+      if (u.includes('example.modal.run')) return new Response('down', { status: 502 });
+      const body = JSON.parse((init?.body ?? '{}') as string) as unknown;
+      const payload = artReply(body);
+      if (payload instanceof Response) return payload;
+      return new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const res = await app.request('/api/ai/art', json('POST', { projectId: pid, sceneNumber: 1 }, cookie), env);
+    expect(res.status).toBe(200);
+
+    const art = db.usage.filter((u) => u.task === 'art');
+    expect(art.map((u) => [u.provider, u.ok])).toEqual([
+      ['modal', 0],
+      ['meta-model-api', 1],
+    ]);
+    // The op retried on Meta instead of repeating the failed Modal call.
+    expect(seen.filter((u) => u.includes('example.modal.run'))).toHaveLength(1);
+  });
+
   it('draws the page cast: known names expand to looks, unknown names pass through', async () => {
     const db = makeDb();
     const cookie = await signIn(db);
@@ -346,7 +389,7 @@ describe('Scene art endpoints', () => {
     expect(
       (await app.request('/api/ai/art', json('POST', { projectId: 'missing', sceneNumber: 1 }, cookie), env)).status,
     ).toBe(404);
-    db.seedUsage(uid, 50);
+    db.seedFailures(uid, 10);
     expect(
       (await app.request('/api/ai/art', json('POST', { projectId: pid, sceneNumber: 1 }, cookie), env)).status,
     ).toBe(429);
@@ -472,7 +515,7 @@ describe('Scene art endpoints', () => {
     expect(
       (await app.request('/api/ai/art/portrait', json('POST', { ...good, projectId: 'missing' }, cookie), env)).status,
     ).toBe(404);
-    db.seedUsage(uid, 50);
+    db.seedFailures(uid, 10);
     expect((await app.request('/api/ai/art/portrait', json('POST', good, cookie), env)).status).toBe(429);
   });
 

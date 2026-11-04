@@ -77,6 +77,15 @@ describe('checkLevel', () => {
     expect(checkLevel('They celebrate the festival', 'B1').passed).toBe(true);
   });
 
+  it('admits everyday words real drafts use (factory gap-fill)', () => {
+    expect(checkLevel('The boy and his son eat bread and soup', 'A1').passed).toBe(true);
+    expect(checkLevel('Milk and rice and a red ball', 'A1').passed).toBe(true);
+    expect(checkLevel('The kite can fly high', 'A2').passed).toBe(true);
+    expect(checkLevel('Cut the apple and stir the soup', 'A2').passed).toBe(true);
+    expect(checkLevel('He opens the toolbox', 'B1').passed).toBe(true);
+    expect(checkLevel('It is restored and real', 'B1').passed).toBe(true);
+  });
+
   it('gates C2 words to C levels', () => {
     const text = C2.slice(0, 40).join(' ');
     expect(checkLevel(text, 'C2').passed).toBe(true);

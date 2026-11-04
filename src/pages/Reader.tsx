@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { aiMeanings, apiUrl, getBook, getPosition, getSharedBook, recordMiss, setPosition, voiceLang } from '../lib/api';
+import { aiMeanings, apiUrl, getBook, getPosition, getSharedBook, listBookWords, recordMiss, setPosition, voiceLang } from '../lib/api';
 import { getCachedBook, putBook } from '../lib/db';
 import type { Book } from '../lib/api';
 import { cleanWord, stopSpeaking } from '../lib/speech';
@@ -47,6 +47,13 @@ export default function Reader() {
   // the "I don't know this" signal; the gloss prefetch is not). Anonymous
   // taps 401 and are ignored — no sign-in prompt from a background write.
   const missLogged = useRef(new Set<string>());
+  // Defined-words gate (publish-computed): words with a gloss stay
+  // tappable, the rest render as plain text. Not ready until the map
+  // loads; null words = unknown, and everything stays tappable.
+  const [defined, setDefined] = useState<{ ready: boolean; words: Set<string> | null }>({
+    ready: false,
+    words: null,
+  });
   const lastMoveRef = useRef(0);
   const panelRef = useRef<HTMLElement | null>(null);
   const [quiz, setQuiz] = useState(false);
@@ -86,13 +93,13 @@ export default function Reader() {
   // tap resolves instantly — even on fast page turns. A 6-page book is
   // typically 2 calls total, fewer than one call per page turn.
   useEffect(() => {
-    if (!book || needsSignIn || offline || prefetching.current) return;
+    if (!book || needsSignIn || offline || prefetching.current || !defined.ready) return;
     const fresh = [
       ...new Set(
         book.manifest.scenes
           .flatMap((sc) => [sc.narration, ...sc.bubbles.map((b) => b.text)])
           .flatMap((t) => t.split(/\s+/).map((w) => clean(w)))
-          .filter((w) => w !== '' && isContentWord(w) && !meanings[w]),
+          .filter((w) => w !== '' && isContentWord(w) && !meanings[w] && (!defined.words || defined.words.has(w))),
       ),
     ];
     if (fresh.length === 0) return;
@@ -117,11 +124,12 @@ export default function Reader() {
       .finally(() => {
         prefetching.current = false;
       });
-  }, [book, meanings, needsSignIn, offline]);
+  }, [book, meanings, needsSignIn, offline, defined]);
 
   useEffect(() => {
     const key = shareMode ? `s:${bookId}` : `p:${id}`;
     const load = shareMode ? getSharedBook(bookId) : getBook(id);
+    setDefined({ ready: false, words: null });
     load
       .then((res) => {
         setBook(res.book);
@@ -129,6 +137,14 @@ export default function Reader() {
         setActive(null);
         setMeanings({});
         missLogged.current = new Set();
+        // Defined-words map rides the publish pipeline; an empty map or a
+        // fetch failure keeps the legacy all-tappable behavior.
+        listBookWords(res.book.id)
+          .then((w) => setDefined({
+            ready: true,
+            words: w.words.length > 0 ? new Set(w.words.map((x) => clean(x))) : null,
+          }))
+          .catch(() => setDefined({ ready: true, words: null }));
         setNeedsSignIn(false);
         setPassed(new Set());
         setOffline(false);
@@ -212,6 +228,9 @@ export default function Reader() {
     if (!book || lookingUp) return;
     const word = clean(raw);
     if (!word) return;
+    // Defined-words gate: undefined words are not tappable, so a stray
+    // call (read-aloud misses, tests) never reaches the lookup.
+    if (defined.words && !defined.words.has(word)) return;
     // A word tap owns the buddy corner: tuck the voice menu away so the
     // bubble never overlaps the Listen/Read buttons.
     setVoiceOpen(false);
@@ -376,12 +395,12 @@ export default function Reader() {
             )}
             <div className="absolute inset-x-0 bottom-0 p-3 font-semibold text-black [-webkit-text-stroke:4px_white] [paint-order:stroke_fill]">
               <p className="mb-1 text-lg leading-snug">
-                <Words text={scene.narration} onTap={(w) => void tap(w)} tapped={active?.word ?? null} base={0} heardCount={liveCount} spoken={listenSet} current={listenCur} />
+                <Words text={scene.narration} onTap={(w) => void tap(w)} tapped={active?.word ?? null} base={0} heardCount={liveCount} spoken={listenSet} current={listenCur} definedWords={defined.words} />
               </p>
               {scene.bubbles.map((b, bi) => (
                 <p key={bi} className="text-lg leading-snug">
                   <strong>{b.speaker}: </strong>
-                  <Words text={b.text} onTap={(w) => void tap(w)} tapped={active?.word ?? null} base={(bubbleBase[bi] ?? 0) + countWords(b.speaker)} heardCount={liveCount} spoken={listenSet} current={listenCur} />
+                  <Words text={b.text} onTap={(w) => void tap(w)} tapped={active?.word ?? null} base={(bubbleBase[bi] ?? 0) + countWords(b.speaker)} heardCount={liveCount} spoken={listenSet} current={listenCur} definedWords={defined.words} />
                 </p>
               ))}
             </div>
@@ -435,6 +454,7 @@ export default function Reader() {
                   onPass={(n) => setPassed((p) => new Set(p).add(n))}
                   recognitionLang={voiceLang(book.lang)}
                   onLookup={(w) => void tap(w)}
+                  definedWords={defined.words}
                   onProgress={setLiveCount}
                   onStart={() => {
                     setListenSet(new Set());

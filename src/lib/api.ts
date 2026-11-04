@@ -241,6 +241,12 @@ export interface CatalogBook {
 
 export const listBooks = () => api<{ books: CatalogBook[] }>('/api/share/books');
 
+// Defined-words map for the Reader (publish-computed): words with a gloss
+// stay tappable, the rest render as plain text. Empty = unknown, and the
+// Reader keeps the legacy all-tappable behavior.
+export const listBookWords = (bookId: string) =>
+  api<{ words: string[] }>(`/api/share/${encodeURIComponent(bookId)}/words`);
+
 export const getPosition = (bookId: string) =>
   api<{ scene_number: number; updated_at: string | null }>(`/api/share/${bookId}/position`);
 

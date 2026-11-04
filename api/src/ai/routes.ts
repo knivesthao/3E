@@ -4,7 +4,7 @@ import type { Bindings, Variables } from '../types';
 import { AiError } from './meta';
 import { basetenConfig } from './config';
 import type { BasetenConfig } from './config';
-import { FAILED, INVALID, finishJob, modelKey, overLimit, readJson } from './http';
+import { FAILED, INVALID, finishJob, modelKey, limitCheck, readJson } from './http';
 import { generate, parseJson } from './client';
 import { buddyPrompt, castNames, checkPrompt, checkPromptZh, draftPrompt, draftPromptZh, ideaPrompt, meaningsPrompt, meaningsPromptZh, quizPrompt, sceneActionText, simplifyPrompt } from './prompts';
 import { easierLevels } from '../levels';
@@ -34,7 +34,8 @@ ai.post('/idea', async (c) => {
   }
   const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
-  if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+  const limited = await limitCheck(c.env.DB, c.get('userId'));
+  if (limited) return c.json(limited, 429);
   try {
     const { text } = await generate(c.env.DB, {
       apiKey,
@@ -72,9 +73,13 @@ ai.post('/meanings', async (c) => {
   // English (the learner's stronger language); the word stays exact Chinese.
   const zh = isHskLevel(level);
   if (!zh && !isLevel(level)) return c.json(INVALID, 400);
+  // Exact-level mode (exact:true) skips the easier-level fallback chain so
+  // QA backfills write the requested level's own row instead of reusing a
+  // simpler gloss. Readers never need this; the chain serves them either way.
+  const exact = body.exact === true;
   const words = body.words as string[];
   const lang = zh ? 'zh' : 'en';
-  const chain: (Level | HskLevel)[] = zh ? easierHsk(level as HskLevel) : easierLevels(level as Level);
+  const chain: (Level | HskLevel)[] = exact ? [level] : zh ? easierHsk(level as HskLevel) : easierLevels(level as Level);
   // 1. Dictionary first: exact level preferred, then easier levels.
   const inWords = words.map(() => '?').join(',');
   const inLevels = chain.map(() => '?').join(',');
@@ -102,9 +107,14 @@ ai.post('/meanings', async (c) => {
   if (missing.length > 0) {
     const apiKey = modelKey(c.env);
     if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
-    if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+    const limited = await limitCheck(c.env.DB, c.get('userId'));
+    if (limited) return c.json(limited, 429);
     const wordsList = missing.map((w, i) => `${i + 1}. ${w}`).join('\n');
     try {
+      // Explicit per-request provider escape hatch: provider:'meta' routes
+      // around a down Baseten (no silent fallback — the caller opts into
+      // Meta spend). Used by the dictionary top-up when Baseten 402s.
+      const forceMeta = body.provider === 'meta';
       const { text } = await generate(c.env.DB, {
         apiKey,
         userId: c.get('userId'),
@@ -114,7 +124,7 @@ ai.post('/meanings', async (c) => {
         prompt: zh ? meaningsPromptZh(level as HskLevel, wordsList) : meaningsPrompt(level as Level, wordsList),
         json: true,
         apiUrl: c.env.AI_API_URL,
-        baseten: basetenConfig(c.env),
+        baseten: forceMeta ? null : basetenConfig(c.env),
         validate: (t) => {
           const v = parseJson(t, isRecord);
           if (!v || !Array.isArray(v.meanings) || v.meanings.length !== missing.length) return false;
@@ -156,7 +166,8 @@ ai.post('/simplify', async (c) => {
   if (!isLevel(body.level)) return c.json(INVALID, 400);
   const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
-  if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+  const limited = await limitCheck(c.env.DB, c.get('userId'));
+  if (limited) return c.json(limited, 429);
   try {
     const { text } = await generate(c.env.DB, {
       apiKey,
@@ -212,7 +223,8 @@ ai.post('/quiz', async (c) => {
   if (!isLevel(project.level) && !isHskLevel(project.level)) return c.json(INVALID, 400);
   const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
-  if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+  const limited = await limitCheck(c.env.DB, c.get('userId'));
+  if (limited) return c.json(limited, 429);
 
   const db = c.env.DB;
   const { results: rows } = await db
@@ -310,7 +322,8 @@ ai.post('/buddy', async (c) => {
   if (!isLevel(project.level)) return c.json(INVALID, 400);
   const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
-  if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+  const limited = await limitCheck(c.env.DB, c.get('userId'));
+  if (limited) return c.json(limited, 429);
 
   const db = c.env.DB;
   const { results: rows } = await db
@@ -411,7 +424,8 @@ ai.post('/finish', async (c) => {
   if (!isLevel(project.level) && !isHskLevel(project.level)) return c.json(INVALID, 400);
   const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
-  if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+  const limited = await limitCheck(c.env.DB, c.get('userId'));
+  if (limited) return c.json(limited, 429);
 
   const db = c.env.DB;
   const userId = c.get('userId');

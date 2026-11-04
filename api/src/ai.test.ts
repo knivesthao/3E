@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import app from './index';
+import { CONSECUTIVE_FAIL_LIMIT, TASK_TIMEOUT_MS } from './ai/config';
 
 // In-memory D1 subset for the AI routes (extends the projects-test pattern
 // with ai_usage + jobs). Model calls are stubbed at fetch, never network.
@@ -15,10 +16,9 @@ function makeDb() {
 
   const db = {
     usage,
-    seedUsage(userId: string, n: number) {
-      const day = new Date().toISOString();
+    seedFailures(userId: string, n: number) {
       for (let i = 0; i < n; i++) {
-        usage.push({ user_id: userId, task: 'idea', created_at: day, attempt: 1, ok: 1 });
+        usage.push({ user_id: userId, task: 'idea', created_at: new Date(Date.now() + i).toISOString(), attempt: 1, ok: 0 });
       }
     },
     seedDefinitions(rows: { word: string; level: string; lang: string; gloss: string; source: string; verified: number }[]) {
@@ -69,6 +69,15 @@ function makeDb() {
               return null;
             },
             all: async () => {
+              if (q.startsWith('SELECT ok FROM ai_usage WHERE user_id')) {
+                // Streak check: insertion order is chronological in the double.
+                const rows = usage
+                  .filter((u) => u.user_id === params[0])
+                  .reverse()
+                  .slice(0, CONSECUTIVE_FAIL_LIMIT)
+                  .map((u) => ({ ok: u.ok }));
+                return { results: rows };
+              }
               if (q.startsWith('SELECT * FROM scenes WHERE project_id = ? ORDER BY')) {
                 return {
                   results: [...scenes.values()]
@@ -265,7 +274,23 @@ describe('AI endpoints', () => {
     const me = (await (await app.request('/api/auth/me', { headers: { cookie } }, env)).json()) as {
       user: { id: string };
     };
-    db.seedUsage(me.user.id, 50);
+    db.seedFailures(me.user.id, 10);
+    const paused = await app.request('/api/ai/idea', json('POST', { idea: 'x' }, cookie), env);
+    expect(paused.status).toBe(429);
+    expect(((await paused.json()) as { error: string }).error).toBe('paused after repeated failures');
+  });
+
+  it('pauses only on a full failure streak; a success resets it', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    stubFetch(modelReply);
+    const env = ENV(db);
+    const me = (await (await app.request('/api/auth/me', { headers: { cookie } }, env)).json()) as {
+      user: { id: string };
+    };
+    db.seedFailures(me.user.id, 9);
+    expect((await app.request('/api/ai/idea', json('POST', { idea: 'x' }, cookie), env)).status).toBe(200);
+    db.seedFailures(me.user.id, 10);
     expect((await app.request('/api/ai/idea', json('POST', { idea: 'x' }, cookie), env)).status).toBe(429);
   });
 
@@ -452,6 +477,125 @@ describe('AI endpoints', () => {
     expect(db.usage.filter((u) => u.task === 'meanings' && u.ok === 1)).toHaveLength(1);
   });
 
+  it("meanings honors provider:meta, routing around a configured Baseten", async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const seen: string[] = [];
+    globalThis.fetch = (async (url: unknown, init?: { body?: unknown }) => {
+      seen.push(String(url));
+      const body = JSON.parse((init?.body ?? '{}') as string) as { messages?: { content?: string }[] };
+      const prompt = body.messages?.[0]?.content ?? '';
+      const words = [...prompt.matchAll(/(?:^| )(\d+)\. (.+)$/gm)].map((m) => m[2]);
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ meanings: words.map((w) => ({ word: w, meaning: `meta ${w}` })) }) } }],
+          usage: { prompt_tokens: 10, completion_tokens: 20 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }) as typeof fetch;
+    const env = { ...ENV(db), BASETEN_API_URL: 'https://baseten.example/v1', BASETEN_API_KEY: 'bk' };
+    const res = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['zebra'], level: 'A1', provider: 'meta' }, cookie), env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ meanings: [{ word: 'zebra', meaning: 'meta zebra' }] });
+    // The call rode the Meta route, never the configured Baseten deployment.
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).not.toContain('baseten.example');
+    expect(db.usage.filter((u) => u.task === 'meanings').map((u) => u.provider)).toEqual(['meta-model-api']);
+  });
+
+  it('meanings exact:true skips the easier-level fallback and writes that level', async () => {
+    const db = makeDb();
+    db.seedDefinitions([
+      { word: 'dog', level: 'B1', lang: 'en', gloss: 'a pet animal', source: 'baseten', verified: 1 },
+    ]);
+    const cookie = await signIn(db);
+    stubFetch(modelReply);
+    const env = ENV(db);
+    // Without exact, the B1 gloss serves a B2 ask with no model call.
+    const fallback = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['dog'], level: 'B2' }, cookie), env);
+    expect(await fallback.json()).toEqual({ meanings: [{ word: 'dog', meaning: 'a pet animal' }] });
+    // With exact, the B2 row is generated and cached even though B1 has it.
+    const res = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['dog'], level: 'B2', exact: true }, cookie), env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ meanings: [{ word: 'dog', meaning: 'simple dog' }] });
+    const again = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['dog'], level: 'B2', exact: true }, cookie), env);
+    expect(await again.json()).toEqual({ meanings: [{ word: 'dog', meaning: 'simple dog' }] });
+    expect(db.usage.filter((u) => u.task === 'meanings' && u.ok === 1)).toHaveLength(1);
+  });
+
+  it('meanings falls back to Meta when Baseten 402s', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const seen: string[] = [];
+    globalThis.fetch = (async (url: unknown, init?: { body?: unknown }) => {
+      const u = String(url);
+      seen.push(u);
+      if (u.includes('baseten.example')) return new Response('pay up', { status: 402 });
+      const body = JSON.parse((init?.body ?? '{}') as string) as { messages?: { content?: string }[] };
+      const payload = modelReply(body.messages?.[0]?.content ?? '');
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: typeof payload === 'string' ? payload : JSON.stringify(payload) } }],
+          usage: { prompt_tokens: 10, completion_tokens: 20 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }) as typeof fetch;
+    const env = { ...ENV(db), BASETEN_API_URL: 'https://baseten.example/v1', BASETEN_API_KEY: 'bk' };
+    const res = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['zebra'], level: 'A1' }, cookie), env);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ meanings: [{ word: 'zebra', meaning: 'simple zebra' }] });
+    // One failed Baseten attempt, then the same op completes on Meta.
+    expect(seen).toHaveLength(2);
+    expect(seen[0]).toBe('https://baseten.example/v1');
+    expect(seen[1]).not.toContain('baseten.example');
+    expect(db.usage.filter((u) => u.task === 'meanings').map((u) => [u.provider, u.ok])).toEqual([
+      ['baseten', 0],
+      ['meta-model-api', 1],
+    ]);
+  });
+
+  it('meanings still fails when Meta falls over after Baseten', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    globalThis.fetch = (async (url: unknown) => {
+      if (String(url).includes('baseten.example')) return new Response('pay up', { status: 402 });
+      return new Response('down', { status: 500 });
+    }) as typeof fetch;
+    const env = { ...ENV(db), BASETEN_API_URL: 'https://baseten.example/v1', BASETEN_API_KEY: 'bk' };
+    const res = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['zebra'], level: 'A1' }, cookie), env);
+    expect(res.status).toBe(502);
+  });
+
+  it('meanings defaults to Baseten when configured and no provider flag is sent', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const seen: string[] = [];
+    globalThis.fetch = (async (url: unknown) => {
+      seen.push(String(url));
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ meanings: [{ word: 'zebra', meaning: 'simple zebra' }] }) } }],
+          usage: { prompt_tokens: 10, completion_tokens: 20 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }) as typeof fetch;
+    const env = { ...ENV(db), BASETEN_API_URL: 'https://baseten.example/v1', BASETEN_API_KEY: 'bk' };
+    const res = await app.request(
+      '/api/ai/meanings', json('POST', { words: ['zebra'], level: 'A1' }, cookie), env);
+    expect(res.status).toBe(200);
+    expect(seen).toEqual(['https://baseten.example/v1']);
+    expect(db.usage.filter((u) => u.task === 'meanings').map((u) => u.provider)).toEqual(['baseten']);
+  });
+
   it('meanings serves Mandarin glosses from the zh dictionary with no model call', async () => {
     const db = makeDb();
     db.seedDefinitions([
@@ -588,5 +732,15 @@ describe('AI endpoints', () => {
     );
     expect(res.status).toBe(200);
     expect(((await res.json()) as { reply: string }).reply).toHaveLength(500);
+  });
+});
+
+describe('task timeouts', () => {
+  it('gives reasoning-backed tasks a 120s budget and keeps short tasks at 30s', () => {
+    expect(TASK_TIMEOUT_MS.draft).toBe(120_000);
+    expect(TASK_TIMEOUT_MS.check).toBe(120_000);
+    expect(TASK_TIMEOUT_MS.meanings).toBe(30_000);
+    expect(TASK_TIMEOUT_MS.quiz).toBe(30_000);
+    expect(TASK_TIMEOUT_MS.buddy).toBe(30_000);
   });
 });

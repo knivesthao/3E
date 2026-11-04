@@ -1,0 +1,86 @@
+name: make-books
+# Overnight book factory: builds the 30-book library through the live
+# development worker while the laptop stays shut. Each shard resumes its own
+# ledger (committed qa/book-ledger-shardNof3.json files are the baseline;
+# the cache carries progress between runs), so re-dispatch retries only what
+# is not yet published. Ledgers land as artifacts; node qa/ledger.mjs
+# merges them for status.
+# Secrets (repo Settings -> Secrets -> Actions): SEED_API (dev worker URL,
+# e.g. https://3e-dev.<subdomain>.workers.dev). No model keys needed here —
+# MODEL_API_KEY lives server-side on the worker.
+# NOTE: scheduled runs only fire on the DEFAULT branch. Dispatch works from
+# any branch via the Actions tab.
+
+on:
+  schedule:
+    # 02:00 +07:00 (Laos) nightly.
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+    inputs:
+      shards:
+        description: 'JSON array of shards to run (default all ten)'
+        required: false
+        default: '["0/10", "1/10", "2/10", "3/10", "4/10", "5/10", "6/10", "7/10", "8/10", "9/10"]'
+      limit:
+        description: 'Max books per shard this run (0 = all remaining)'
+        required: false
+        default: '0'
+
+concurrency:
+  group: make-books
+  cancel-in-progress: false
+
+jobs:
+  books:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(github.event.inputs.shards || '["0/10", "1/10", "2/10", "3/10", "4/10", "5/10", "6/10", "7/10", "8/10", "9/10"]') }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Resolve ledger file
+        run: |
+          SHARD='${{ matrix.shard }}'
+          SLUG="shard${SHARD/\//of}"
+          echo "LEDGER=qa/book-ledger-${SLUG}.json" >> "$GITHUB_ENV"
+          echo "SLUG=${SLUG}" >> "$GITHUB_ENV"
+
+      - name: Restore shard ledger
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.LEDGER }}
+          key: factory-ledger-${{ env.SLUG }}-
+
+      - name: Make books (shard ${{ matrix.shard }})
+        run: >
+          node qa/make-books.mjs
+          --api ${{ secrets.SEED_API }}
+          --shard ${{ matrix.shard }}
+          --resume
+          --allow-wired
+          --limit ${{ github.event.inputs.limit || '0' }}
+
+      - name: Save shard ledger
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.LEDGER }}
+          key: factory-ledger-${{ env.SLUG }}-${{ github.run_number }}
+
+      - name: Upload shard ledger
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: factory-ledger-${{ env.SLUG }}-${{ github.run_number }}
+          path: ${{ env.LEDGER }}
+
+      - name: Merge ledgers
+        if: always()
+        run: node qa/ledger.mjs

@@ -16,6 +16,7 @@ export function ReadAloudPanel({
   onLookup,
   onProgress,
   onStart,
+  definedWords = null,
 }: {
   sceneNumber: number;
   text: string;
@@ -28,6 +29,9 @@ export function ReadAloudPanel({
   onProgress?: (matched: number) => void;
   // Fired when a take begins so the page can clear the Listen trail.
   onStart?: () => void;
+  // Defined-words gate (same contract as Words): missed words without a
+  // gloss render as plain text instead of inviting a doomed lookup.
+  definedWords?: Set<string> | null;
 }) {
   const [state, setState] = useState<'idle' | 'listening' | 'done'>('idle');
   const [score, setScore] = useState<ReadingScore | null>(null);
@@ -161,18 +165,25 @@ export function ReadAloudPanel({
           {score.missed.length > 0 && (
             <p className="mt-1 text-sm">
               Missed:{' '}
-              {score.missed.map((w, i) => (
-                <span key={w}>
-                  {i > 0 && ', '}
-                  <button
-                    type="button"
-                    onClick={() => onLookup(w)}
-                    className="min-h-0 cursor-pointer px-0.5 text-left underline decoration-accent-800 underline-offset-4"
-                  >
-                    {w}
-                  </button>
-                </span>
-              ))}
+              {score.missed.map((w, i) => {
+                const defined = !definedWords || definedWords.has(cleanWord(w));
+                return (
+                  <span key={w}>
+                    {i > 0 && ', '}
+                    {defined ? (
+                      <button
+                        type="button"
+                        onClick={() => onLookup(w)}
+                        className="min-h-0 cursor-pointer px-0.5 text-left underline decoration-accent-800 underline-offset-4"
+                      >
+                        {w}
+                      </button>
+                    ) : (
+                      <span className="px-0.5">{w}</span>
+                    )}
+                  </span>
+                );
+              })}
             </p>
           )}
         </div>

@@ -24,6 +24,11 @@ export const A1 = [
   'for', 'of', 'with', 'from', 'by', 'can', 'will', 'all', 'some', 'many',
   'more', 'other', 'only', 'just', 'now', 'today', 'morning', 'hello',
   'thanks', 'please', 'time', 'people', 'way',
+  // Factory gap-fill (Nov 2026): everyday words real A1 drafts use that the
+  // hand list missed. All are standard A1 (Starters/Movers) vocabulary.
+  'son', 'rice', 'ball', 'milk', 'buy', 'sleep', 'cry', 'hungry', 'read',
+  'open', 'woof', 'meow', 'bread', 'soup', 'apple', 'banana', 'children',
+  'much', 'need', 'then', 'high', 'into',
 ];
 
 // Everyday life: past forms, food/time/places, feelings, simple connectors.
@@ -58,6 +63,10 @@ export const A2 = [
   'wife', 'win', 'wind', 'window', 'winter', 'wish', 'without', 'wonderful',
   'wood', 'word', 'work', 'world', 'worried', 'worry', 'worse', 'would',
   'write', 'wrong', 'wrote', 'year', 'yesterday', 'yet', 'young',
+  // Factory gap-fill (Nov 2026): everyday A2 words (food, kite, fixes)
+  // that real drafts use. Stemmer covers inflections (flies→fly).
+  'kite', 'hold', 'string', 'fly', 'let', 'pot', 'cut', 'stir', 'smell',
+  'piece', 'fix', 'soon', 'wall', 'around',
 ];
 
 // Connected text: school/work/travel, opinions, reasons, common abstract nouns.
@@ -324,6 +333,9 @@ export const B1 = [
   'wrong', 'yank', 'yawn', 'yearn', 'yell', 'yellow', 'yelp', 'yield',
   'yoga', 'yogurt', 'yoke', 'yonder', 'young', 'youth', 'zeal', 'zebra',
   'zero', 'zest', 'zigzag', 'zombie', 'zone',
+  // Factory gap-fill (Nov 2026): B1 words real drafts use, including the
+  // 'restored' stemmer gap (strips 'ed' → 'restor', so list it directly).
+  'toolbox', 'hmm', 'slowly', 'finally', 'real', 'restored', 'difficult',
 ];
 
 // Discussion language: opinions, society, feelings nuance, abstract nouns.
@@ -1350,6 +1362,8 @@ export const B2 = [
   'yokel', 'yonder', 'young', 'youngster', 'youth', 'yowl',
   'zany', 'zeal', 'zealot', 'zebra', 'zenith', 'zephyr', 'zero',
   'zest', 'zigzag', 'zinc', 'zipper', 'zombie', 'zone', 'zoology',
+  // Factory gap-fill (Nov 2026).
+  'joy',
 ];
 
 // Proficient use: formal, abstract, and nuanced vocabulary for complex

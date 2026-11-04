@@ -20,16 +20,35 @@ const SLIDES: Slide[] = [
     ],
   },
   {
-    kicker: 'Slide 1 · The core problem',
-    title: 'Access, not ability',
+    kicker: 'Slide 1 · Who I am',
+    title: "Hi, I'm Yee Thao",
     points: [
-      'Children in underserved communities don’t fail to read because they can’t learn — they fail because they have nothing to read.',
-      'Books are costly to print and import, hard to ship to remote areas, and every new level or language needs another print run.',
-      'The cycle reinforces itself: no books → no practice → weaker literacy → less demand for books.',
+      'Freelance software engineer, currently based in Southeast Asia.',
+      'I build software for good — tools that reach the people the usual markets ignore.',
+      '3E started here: watching learners around me hit a wall with English, and deciding to do something about it.',
     ],
   },
   {
-    kicker: 'Slide 2 · The global literacy gap',
+    kicker: 'Slide 2 · Why Laos, why now',
+    title: 'A country about to graduate',
+    points: [
+      "Laos is graduating from the UN's list of least developed countries — a milestone decades in the making.",
+      'Graduation means more global business: more trade, more tourism, more jobs tied to the world economy.',
+      'English is the de facto language of that business — and the learners least able to afford it need it most.',
+    ],
+  },
+  {
+    kicker: 'Slide 3 · The core problem',
+    title: 'Years of English, no English',
+    points: [
+      'Students study English year after year and barely improve — effort without progress.',
+      'Classrooms are huge, teaching quality is uneven, and nobody assesses improvement, so nothing ever gets fixed.',
+      'The internet is full of English content but almost no English learning content: nothing matched to your level that checks you understood.',
+      'That gap is where 3E plays: stories written at your exact level, with built-in proof you are improving.',
+    ],
+  },
+  {
+    kicker: 'Slide 4 · The global literacy gap',
     title: 'The numbers behind the gap',
     points: [
       '70% of 10-year-olds in low- and middle-income countries cannot read and understand a simple text.',
@@ -39,7 +58,7 @@ const SLIDES: Slide[] = [
     foot: 'Sources: World Bank, UNESCO',
   },
   {
-    kicker: 'Slide 3 · One example: Laos',
+    kicker: 'Slide 5 · One example: Laos',
     title: 'A developing country that could use this',
     points: [
       '~7.5 million people, with ~2.3 million children aged 0–14.',
@@ -51,7 +70,7 @@ const SLIDES: Slide[] = [
     foot: 'Sources: World Bank DataBank Lao PDR, UNICEF Lao PDR, Room to Read',
   },
   {
-    kicker: 'Slide 4 · Why English specifically',
+    kicker: 'Slide 6 · Why English specifically',
     title: 'The most requested skill',
     points: [
       'English is the de facto language of the global economy, higher education, and technology.',
@@ -62,7 +81,7 @@ const SLIDES: Slide[] = [
     foot: 'Source: W3Techs',
   },
   {
-    kicker: 'Slide 5 · The infrastructure reality',
+    kicker: 'Slide 7 · The infrastructure reality',
     title: 'Phones, not internet',
     points: [
       '92% of Lao households have a mobile phone — but only 1.7% have home internet.',
@@ -72,7 +91,7 @@ const SLIDES: Slide[] = [
     ],
   },
   {
-    kicker: 'Slide 6 · Who is left behind',
+    kicker: 'Slide 8 · Who is left behind',
     title: 'Who 3E serves',
     points: [
       'Children learning to read, and children and adults learning English as a second language.',
@@ -82,17 +101,26 @@ const SLIDES: Slide[] = [
     ],
   },
   {
-    kicker: 'Slide 7 · How 3E answers it',
-    title: 'Leveled comics, made for pennies',
+    kicker: 'Slide 9 · How 3E answers it',
+    title: 'A full learning path, not just stories',
     points: [
       'Every book is written to a CEFR level (A1–B2), enforced by level word lists and a 90% gate — not vibes.',
-      'AI draws flat-style panels plus reusable characters and places, so one cast stars across many books.',
-      'The Reader coaches out loud: read-aloud scoring and listen mode, all processed on-device — free and private.',
-      'A practice exam in the Library tab tracks real A1-level progress, with guidance instead of a certificate.',
+      'Start where you are: the alphabet and phonics, then vocabulary flashcards, then real books — every step at your CEFR level (A1–B2).',
+      'Practice exams in the Cambridge Movers format prepare learners for real certification, with guidance instead of a certificate.',
+      'Every book matches your level, and the app learns from how you read — building a personal plan around the words you need, from nouns to verbs.',
+      'Progress feels like fun, not homework: each webcomic you finish measurably lifts your English.',
     ],
   },
   {
-    kicker: 'Slide 8 · The real-world path',
+    kicker: 'Slide 10 · The demo',
+    title: 'Enough talking — watch it work',
+    points: [
+      'A learner opens a book at their level, taps a word they don’t know, and hears Pip read the page aloud.',
+      'Then a Movers-style quiz checks the story actually landed — the loop from reading to proof in one minute.',
+    ],
+  },
+  {
+    kicker: 'Slide 11 · The real-world path',
     title: 'Built to survive contact with reality',
     points: [
       'Cost-efficient by design: cheap text models for writing, metered image calls for art, idle GPUs parked — every call logged in the Admin panel.',
@@ -102,7 +130,7 @@ const SLIDES: Slide[] = [
     ],
   },
   {
-    kicker: 'Slide 9 · The impact case',
+    kicker: 'Slide 12 · The impact case',
     title: 'What changes if this works',
     points: [
       'Every learner gets stories matched to their reading level, in a language path they can follow.',
@@ -111,6 +139,25 @@ const SLIDES: Slide[] = [
       'Laos is one possible target — the same model fits any community where phones outnumber bookshelves.',
     ],
     foot: 'Try it: open the Library, read a book, take the practice exam.',
+  },
+  {
+    kicker: 'Slide 13 · Traction — built on free credits',
+    title: 'Books for cents, not dollars',
+    points: [
+      'A finished 6-scene book — drafted, level-gated, illustrated, published — costs about $0.17 in AI.',
+      'A 10,800-word dictionary across levels A1–C2 backs every tap-to-define in the Reader.',
+      'The launch library is publishing itself right now through the automated pipeline — watch each book land in the Costs tab.',
+    ],
+  },
+  {
+    kicker: 'Slide 14 · Ready for funding',
+    title: 'A prototype ready to pilot',
+    points: [
+      'Working product, ready for launch: a growing library of leveled books, 10 flashcard decks from phonics to C2 words, and 10,800+ definitions matched to level.',
+      'Next step: pilot classes with English learners here in Laos, together with a local company running distribution and marketing.',
+      'We are raising to launch the pilot and fill the 30-book library — come read with us.',
+    ],
+    foot: 'Talk to us after the demo.',
   },
 ];
 

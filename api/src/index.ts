@@ -213,6 +213,25 @@ app.route('/api/ai', ai);
 app.route('/api/share', share);
 app.route('/api/admin/costs', costs);
 
+// SPA fallback: deep links, bookmarks, share links, and PWA launches must
+// land in the app shell. The assets layer serves exact files only; misses
+// reach the worker, so the worker serves index.html itself. API routes keep
+// their JSON 404s; a missing ASSETS binding degrades to the JSON 404.
+app.get('*', async (c) => {
+  if (!c.req.path.startsWith('/api/')) {
+    try {
+      const assets = c.env.ASSETS;
+      if (assets) {
+        const res = await assets.fetch(new URL('/index.html', c.req.url));
+        if (res.ok) return c.html(await res.text());
+      }
+    } catch {
+      // Asset fetch failed: fall through to the JSON 404 below.
+    }
+  }
+  return c.notFound();
+});
+
 app.notFound((c) => c.json({ error: 'not found' }, 404));
 
 export default app;
