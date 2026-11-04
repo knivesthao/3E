@@ -35,9 +35,9 @@ function makeDb() {
     } else if (q.startsWith('DELETE FROM sessions WHERE id_hash')) {
       sessions.delete(p[0] as string);
     } else if (q.startsWith('INSERT INTO projects')) {
-      const [id, creator_id, title, description, level, purpose, status, cast_json, tags_json, created_at, updated_at] =
+      const [id, creator_id, title, description, level, purpose, status, cast_json, tags_json, quiz_json, created_at, updated_at] =
         p as string[];
-      projects.set(id, { id, creator_id, title, description, level, purpose, status, cast_json, tags_json, created_at, updated_at });
+      projects.set(id, { id, creator_id, title, description, level, purpose, status, cast_json, tags_json, quiz_json, created_at, updated_at });
     } else if (q.startsWith('UPDATE projects SET updated_at')) {
       const row = projects.get(p[1] as string);
       if (row) row.updated_at = p[0];

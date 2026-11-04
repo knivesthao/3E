@@ -137,6 +137,10 @@ function makeDb() {
                 const [updated_at, id] = params as [string, string];
                 const row = projects.get(id);
                 if (row) Object.assign(row, { status: 'published', updated_at });
+              } else if (q.startsWith('UPDATE projects SET quiz_json')) {
+                const [quiz_json, id] = params as [string, string];
+                const row = projects.get(id);
+                if (row) row.quiz_json = quiz_json;
               } else if (q.startsWith('UPDATE projects SET title')) {
                 const [title, description, level, purpose, cast_json, updated_at, id] = params as string[];
                 const row = projects.get(id);
@@ -379,6 +383,56 @@ describe('Publish endpoint', () => {
     expect(safety).toHaveLength(1);
     expect(safety[0].ok).toBe(1);
     expect(safety[0].model).toBe('muse-spark-1.3');
+  });
+
+  // Quiz pipeline: safety passes, the quiz builds once, views pay nothing.
+  function stubQuizPipeline() {
+    globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse((init?.body ?? '{}') as string) as { messages?: { content: string }[] };
+      const content = body.messages?.[0]?.content ?? '';
+      const reply = content.includes('quiz writer')
+        ? JSON.stringify({
+          questions: [1, 2, 3, 4, 5, 6].map((n) => ({
+            prompt: `Question ${n} about the story?`,
+            options: ['A cat', 'A dog', 'A bird'],
+            answer: n % 3,
+            explanation: `Because of question ${n}.`,
+          })),
+        })
+        : 'safe';
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: reply } }],
+          usage: { prompt_tokens: 50, completion_tokens: 10 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }) as typeof fetch;
+  }
+
+  it('publish writes the quiz once and quiz views never pay again', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    const env = ENV(db);
+    const uid = await userIdOf(cookie, env);
+    const pid = seedBook(db, uid);
+    stubQuizPipeline();
+
+    const res = await app.request(`/api/projects/${pid}/publish`, json('POST', {}, cookie), env);
+    expect(res.status).toBe(200);
+    expect(db.usage.filter((u) => u.task === 'quiz')).toHaveLength(1);
+    const stored = db.projects.get(pid)?.quiz_json as string | undefined;
+    expect(typeof stored).toBe('string');
+    expect((JSON.parse(stored as string) as { questions: unknown[] }).questions).toHaveLength(6);
+
+    globalThis.fetch = (() => {
+      throw new Error('must not call the model');
+    }) as unknown as typeof fetch;
+    const quiz = await app.request('/api/ai/quiz', json('POST', { projectId: pid }, cookie), env);
+    expect(quiz.status).toBe(200);
+    const body = (await quiz.json()) as { questions: unknown[] };
+    expect(body.questions).toHaveLength(6);
+    expect(db.usage.filter((u) => u.task === 'quiz')).toHaveLength(1);
   });
 
   it('copies panel art into the library bucket on publish', async () => {

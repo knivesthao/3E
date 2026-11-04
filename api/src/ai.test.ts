@@ -116,9 +116,9 @@ function makeDb() {
               } else if (q.startsWith('DELETE FROM sessions WHERE id_hash')) {
                 sessions.delete(params[0] as string);
               } else if (q.startsWith('INSERT INTO projects')) {
-                const [id, creator_id, title, description, level, purpose, status, cast_json, tags_json, created_at, updated_at] =
+                const [id, creator_id, title, description, level, purpose, status, cast_json, tags_json, quiz_json, created_at, updated_at] =
                   params as string[];
-                projects.set(id, { id, creator_id, title, description, level, purpose, status, cast_json, tags_json, created_at, updated_at });
+                projects.set(id, { id, creator_id, title, description, level, purpose, status, cast_json, tags_json, quiz_json, created_at, updated_at });
               } else if (q.startsWith('INSERT INTO scenes')) {
                 const [id, project_id, scene_number, data_json, updated_at] = params as [string, string, number, string, string];
                 scenes.set(id, { id, project_id, scene_number, data_json, updated_at });
@@ -138,6 +138,10 @@ function makeDb() {
                 const [status, result, error, updated_at, id] = params as [string, string | null, string | null, string, string];
                 const row = jobs.get(id);
                 if (row) Object.assign(row, { status, result, error, updated_at });
+              } else if (q.startsWith('UPDATE projects SET quiz_json')) {
+                const [quiz_json, id] = params as [string, string];
+                const row = projects.get(id);
+                if (row) row.quiz_json = quiz_json;
               }
               return { success: true };
             },
@@ -742,13 +746,37 @@ describe('AI endpoints', () => {
     expect((await app.request('/api/ai/quiz', json('POST', { projectId: pid }, cookie), env)).status).toBe(200);
     expect((await app.request('/api/ai/quiz', json('POST', { projectId: '' }, cookie), env)).status).toBe(400);
     expect((await app.request('/api/ai/quiz', json('POST', { projectId: pid, sceneNumbers: [0] }, cookie), env)).status).toBe(400);
-    expect((await app.request('/api/ai/quiz', json('POST', { projectId: pid }, cookie), ENV(db, false))).status).toBe(503);
+    // Fresh projects have no stored quiz, so the legacy path still needs a key and valid JSON.
+    const noKey = await makeProject(db, cookie);
+    await makeScene(db, cookie, noKey, 'Ana has a small red cat.');
+    expect((await app.request('/api/ai/quiz', json('POST', { projectId: noKey }, cookie), ENV(db, false))).status).toBe(503);
     expect((await app.request('/api/ai/quiz', json('POST', { projectId: pid }), env)).status).toBe(401);
     expect((await app.request('/api/ai/quiz', json('POST', { projectId: 'missing' }, cookie), env)).status).toBe(404);
     const empty = await makeProject(db, cookie);
     expect((await app.request('/api/ai/quiz', json('POST', { projectId: empty }, cookie), env)).status).toBe(400);
+    const badJson = await makeProject(db, cookie);
+    await makeScene(db, cookie, badJson, 'Ana has a small red cat.');
     stubFetch(() => ({ questions: [{ prompt: 'Bad', options: ['only-one'], answer: 5, explanation: '' }] }));
-    expect((await app.request('/api/ai/quiz', json('POST', { projectId: pid }, cookie), env)).status).toBe(502);
+    expect((await app.request('/api/ai/quiz', json('POST', { projectId: badJson }, cookie), env)).status).toBe(502);
+  });
+
+  it('quiz serves the stored quiz with zero model calls', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    stubFetch(modelReply);
+    const env = ENV(db);
+    const pid = await makeProject(db, cookie);
+    await makeScene(db, cookie, pid, 'Ana has a small red cat.');
+    const first = await app.request('/api/ai/quiz', json('POST', { projectId: pid }, cookie), env);
+    expect(first.status).toBe(200);
+    expect(db.usage.filter((u) => u.task === 'quiz')).toHaveLength(1);
+    stubFetch(() => {
+      throw new Error('must not call the model');
+    });
+    const second = await app.request('/api/ai/quiz', json('POST', { projectId: pid }, cookie), env);
+    expect(second.status).toBe(200);
+    expect(await second.json()).toEqual(await first.json());
+    expect(db.usage.filter((u) => u.task === 'quiz')).toHaveLength(1);
   });
 
   it('buddy answers about the story and stays short', async () => {

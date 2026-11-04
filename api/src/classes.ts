@@ -3,6 +3,8 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { Bindings, Variables } from './types';
 import { requireRole } from './roles';
 import { LEVELS, isRecord } from './validate';
+import { BANK_WORDS, EXAM_LEVELS } from './exam-banks';
+import type { ExamLevel } from './exam-banks';
 
 // Class management: one teacher owns each class; admins see everything.
 // Curriculum entries reference published library books by id — D1 cannot
@@ -10,6 +12,21 @@ import { LEVELS, isRecord } from './validate';
 export const classes = new Hono<{ Bindings: Bindings; Variables: Variables }>({ strict: false });
 
 const CURRICULUM_SIZE = 8;
+
+// Flashcards per class curriculum. Auto-filled from the level's exam bank —
+// those words are curated, level-appropriate, and already inside the level
+// vocabulary by construction — so teachers start with a drillable set and
+// edit from there. C-level classes reuse the B2 bank (no C banks yet).
+const CURRICULUM_WORDS = 12;
+
+export function autoWords(level: string): string[] {
+  const tag = (EXAM_LEVELS as string[]).includes(level) ? (level as ExamLevel) : 'B2';
+  const words = new Set<string>();
+  for (const list of Object.values(BANK_WORDS[tag])) {
+    for (const w of list) words.add(w);
+  }
+  return [...words].sort().slice(0, CURRICULUM_WORDS);
+}
 
 interface ClassRow {
   id: string;
