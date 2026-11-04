@@ -13,8 +13,9 @@ import type { Level } from './levels';
 
 const LEVELS: Level[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 // Same normalization as the Reader's cleanWord: lowercase, letters plus
-// interior hyphens/apostrophes (don't, well-known).
-const WORD_RE = /^[a-z][a-z'-]{0,31}$/;
+// interior hyphens/apostrophes (don't, well-known). Shared with the class
+// word-list editor so teacher words match miss-loop words.
+export const WORD_RE = /^[a-z][a-z'-]{0,31}$/;
 const SOURCES = ['reader', 'exam'] as const;
 
 function isLevel(v: unknown): v is Level {

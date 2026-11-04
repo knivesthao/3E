@@ -258,6 +258,7 @@ export interface EnrolledClass {
   name: string;
   level: string;
   books: EnrolledClassBook[];
+  words: string[];
 }
 
 export const listMyClasses = () => api<{ classes: EnrolledClass[] }>('/api/me/classes');
@@ -312,17 +313,30 @@ export interface ClassDetail {
   cls: { id: string; teacher_id: string; name: string; level: string };
   students: ClassStudent[];
   books: ClassBook[];
+  words: string[];
 }
 
 export const listClasses = () => api<{ classes: TeacherClass[] }>('/api/classes');
 
 export const createClass = (name: string, level: string) =>
-  api<{ cls: ClassDetail['cls']; books: { book_id: string; position: number }[] }>('/api/classes', {
+  api<{ cls: ClassDetail['cls']; books: { book_id: string; position: number }[]; words: string[] }>('/api/classes', {
     method: 'POST',
     body: JSON.stringify({ name, level }),
   });
 
 export const getClass = (id: string) => api<ClassDetail>(`/api/classes/${id}`);
+
+export interface ClassActivityEntry {
+  user_id: string;
+  email: string;
+  days_active: number;
+  streak: number;
+  finished: number;
+  last_active: string | null;
+}
+
+export const getClassActivity = (id: string) =>
+  api<{ activity: ClassActivityEntry[] }>(`/api/classes/${id}/activity`);
 
 export const renameClass = (id: string, name: string) =>
   api<ClassDetail>(`/api/classes/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) });
@@ -335,6 +349,12 @@ export const enrollStudent = (id: string, email: string) =>
 
 export const removeStudent = (id: string, userId: string) =>
   api<{ ok: true }>(`/api/classes/${id}/students/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+
+export const replaceClassWords = (id: string, words: string[]) =>
+  api<{ words: string[] }>(`/api/classes/${id}/words`, {
+    method: 'POST',
+    body: JSON.stringify({ words }),
+  });
 
 export const replaceClassBooks = (id: string, bookIds: string[]) =>
   api<{ books: { book_id: string; position: number }[] }>(`/api/classes/${id}/books`, {
@@ -537,8 +557,24 @@ export const submitExam = (level: ExamLevel, form: string[], answers: { id: stri
 export const getBookCosts = (projectId: string) =>
   api<BookCosts>(`/api/admin/costs/book?projectId=${encodeURIComponent(projectId)}`);
 
+export interface CostsLevelMonth {
+  level: string;
+  month: string;
+  cost: number;
+}
+
+export interface CostsLevelDay {
+  level: string;
+  day: string;
+  cost: number;
+}
+
 export const getCostsOverview = () =>
-  api<{ by_user_month: { user_id: string; month: string; cost: number }[] }>('/api/admin/costs/overview');
+  api<{
+    by_user_month: { user_id: string; month: string; cost: number }[];
+    by_level_month: CostsLevelMonth[];
+    by_level_day: CostsLevelDay[];
+  }>('/api/admin/costs/overview');
 
 export const aiMeanings = (words: string[], level: string) =>
   api<{ meanings: { word: string; meaning: string }[] }>('/api/ai/meanings', {

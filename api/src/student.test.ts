@@ -48,6 +48,7 @@ function makeAppDb() {
   const enrollment = new Map<string, string>();
   const curriculum = new Map<string, { book_id: string; position: number }[]>();
   const shelf = new Map<string, string>();
+  const words = new Map<string, { word: string; position: number }[]>();
   return {
     users,
     prepare(sql: string) {
@@ -91,6 +92,11 @@ function makeAppDb() {
         if (q.startsWith('SELECT book_id, position FROM class_books')) {
           return { results: [...(curriculum.get(params[0] as string) ?? [])] };
         }
+        if (q.startsWith('SELECT word FROM class_words')) {
+          return {
+            results: [...(words.get(params[0] as string) ?? [])].sort((a, b) => a.position - b.position),
+          };
+        }
         if (q.startsWith('SELECT book_id, added_at FROM library_shelf')) {
           return {
             results: [...shelf.entries()]
@@ -124,6 +130,12 @@ function makeAppDb() {
           const list = curriculum.get(params[0] as string) ?? [];
           list.push({ book_id: params[1] as string, position: params[2] as number });
           curriculum.set(params[0] as string, list);
+        } else if (q.startsWith('DELETE FROM class_words')) {
+          words.set(params[0] as string, []);
+        } else if (q.startsWith('INSERT INTO class_words')) {
+          const list = words.get(params[0] as string) ?? [];
+          list.push({ word: params[1] as string, position: params[2] as number });
+          words.set(params[0] as string, list);
         } else if (q.startsWith('INSERT OR IGNORE INTO library_shelf')) {
           shelf.set(`${params[0]}|${params[1]}`, params[2] as string);
         } else if (q.startsWith('DELETE FROM library_shelf')) {
@@ -180,10 +192,11 @@ describe('student classes and shelf', () => {
 
     const student = await signIn(db, libraryDb, 'student@example.com');
     const mine = (await (await app.request('/api/me/classes', { headers: { cookie: student } }, ENV(db, libraryDb))).json()) as {
-      classes: { name: string; books: { title: string }[] }[];
+      classes: { name: string; books: { title: string }[]; words: string[] }[];
     };
     expect(mine.classes).toHaveLength(1);
     expect(mine.classes[0].books.map((b) => b.title)).toEqual(['A1 Book 2', 'A1 Book 1']);
+    expect(mine.classes[0].words).toHaveLength(12);
 
     const other = await signIn(db, libraryDb, 'other@example.com');
     const theirs = (await (await app.request('/api/me/classes', { headers: { cookie: other } }, ENV(db, libraryDb))).json()) as {

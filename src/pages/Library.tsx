@@ -7,6 +7,7 @@ import {
   apiUrl,
   getExamBest,
   getMyActivity,
+  getProgressSummary,
   getRecommendations,
   listBooks,
   listLevels,
@@ -17,7 +18,8 @@ import {
   saveShelfBook,
 } from '../lib/api';
 import { assignedBooks, filterCatalog, levelsInCatalog } from '../lib/catalog';
-import type { CatalogBook, EnrolledClass, FocusTag, MyActivity, RecommendedBook, ShelfBook } from '../lib/api';
+import { collectClassWords } from '../lib/flashcards';
+import type { CatalogBook, EnrolledClass, FocusTag, MyActivity, ProgressSummary, RecommendedBook, ShelfBook } from '../lib/api';
 import { BELT_LABEL, beltFor } from '../lib/belts';
 
 const TOUR_KEY = 'e3-tour-library';
@@ -73,6 +75,9 @@ export default function Library() {
   const [levelFilter, setLevelFilter] = useState<'all' | string>('all');
   const [query, setQuery] = useState('');
   const [activity, setActivity] = useState<MyActivity | null>(null);
+  // My progress card: counters only (books, flashes, exams). Signed out:
+  // the summary 401s and the card stays hidden — never a sign-in nudge.
+  const [summary, setSummary] = useState<ProgressSummary | null>(null);
   // Missed-word loop: how many stumbles await practice, and which books
   // drill them. Signed out: both 401 and stay hidden.
   const [missCount, setMissCount] = useState<number | null>(null);
@@ -98,6 +103,7 @@ export default function Library() {
   };
   const savedIds = new Set((shelf ?? []).map((b) => b.id));
   const assigned = assignedBooks(myClasses ?? []);
+  const classWords = myClasses ? collectClassWords(myClasses) : [];
   async function toggleShelf(bookId: string) {
     setShelfError(null);
     try {
@@ -123,6 +129,9 @@ export default function Library() {
     // Anonymous visitors get a 401 here: shelf simply stays hidden.
     getMyActivity()
       .then(setActivity)
+      .catch(() => {});
+    getProgressSummary()
+      .then(setSummary)
       .catch(() => {});
     listMisses()
       .then((res) => setMissCount(res.misses.length))
@@ -164,6 +173,16 @@ export default function Library() {
           </p>
         </section>
       ) : null}
+      {summary && (
+        <section aria-label="My progress" className="mt-3 rounded-md border border-accent-900 bg-accent-50 p-3">
+          <h2 className="font-display text-xl font-bold">My progress</h2>
+          <ul className="mt-1 flex list-disc flex-col gap-1 pl-5 text-base">
+            <li>📚 {summary.booksStarted} {summary.booksStarted === 1 ? 'book' : 'books'} started · {summary.booksFinished} finished</li>
+            <li>🃏 {summary.flashSeen} cards practiced · {summary.flashKnown} words learned</li>
+            <li>🥋 {summary.examAttempts} {summary.examAttempts === 1 ? 'test' : 'tests'} taken{summary.examBest !== null ? ` · best ${summary.examBest}` : ''}</li>
+          </ul>
+        </section>
+      )}
       <div role="tablist" aria-label="Library sections" className="sticky top-[69px] z-30 -mx-4 mb-3 flex gap-2 bg-white px-4 py-2 sm:-mx-6 sm:px-6">
         {(['classes', 'shelf', 'books', 'flashcards', 'exams'] as const).map((t) => (
           <Button
@@ -216,6 +235,12 @@ export default function Library() {
                     ))}
                   </ul>
                 )}
+                {cls.words.length > 0 && (
+                  <p className="mt-2 text-sm text-stone-600">
+                    <span className="font-bold text-stone-900">Words to practice:</span> {cls.words.join(' · ')}{' '}
+                    <Link to="/practice/alphabet?deck=class" className="underline underline-offset-4">Practice</Link>
+                  </p>
+                )}
               </li>
             ))}
           </ul>
@@ -257,6 +282,15 @@ export default function Library() {
               </li>
             ))}
           </ul>
+        )}
+        {classWords.length > 0 && (
+          <>
+            <h2 className="mt-4 font-display text-xl font-bold">Words to practice</h2>
+            <p className="mt-1 text-sm text-stone-600">
+              {classWords.map((w) => w.word).join(' · ')}{' '}
+              <Link to="/practice/alphabet?deck=class" className="underline underline-offset-4">Practice</Link>
+            </p>
+          </>
         )}
         <h2 className="mt-4 font-display text-xl font-bold">Saved for later</h2>
         {shelfError && <p role="alert" className="mt-1 text-sm text-red-900">{shelfError}</p>}
@@ -487,6 +521,15 @@ export default function Library() {
               </p>
             </li>
           ) : null}
+          {classWords.length > 0 && (
+            <li className="rounded-md border border-stone-200 bg-white p-3">
+              <p className="text-base font-bold">Class words · {classWords.length} to practice</p>
+              <p className="text-sm text-stone-600">Words from your classes, at your class level.</p>
+              <p className="mt-1">
+                <Link to="/practice/alphabet?deck=class" className="underline underline-offset-4">Practice class words</Link>
+              </p>
+            </li>
+          )}
           <li className="rounded-md border border-stone-200 bg-white p-3">
             <p className="text-base font-bold">Phonics</p>
             <p className="text-sm text-stone-600">All 26 letter sounds. Hear each sound, say an example word.</p>

@@ -67,6 +67,7 @@ describe('assignedBooks', () => {
     name,
     level: 'A1',
     books,
+    words: [],
   });
   const book = (book_id: string, position: number, title: string) => ({
     book_id,

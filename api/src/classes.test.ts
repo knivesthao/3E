@@ -3,7 +3,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import app from './index';
 
 function makeLibraryDb() {
-  const books = new Map<string, { id: string; title: string; level: string; cover_url: string | null; published_at: string }>();
+  const books = new Map<string, { id: string; title: string; level: string; cover_url: string | null; published_at: string; manifest_json: string }>();
   return {
     books,
     prepare(sql: string) {
@@ -26,6 +26,14 @@ function makeLibraryDb() {
               .map((b) => ({ id: b.id })),
           };
         }
+        if (q.startsWith('SELECT id, title, cover_url, manifest_json FROM books WHERE id IN')) {
+          return {
+            results: params
+              .map((id) => books.get(id as string))
+              .filter((b) => b !== undefined)
+              .map((b) => ({ id: b!.id, title: b!.title, cover_url: b!.cover_url, manifest_json: b!.manifest_json })),
+          };
+        }
         return { results: [] };
       };
       return {
@@ -42,8 +50,14 @@ function makeAppDb() {
   const classes = new Map<string, Record<string, unknown>>();
   const enrollment = new Map<string, string>();
   const curriculum = new Map<string, { book_id: string; position: number }[]>();
+  const sync = new Map<string, { book_id: string; scene_number: number; updated_at: string }[]>();
+  const attemptDays = new Map<string, string[]>();
+  const words = new Map<string, { word: string; position: number }[]>();
   return {
     users,
+    sync,
+    attemptDays,
+    words,
     prepare(sql: string) {
       const q = sql.replace(/\s+/g, ' ').trim();
       const first = async (params: unknown[]) => {
@@ -103,14 +117,34 @@ function makeAppDb() {
               .filter(([k]) => k.startsWith(`${classId}|`))
               .map(([k, addedAt]) => {
                 const user = users.get(k.split('|')[1])!;
-                return { id: user.id, email: user.email, added_at: addedAt };
+                return { id: user.id, user_id: user.id, email: user.email, added_at: addedAt };
               })
               .sort((a, b) => (a.email < b.email ? -1 : 1)),
+          };
+        }
+        if (q.startsWith('SELECT DISTINCT substr(created_at, 1, 10) AS day FROM exam_attempts')) {
+          const uid = params[0] as string;
+          return { results: (attemptDays.get(uid) ?? []).map((day) => ({ day })) };
+        }
+        if (q.startsWith('SELECT DISTINCT substr(updated_at, 1, 10) AS day FROM reading_sync')) {
+          const uid = params[0] as string;
+          const days = [...new Set((sync.get(uid) ?? []).map((s) => s.updated_at.slice(0, 10)))];
+          return { results: days.map((day) => ({ day })) };
+        }
+        if (q.startsWith('SELECT book_id, scene_number FROM reading_sync')) {
+          const uid = params[0] as string;
+          return {
+            results: (sync.get(uid) ?? []).map((s) => ({ book_id: s.book_id, scene_number: s.scene_number })),
           };
         }
         if (q.startsWith('SELECT book_id, position FROM class_books')) {
           return {
             results: [...(curriculum.get(params[0] as string) ?? [])].sort((a, b) => a.position - b.position),
+          };
+        }
+        if (q.startsWith('SELECT word FROM class_words')) {
+          return {
+            results: [...(words.get(params[0] as string) ?? [])].sort((a, b) => a.position - b.position),
           };
         }
         return { results: [] };
@@ -146,6 +180,12 @@ function makeAppDb() {
           const list = curriculum.get(params[0] as string) ?? [];
           list.push({ book_id: params[1] as string, position: params[2] as number });
           curriculum.set(params[0] as string, list);
+        } else if (q.startsWith('DELETE FROM class_words')) {
+          words.set(params[0] as string, []);
+        } else if (q.startsWith('INSERT INTO class_words')) {
+          const list = words.get(params[0] as string) ?? [];
+          list.push({ word: params[1] as string, position: params[2] as number });
+          words.set(params[0] as string, list);
         }
         return { success: true };
       };
@@ -191,9 +231,10 @@ function seedBooks(libraryDb: LibraryDb) {
     const id = `a1-${i}`;
     libraryDb.books.set(id, {
       id, title: `A1 Book ${i}`, level: 'A1', cover_url: null, published_at: `2026-01-${String(i).padStart(2, '0')}`,
+      manifest_json: JSON.stringify({ scenes: [{}, {}, {}] }),
     });
   }
-  libraryDb.books.set('b1-1', { id: 'b1-1', title: 'B1 Book 1', level: 'B1', cover_url: null, published_at: '2026-02-01' });
+  libraryDb.books.set('b1-1', { id: 'b1-1', title: 'B1 Book 1', level: 'B1', cover_url: null, published_at: '2026-02-01', manifest_json: JSON.stringify({ scenes: [{}, {}, {}] }) });
 }
 
 const json = (method: string, body: unknown, cookie?: string) => ({
@@ -301,5 +342,104 @@ describe('class management', () => {
       { book_id: 'a1-2', position: 1, title: 'A1 Book 2', level: 'A1', cover_url: null },
       { book_id: 'a1-1', position: 2, title: 'A1 Book 1', level: 'A1', cover_url: null },
     ]);
+  });
+});
+
+describe('class activity', () => {
+  type Entry = {
+    user_id: string; email: string; days_active: number; streak: number; finished: number; last_active: string | null;
+  };
+
+  async function setup() {
+    const db = makeAppDb();
+    const libraryDb = makeLibraryDb();
+    seedUsers(db);
+    seedBooks(libraryDb);
+    db.users.set('student-2', { id: 'student-2', email: 'b-student@example.com', role: 'student' });
+    const teacher = await signIn(db, libraryDb, 'teacher@example.com');
+    const created = await app.request('/api/classes', json('POST', { name: 'Grade 2', level: 'A1' }, teacher), ENV(db, libraryDb));
+    const { cls } = (await created.json()) as { cls: { id: string } };
+    for (const email of ['student@example.com', 'b-student@example.com']) {
+      const enrolled = await app.request(`/api/classes/${cls.id}/students`, json('POST', { email }, teacher), ENV(db, libraryDb));
+      expect(enrolled.status).toBe(201);
+    }
+    return { db, libraryDb, teacher, classId: cls.id };
+  }
+
+  it('reports per-student activity to the owning teacher, most recent first', async () => {
+    const { db, libraryDb, teacher, classId } = await setup();
+    const today = new Date().toISOString();
+    // Active reader: finished a 3-scene book today and took an exam.
+    db.sync.set('student-1', [{ book_id: 'a1-1', scene_number: 3, updated_at: today }]);
+    db.attemptDays.set('student-1', [today.slice(0, 10)]);
+    // Quiet reader: one page turn ten days ago.
+    const stale = new Date(Date.now() - 10 * 86400000).toISOString();
+    db.sync.set('student-2', [{ book_id: 'a1-2', scene_number: 1, updated_at: stale }]);
+
+    const res = await app.request(`/api/classes/${classId}/activity`, { headers: { cookie: teacher } }, ENV(db, libraryDb));
+    expect(res.status).toBe(200);
+    const { activity } = (await res.json()) as { activity: Entry[] };
+    expect(activity.map((a) => a.email)).toEqual(['student@example.com', 'b-student@example.com']);
+    expect(activity[0]).toMatchObject({
+      user_id: 'student-1', days_active: 1, streak: 1, finished: 1, last_active: today.slice(0, 10),
+    });
+    expect(activity[1]).toMatchObject({ user_id: 'student-2', streak: 0, finished: 0 });
+    expect(activity[1].last_active).toBe(stale.slice(0, 10));
+  });
+
+  it('denies students and other teachers, 404s unknown classes', async () => {
+    const { db, libraryDb, teacher, classId } = await setup();
+    const other = await signIn(db, libraryDb, 'other-teacher@example.com');
+    const student = await signIn(db, libraryDb, 'student@example.com');
+    const env = ENV(db, libraryDb);
+    expect((await app.request(`/api/classes/${classId}/activity`, { headers: { cookie: other } }, env)).status).toBe(404);
+    expect((await app.request(`/api/classes/${classId}/activity`, { headers: { cookie: student } }, env)).status).toBe(403);
+    expect((await app.request('/api/classes/missing/activity', { headers: { cookie: teacher } }, env)).status).toBe(404);
+    expect((await app.request(`/api/classes/${classId}/activity`, {}, env)).status).toBe(401);
+  });
+});
+
+describe('class word lists', () => {
+  async function setup() {
+    const db = makeAppDb();
+    const libraryDb = makeLibraryDb();
+    seedUsers(db);
+    seedBooks(libraryDb);
+    const teacher = await signIn(db, libraryDb, 'teacher@example.com');
+    const created = await app.request('/api/classes', json('POST', { name: 'Grade 2', level: 'A1' }, teacher), ENV(db, libraryDb));
+    const { cls } = (await created.json()) as { cls: { id: string } };
+    return { db, libraryDb, teacher, classId: cls.id };
+  }
+
+  it('auto-fills level words on creation and serves them in detail', async () => {
+    const { db, libraryDb, teacher, classId } = await setup();
+    const created = await app.request('/api/classes', json('POST', { name: 'Grade 3', level: 'A1' }, teacher), ENV(db, libraryDb));
+    const body = (await created.json()) as { words: string[] };
+    expect(body.words).toHaveLength(12);
+    for (const w of body.words) expect(w).toMatch(/^[a-z][a-z'-]{0,31}$/);
+    const detail = (await (await app.request(`/api/classes/${classId}`, { headers: { cookie: teacher } }, ENV(db, libraryDb))).json()) as {
+      words: string[];
+    };
+    expect(detail.words).toHaveLength(12);
+  });
+
+  it('replaces the list with normalized words, rejecting bad input', async () => {
+    const { db, libraryDb, teacher, classId } = await setup();
+    const env = ENV(db, libraryDb);
+    const replaced = await app.request(`/api/classes/${classId}/words`, json('POST', { words: ['  Cat ', 'cat', 'dog'] }, teacher), env);
+    expect(replaced.status).toBe(200);
+    expect((await replaced.json()) as { words: string[] }).toEqual({ words: ['cat', 'dog'] });
+    for (const payload of [
+      { words: [] },
+      { words: ['ok', 'not a word!'] },
+      { words: ['ok', 7] },
+      { words: new Array(41).fill('cat') },
+      { nope: ['cat'] },
+    ]) {
+      expect((await app.request(`/api/classes/${classId}/words`, json('POST', payload, teacher), env)).status).toBe(400);
+    }
+    const other = await signIn(db, libraryDb, 'other-teacher@example.com');
+    expect((await app.request(`/api/classes/${classId}/words`, json('POST', { words: ['cat'] }, other), env)).status).toBe(404);
+    expect((await app.request('/api/classes/missing/words', json('POST', { words: ['cat'] }, teacher), env)).status).toBe(404);
   });
 });

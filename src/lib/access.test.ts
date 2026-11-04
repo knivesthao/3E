@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canAccess } from './access';
+import { canAccess, effectiveRole } from './access';
 import type { UserRole } from './api';
 
 const ROLES: UserRole[] = ['student', 'teacher', 'creator', 'admin'];
@@ -29,5 +29,27 @@ describe('canAccess', () => {
     for (const role of ['student', 'teacher', 'creator'] as const) {
       expect(canAccess('admin', role)).toBe(false);
     }
+  });
+});
+
+describe('effectiveRole', () => {
+  it('applies an admin preview lens without touching the session role', () => {
+    expect(effectiveRole('admin', 'student')).toBe('student');
+    expect(effectiveRole('admin', 'teacher')).toBe('teacher');
+    expect(effectiveRole('admin', 'creator')).toBe('creator');
+    expect(effectiveRole('admin', null)).toBe('admin');
+  });
+
+  it('ignores preview requests from non-admins and signed-out users', () => {
+    expect(effectiveRole('student', 'teacher')).toBe('student');
+    expect(effectiveRole('creator', 'student')).toBe('creator');
+    expect(effectiveRole(null, 'student')).toBe(null);
+  });
+
+  it('drives the same surface rules as a real role', () => {
+    expect(canAccess('studio', effectiveRole('admin', 'student'))).toBe(false);
+    expect(canAccess('studio', effectiveRole('admin', 'creator'))).toBe(true);
+    expect(canAccess('classes', effectiveRole('admin', 'teacher'))).toBe(true);
+    expect(canAccess('admin', effectiveRole('admin', 'teacher'))).toBe(false);
   });
 });

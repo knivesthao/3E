@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { aiMeanings, apiUrl, clearMiss, listFlashImages, listLevels, listMisses, putFlashProgress, voiceLang } from '../lib/api';
+import { aiMeanings, apiUrl, clearMiss, listFlashImages, listLevels, listMisses, listMyClasses, putFlashProgress, voiceLang } from '../lib/api';
+import { collectClassWords, planPrefetch } from '../lib/flashcards';
 import { ALPHABET, DIGRAPHS, letterListenText, splitSyllables, wordsByLevel } from '../lib/phonics';
 import { Button } from '../components/ui';
 import { flashFallback } from '../lib/fallback-art';
@@ -96,21 +97,62 @@ function shuffle<T>(xs: T[]): T[] {
 // General basics only: letter sounds, teams, and level words
 // (testimonials/kia.md). No per-book decks — foundations first, book words
 // get their meanings from tap-to-define in the Reader instead.
-// Meanings load lazily on flip (one word per tap) so the B2 deck never
-// prefetches thousands of glosses at once.
-type DeckKey = 'letters' | 'names' | 'teams' | 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2' | 'mine';
+// Meanings prefetch for the first cards of the active deck (batched,
+// dictionary-first) with lazy single-word lookup as the fallback, so the
+// B2 deck never fetches thousands of glosses at once.
+type DeckKey = 'letters' | 'names' | 'teams' | 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2' | 'mine' | 'class';
+
+// Deck-specific gloss framing, shared by lazy flip lookup and prefetch so
+// a prefetched card reads exactly like a flipped one.
+function formatMeaning(deck: DeckKey, display: string[], word: string, gloss: string): string {
+  if (deck === 'names') return `Letter ${display[0]} — ${gloss}`;
+  if (deck === 'letters' || deck === 'teams') return `as in ${word} — ${gloss}`;
+  return gloss;
+}
 const DECK_LABEL: Record<DeckKey, string> = {
-  letters: 'Phonics', names: 'Alphabet', teams: 'Letter teams', A1: 'A1 words', A2: 'A2 words', B1: 'B1 words', B2: 'B2 words', C1: 'C1 words', C2: 'C2 words', mine: 'My words',
+  letters: 'Phonics', names: 'Alphabet', teams: 'Letter teams', A1: 'A1 words', A2: 'A2 words', B1: 'B1 words', B2: 'B2 words', C1: 'C1 words', C2: 'C2 words', mine: 'My words', class: 'Class words',
 };
 // Meaning lookup rides the deck's own level so glosses match the learner.
-// My Words cards carry their own miss level instead.
+// My Words and Class words cards carry their own level instead.
 const DECK_LEVEL: Record<DeckKey, string> = {
-  letters: 'A1', names: 'A1', teams: 'A1', A1: 'A1', A2: 'A2', B1: 'B1', B2: 'B2', C1: 'C1', C2: 'C2', mine: 'A1',
+  letters: 'A1', names: 'A1', teams: 'A1', A1: 'A1', A2: 'A2', B1: 'B1', B2: 'B2', C1: 'C1', C2: 'C2', mine: 'A1', class: 'A1',
 };
+
+// Prefetch meanings for the first cards of the active deck (batched,
+// dictionary-first, up to 50 cards) plus a few screens of image warming,
+// so flips feel instant. Fire-and-forget: failures leave lazy lookup to
+// cover flips, and merges skip cards the learner already flipped.
+async function prefetchDeck(
+  key: DeckKey,
+  cards: Card[],
+  merge: (key: DeckKey, got: Map<string, string>) => void,
+): Promise<void> {
+  for (const card of cards.slice(0, 12)) {
+    if (card.image) {
+      const warm = new Image();
+      warm.src = card.image;
+    }
+  }
+  const batches = planPrefetch(cards, DECK_LEVEL[key]);
+  await Promise.all(
+    batches.map(async ({ level, words }) => {
+      try {
+        const res = await aiMeanings(words, level);
+        const got = new Map<string, string>();
+        for (const m of res.meanings) {
+          if (m.meaning) got.set(m.word, m.meaning);
+        }
+        if (got.size > 0) merge(key, got);
+      } catch {
+        // Offline or capped: flips fetch on demand.
+      }
+    }),
+  );
+}
 export default function Flashcards() {
   const [params] = useSearchParams();
   const initial = params.get('deck');
-  const startDeck: DeckKey = initial === 'names' || initial === 'teams' || initial === 'A1' || initial === 'A2' || initial === 'B1' || initial === 'B2' || initial === 'C1' || initial === 'C2' || initial === 'mine' ? initial : 'letters';
+  const startDeck: DeckKey = initial === 'names' || initial === 'teams' || initial === 'A1' || initial === 'A2' || initial === 'B1' || initial === 'B2' || initial === 'C1' || initial === 'C2' || initial === 'mine' || initial === 'class' ? initial : 'letters';
   const [decks, setDecks] = useState<Record<DeckKey, Card[]> | null>(null);
   const [deck] = useState<DeckKey>(startDeck);
   const [index, setIndex] = useState(0);
@@ -127,11 +169,11 @@ export default function Flashcards() {
   // the rest never fire image requests.
   useEffect(() => {
     let cancelled = false;
-    Promise.all([listLevels(), listFlashImages(), listMisses().catch(() => ({ misses: [] }))])
-      .then(([lists, known, mine]) => {
+    Promise.all([listLevels(), listFlashImages(), listMisses().catch(() => ({ misses: [] })), listMyClasses().catch(() => ({ classes: [] }))])
+      .then(([lists, known, mine, enrolled]) => {
         if (cancelled) return;
         const byLevel = wordsByLevel(lists);
-        setDecks({
+        const built: Record<DeckKey, Card[]> = {
           letters: shuffle(ALPHABET.map((s) => soundCard(s.sound, s.example, ''))),
           names: shuffle(ALPHABET.map((s) => nameCard(s.sound.toUpperCase(), s.example, ''))),
           teams: shuffle(DIGRAPHS.map((s) => soundCard(s.sound, s.example, ''))),
@@ -145,7 +187,26 @@ export default function Flashcards() {
           // card riding its miss level for meanings and art. Signed out:
           // misses stay empty and the deck waits.
           mine: shuffle(mine.misses.map((m) => bookCard(m.word, '', flashImage(m.level, m.word, known), m.level))),
-        });
+          // Class words: the teacher's drill list from the learner's
+          // enrollments, each card riding its class level. No classes
+          // (or signed out): the deck waits.
+          class: shuffle(
+            collectClassWords(enrolled.classes).map((w) => bookCard(w.word, '', flashImage(w.level, w.word, known), w.level)),
+          ),
+        };
+        setDecks(built);
+        if (!cancelled) {
+          void prefetchDeck(deck, built[deck], (key, got) => {
+            setDecks((d) => {
+              if (!d) return d;
+              const list = d[key].map((c) => {
+                const m = got.get(c.word);
+                return m && c.meaning === '' ? { ...c, meaning: formatMeaning(key, c.display, c.word, m) } : c;
+              });
+              return { ...d, [key]: list };
+            });
+          });
+        }
       })
       .catch(() => {
         // Lists unreachable (offline): sound decks still work, level decks wait.
@@ -153,7 +214,7 @@ export default function Flashcards() {
           letters: shuffle(ALPHABET.map((s) => soundCard(s.sound, s.example, ''))),
           names: shuffle(ALPHABET.map((s) => nameCard(s.sound.toUpperCase(), s.example, ''))),
           teams: shuffle(DIGRAPHS.map((s) => soundCard(s.sound, s.example, ''))),
-          A1: [], A2: [], B1: [], B2: [], C1: [], C2: [], mine: [],
+          A1: [], A2: [], B1: [], B2: [], C1: [], C2: [], mine: [], class: [],
         });
       });
     return () => { cancelled = true; };
@@ -171,7 +232,7 @@ export default function Flashcards() {
           if (!meaning) return;
           setDecks((d) => {
             if (!d) return d;
-            const list = d[key].map((c, i) => (i === at ? { ...c, meaning: key === 'names' ? `Letter ${c.display[0]} — ${meaning}` : key === 'letters' || key === 'teams' ? `as in ${c.word} — ${meaning}` : meaning } : c));
+            const list = d[key].map((c, i) => (i === at ? { ...c, meaning: formatMeaning(key, c.display, c.word, meaning) } : c));
             return { ...d, [key]: list };
           });
         })
@@ -244,7 +305,7 @@ export default function Flashcards() {
           media={
             <div className="flex h-full flex-col items-center justify-center bg-white p-6 text-center" role="button" tabIndex={0} onClick={() => flip(!flipped)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') flip(!flipped); }} aria-label={flipped ? 'Show sound' : 'Show meaning'}>
               {(() => {
-                const isWord = deck === 'A1' || deck === 'A2' || deck === 'B1' || deck === 'B2' || deck === 'C1' || deck === 'C2' || deck === 'mine';
+                const isWord = deck === 'A1' || deck === 'A2' || deck === 'B1' || deck === 'B2' || deck === 'C1' || deck === 'C2' || deck === 'mine' || deck === 'class';
                 if (!isWord) {
                   return (
                     <p className="w-full break-words px-2 text-center text-[clamp(9rem,32dvh,22rem)] font-bold leading-none">

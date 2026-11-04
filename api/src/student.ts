@@ -18,6 +18,14 @@ interface CurriculumEntry {
   cover_url: string | null;
 }
 
+async function wordsFor(db: Bindings['DB'], classId: string): Promise<string[]> {
+  const { results } = await db
+    .prepare('SELECT word FROM class_words WHERE class_id = ? ORDER BY position ASC')
+    .bind(classId)
+    .all<{ word: string }>();
+  return (results ?? []).map((r) => r.word);
+}
+
 async function curriculumFor(
   libraryDb: Bindings['LIBRARY_DB'],
   classId: string,
@@ -48,7 +56,11 @@ student.get('/classes', async (c) => {
     .all<{ id: string; name: string; level: string }>();
   const classes = [];
   for (const cls of results ?? []) {
-    classes.push({ ...cls, books: await curriculumFor(c.env.LIBRARY_DB, cls.id, c.env.DB) });
+    classes.push({
+      ...cls,
+      books: await curriculumFor(c.env.LIBRARY_DB, cls.id, c.env.DB),
+      words: await wordsFor(c.env.DB, cls.id),
+    });
   }
   return c.json({ classes });
 });

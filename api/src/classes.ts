@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Bindings, Variables } from './types';
+import { WORD_RE } from './misses';
 import { requireRole } from './roles';
+import { summarizeActivity } from './activity';
 import { LEVELS, isRecord } from './validate';
 import { BANK_WORDS, EXAM_LEVELS } from './exam-banks';
 import type { ExamLevel } from './exam-banks';
@@ -89,6 +91,40 @@ async function setCurriculum(db: D1Database, classId: string, bookIds: string[],
   }
 }
 
+async function setWords(db: D1Database, classId: string, words: string[]) {
+  await db.prepare('DELETE FROM class_words WHERE class_id = ?').bind(classId).run();
+  for (let i = 0; i < words.length; i++) {
+    await db
+      .prepare('INSERT INTO class_words (class_id, word, position) VALUES (?, ?, ?)')
+      .bind(classId, words[i], i + 1)
+      .run();
+  }
+}
+
+async function wordsFor(db: D1Database, classId: string): Promise<string[]> {
+  const { results } = await db
+    .prepare('SELECT word FROM class_words WHERE class_id = ? ORDER BY position ASC')
+    .bind(classId)
+    .all<{ word: string }>();
+  return (results ?? []).map((r) => r.word);
+}
+
+// Teacher-submitted lists normalize like miss-loop words (lowercase, short,
+// letters plus interior hyphens/apostrophes) and dedupe in order.
+const MAX_WORDS = 40;
+
+function normalizeWords(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_WORDS) return null;
+  const out: string[] = [];
+  for (const w of value) {
+    if (typeof w !== 'string') return null;
+    const word = w.trim().toLowerCase();
+    if (!WORD_RE.test(word)) return null;
+    if (!out.includes(word)) out.push(word);
+  }
+  return out.length > 0 ? out : null;
+}
+
 // Teachers manage their own classes; admins manage all of them.
 classes.post('/', async (c) => {
   const denied = requireRole(c, ['teacher', 'admin']);
@@ -120,7 +156,9 @@ classes.post('/', async (c) => {
     .run();
   const bookIds = await autoCurriculum(c.env.LIBRARY_DB, cls.level);
   await setCurriculum(c.env.DB, cls.id, bookIds, now);
-  return c.json({ cls, books: bookIds.map((book_id, i) => ({ book_id, position: i + 1 })) }, 201);
+  const words = autoWords(cls.level);
+  await setWords(c.env.DB, cls.id, words);
+  return c.json({ cls, books: bookIds.map((book_id, i) => ({ book_id, position: i + 1 })), words }, 201);
 });
 
 classes.get('/', async (c) => {
@@ -171,7 +209,46 @@ classes.get('/:id', async (c) => {
     const book = await libraryBook(c.env.LIBRARY_DB, b.book_id);
     if (book) detailed.push({ ...b, title: book.title, level: book.level, cover_url: book.cover_url });
   }
-  return c.json({ cls, students: students.results ?? [], books: detailed });
+  const words = await wordsFor(c.env.DB, cls.id);
+  return c.json({ cls, students: students.results ?? [], books: detailed, words });
+});
+
+// Per-student activity for the teacher's Classes page: who is using the
+// tools and who has gone quiet. Same zero-write series as the self
+// endpoint, one row per enrolled student, most recently active first.
+classes.get('/:id/activity', async (c) => {
+  const denied = requireRole(c, ['teacher', 'admin']);
+  if (denied) return denied;
+  const role = c.get('userRole');
+  const cls = role === 'admin'
+    ? await getClass(c.env.DB, c.req.param('id'))
+    : await ownClass(c.env.DB, c.req.param('id'), c.get('userId'));
+  if (!cls) return c.json(NOT_FOUND, 404);
+  const { results } = await c.env.DB.prepare(
+    `SELECT class_students.user_id AS user_id, users.email AS email FROM class_students
+     JOIN users ON users.id = class_students.user_id WHERE class_id = ? ORDER BY users.email ASC`,
+  )
+    .bind(cls.id)
+    .all<{ user_id: string; email: string }>();
+  const activity = [];
+  for (const s of results ?? []) {
+    const a = await summarizeActivity(c.env.DB, c.env.LIBRARY_DB, s.user_id);
+    activity.push({
+      user_id: s.user_id,
+      email: s.email,
+      days_active: a.totalDays,
+      streak: a.streak,
+      finished: a.finished.length,
+      last_active: a.lastActive,
+    });
+  }
+  activity.sort((a, b) => {
+    if (a.last_active === b.last_active) return a.email < b.email ? -1 : 1;
+    if (a.last_active === null) return 1;
+    if (b.last_active === null) return -1;
+    return a.last_active < b.last_active ? 1 : -1;
+  });
+  return c.json({ activity });
 });
 
 classes.patch('/:id', async (c) => {
@@ -272,4 +349,26 @@ classes.post('/:id/books', async (c) => {
   }
   await setCurriculum(c.env.DB, cls.id, bookIds, new Date().toISOString());
   return c.json({ books: bookIds.map((book_id, i) => ({ book_id, position: i + 1 })) });
+});
+
+// Teacher-edited word list: full ordered replacement. Words normalize like
+// miss-loop words so class drills feed the same My Words deck.
+classes.post('/:id/words', async (c) => {
+  const denied = requireRole(c, ['teacher', 'admin']);
+  if (denied) return denied;
+  const role = c.get('userRole');
+  const cls = role === 'admin'
+    ? await getClass(c.env.DB, c.req.param('id'))
+    : await ownClass(c.env.DB, c.req.param('id'), c.get('userId'));
+  if (!cls) return c.json(NOT_FOUND, 404);
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json(INVALID, 400);
+  }
+  const words = isRecord(body) ? normalizeWords(body.words) : null;
+  if (!words) return c.json(INVALID, 400);
+  await setWords(c.env.DB, cls.id, words);
+  return c.json({ words });
 });

@@ -19,7 +19,7 @@ import { admin } from './admin';
 import { exam } from './exam';
 import { misses } from './misses';
 import { progress } from './progress';
-import { finishedBooks } from './shelf';
+import { summarizeActivity } from './activity';
 import { ai } from './ai/routes';
 import { share } from './share';
 import { costs } from './costs';
@@ -180,35 +180,14 @@ app.get('/api/levels', (c) =>
 
 // Self activity (shelf + streaks): distinct active days from exam attempts
 // plus page turns the user made, and books whose shared position the user
-// left on the final page. Derived from existing tables — zero extra writes.
-// Streak counts back from today, so reading today already extends it.
+// left on the final page. Shared with teacher class tracking.
 app.get('/api/me/activity', async (c) => {
-  const uid = c.get('userId');
-  const db = c.env.DB;
-  const [examRows, readRows] = await Promise.all([
-    db
-      .prepare('SELECT DISTINCT substr(created_at, 1, 10) AS day FROM exam_attempts WHERE user_id = ?')
-      .bind(uid)
-      .all<{ day: string }>(),
-    db
-      .prepare('SELECT DISTINCT substr(updated_at, 1, 10) AS day FROM reading_sync WHERE updated_by = ?')
-      .bind(uid)
-      .all<{ day: string }>(),
-  ]);
-  const daySet = new Set(
-    [...(examRows.results ?? []), ...(readRows.results ?? [])].map((r) => r.day),
+  const { days, streak, totalDays, finished } = await summarizeActivity(
+    c.env.DB,
+    c.env.LIBRARY_DB,
+    c.get('userId'),
   );
-  const days = [...daySet].sort();
-  let streak = 0;
-  const cursor = new Date();
-  while (daySet.has(cursor.toISOString().slice(0, 10))) {
-    streak++;
-    cursor.setUTCDate(cursor.getUTCDate() - 1);
-  }
-  // Finished books via the shared shelf helper (same fetch-then-match
-  // across the app/library DB boundary the summary endpoint uses).
-  const { finished } = await finishedBooks(db, c.env.LIBRARY_DB, uid);
-  return c.json({ days, streak, totalDays: days.length, finished });
+  return c.json({ days, streak, totalDays, finished });
 });
 
 app.post('/api/auth/logout', async (c) => {
