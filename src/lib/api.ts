@@ -33,10 +33,10 @@ export type UserRole = 'student' | 'teacher' | 'creator' | 'admin';
 export const getMe = () =>
   api<{ user: { id: string; email: string; role: UserRole } }>('/api/auth/me');
 
-export const requestLink = (email: string) =>
+export const requestLink = (email: string, inviteCode?: string) =>
   api<{ ok: true; devLink?: string; emailed?: boolean }>('/api/auth/request-link', {
     method: 'POST',
-    body: JSON.stringify({ email }),
+    body: JSON.stringify(inviteCode ? { email, inviteCode } : { email }),
   });
 
 export const logout = () => api<{ ok: true }>('/api/auth/logout', { method: 'POST' });

@@ -11,6 +11,7 @@ import {
 } from './auth';
 import { sendMagicLink } from './email';
 import { isRole } from './roles';
+import { invites, redeemInviteForSignup } from './invites';
 import { projects } from './projects';
 import { admin } from './admin';
 import { exam } from './exam';
@@ -88,6 +89,16 @@ app.post('/api/auth/request-link', async (c) => {
       ? (body as { email: string }).email.trim().toLowerCase()
       : '';
   if (!isValidEmail(email)) return c.json({ error: 'invalid request' }, 400);
+  const inviteCode =
+    typeof (body as { inviteCode?: unknown } | null)?.inviteCode === 'string'
+      ? (body as { inviteCode: string }).inviteCode
+      : '';
+  if (inviteCode !== '') {
+    // Invited signup consumes the code before any session is minted. All
+    // invite failures share one generic error so codes cannot be probed.
+    const redeemed = await redeemInviteForSignup(c.env.DB, inviteCode, email, Date.now());
+    if (!redeemed.ok) return c.json({ error: 'invalid request' }, 400);
+  }
 
   const now = Date.now();
   const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?')
@@ -211,6 +222,7 @@ app.post('/api/auth/logout', async (c) => {
 
 app.route('/api/projects', projects);
 app.route('/api/admin', admin);
+app.route('/api/admin/invites', invites);
 app.route('/api/exam', exam);
 app.route('/api/misses', misses);
 app.route('/api/progress', progress);

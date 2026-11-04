@@ -13,6 +13,7 @@ import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
 import About from './pages/About';
 import SignIn from './pages/SignIn';
+import InviteSignup from './pages/InviteSignup';
 import { getMe, logout } from './lib/api';
 
 function Guard({ email, children }: { email: string | null; children: ReactNode }) {
@@ -111,6 +112,7 @@ export default function App() {
       </nav>
       <Routes>
         <Route path="/signin" element={<SignIn />} />
+        <Route path="/signup/:code" element={<InviteSignup />} />
         <Route
           path="/"
           element={
