@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import app from './index';
+import { DAILY_AI_LIMIT } from './ai/config';
 
 // Minimal stub: real session flow (request-link + verify), COUNT(*)
 // answers for the stats tables, and exam_attempts rows for item stats.
@@ -148,7 +149,7 @@ describe('GET /api/admin/specs', () => {
         segment: 'sam-3.1',
       },
       basetenConfigured: false,
-      dailyAiLimit: 50,
+      dailyAiLimit: DAILY_AI_LIMIT,
     });
     expect(JSON.stringify(body)).not.toMatch(/test-key|sk-|bearer/i);
   });

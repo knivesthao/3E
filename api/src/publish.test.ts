@@ -442,7 +442,7 @@ describe('Publish endpoint', () => {
     const env = ENV(db);
     const uid = await userIdOf(cookie, env);
     const pid = seedBook(db, uid);
-    stubSafety('safe');
+    stubWordPipeline();
 
     const tagged = (t: unknown) => json('POST', { tags: t }, cookie);
     const res = await app.request(`/api/projects/${pid}/publish`, tagged(['nouns']), env);
@@ -582,7 +582,7 @@ describe('Publish endpoint', () => {
     const env = ENV(db);
     const uid = await userIdOf(cookie, env);
     const pid = seedBook(db, uid);
-    stubSafety('safe');
+    stubWordPipeline();
 
     const first = (await (
       await app.request(`/api/projects/${pid}/publish`, json('POST', {}, cookie), env)
