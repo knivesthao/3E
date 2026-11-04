@@ -4,7 +4,8 @@ import app from './index';
 
 // Minimal in-memory D1 for route tests (subset of the API the routes use).
 function makeDb() {
-  const users = new Map<string, { id: string; email: string }>();
+  // Suite exercises creator flows; signup defaults live in roles.test.ts.
+  const users = new Map<string, { id: string; email: string; role: string }>();
   const sessions = new Map<string, { user_id: string; expires_at: number }>();
   const projects = new Map<string, Record<string, unknown>>();
   const scenes = new Map<string, Record<string, unknown>>();
@@ -23,7 +24,7 @@ function makeDb() {
   const runQuery = (q: string, p: unknown[]) => {
     if (q.startsWith('INSERT INTO users')) {
       const [id, email] = p as string[];
-      users.set(id, { id, email });
+      users.set(id, { id, email, role: 'creator' });
     } else if (q.startsWith('INSERT INTO sessions')) {
       const [h, uid, exp] = p as [string, string, number];
       sessions.set(h, { user_id: uid, expires_at: exp });
@@ -85,7 +86,7 @@ function makeDb() {
       const s = sessions.get(p[0] as string);
       if (!s) return null;
       const u = users.get(s.user_id);
-      return u ? { id: u.id, email: u.email, expires_at: s.expires_at } : null;
+      return u ? { id: u.id, email: u.email, role: u.role, expires_at: s.expires_at } : null;
     }
     if (q.startsWith('SELECT * FROM projects WHERE id = ? AND creator_id')) {
       const r = projects.get(p[0] as string);

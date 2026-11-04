@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Bindings, Variables } from './types';
+import { requireRole } from './roles';
 import {
   isRecord,
   validateProjectCreate,
@@ -20,8 +21,15 @@ import { AiError } from './ai/meta';
 import { safetyPrompt, sceneActionText } from './ai/prompts';
 
 // All routes inherit the session gate from index.ts (owner = session user).
-// Missing-or-foreign resources all return 404 so ids can't be probed.
+// Studio drafting is creator/admin-only; students learn from published
+// books. Missing-or-foreign resources all return 404 so ids can't be probed.
 export const projects = new Hono<{ Bindings: Bindings; Variables: Variables }>({ strict: false });
+
+projects.use(async (c, next) => {
+  const denied = requireRole(c, ['creator', 'admin']);
+  if (denied) return denied;
+  return next();
+});
 
 export interface ProjectRow {
   id: string;

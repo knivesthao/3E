@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Bindings, Variables } from './types';
 import { ownProject } from './projects';
+import { requireRole } from './roles';
 
 // Admin cost ledger (Step 5a) — the §Cost & usage tracking queries over
 // ai_usage. Session-gated by index.ts like every other /api/* route;
@@ -11,6 +12,8 @@ const NOT_FOUND = { error: 'not found' } as const;
 const INVALID = { error: 'invalid request' } as const;
 
 costs.get('/book', async (c) => {
+  const denied = requireRole(c, ['creator', 'admin']);
+  if (denied) return denied;
   const projectId = c.req.query('projectId') ?? '';
   if (projectId === '' || projectId.length > 100) return c.json(INVALID, 400);
   const project = await ownProject(c.env.DB, projectId, c.get('userId'));
@@ -78,6 +81,8 @@ costs.get('/book', async (c) => {
 });
 
 costs.get('/overview', async (c) => {
+  const denied = requireRole(c, ['admin']);
+  if (denied) return denied;
   const rows = await c.env.DB.prepare(
     `SELECT user_id, strftime('%Y-%m', created_at) AS month, SUM(cost_usd) AS cost
      FROM ai_usage GROUP BY user_id, month ORDER BY month DESC`,

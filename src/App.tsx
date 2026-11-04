@@ -14,22 +14,44 @@ import Terms from './pages/Terms';
 import About from './pages/About';
 import SignIn from './pages/SignIn';
 import InviteSignup from './pages/InviteSignup';
+import Classes from './pages/Classes';
 import { getMe, logout } from './lib/api';
+import type { UserRole } from './lib/api';
+import { canAccess } from './lib/access';
+import type { Surface } from './lib/access';
 
-function Guard({ email, children }: { email: string | null; children: ReactNode }) {
+function Guard({
+  email,
+  role,
+  surface,
+  children,
+}: {
+  email: string | null;
+  role: UserRole | null;
+  surface: Surface;
+  children: ReactNode;
+}) {
   if (email === null) return <Navigate to="/signin" replace />;
+  if (!canAccess(surface, role)) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
 export default function App() {
   const [email, setEmail] = useState<string | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
     getMe()
-      .then((me) => setEmail(me.user.email))
-      .catch(() => setEmail(null))
+      .then((me) => {
+        setEmail(me.user.email);
+        setRole(me.user.role);
+      })
+      .catch(() => {
+        setEmail(null);
+        setRole(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -38,6 +60,7 @@ export default function App() {
       await logout();
     } finally {
       setEmail(null);
+      setRole(null);
       navigate('/signin');
     }
   }
@@ -68,16 +91,30 @@ export default function App() {
           >
             Library
           </NavLink>
-          <NavLink
-            to="/studio"
-            className={({ isActive }) =>
-              isActive
-                ? 'border-b-2 border-accent-900 pb-0.5 font-semibold text-stone-900'
-                : 'text-stone-600 underline decoration-stone-300 underline-offset-4 hover:decoration-stone-500'
-            }
-          >
-            Studio
-          </NavLink>
+          {canAccess('classes', role) ? (
+            <NavLink
+              to="/classes"
+              className={({ isActive }) =>
+                isActive
+                  ? 'border-b-2 border-accent-900 pb-0.5 font-semibold text-stone-900'
+                  : 'text-stone-600 underline decoration-stone-300 underline-offset-4 hover:decoration-stone-500'
+              }
+            >
+              Classes
+            </NavLink>
+          ) : null}
+          {canAccess('studio', role) ? (
+            <NavLink
+              to="/studio"
+              className={({ isActive }) =>
+                isActive
+                  ? 'border-b-2 border-accent-900 pb-0.5 font-semibold text-stone-900'
+                  : 'text-stone-600 underline decoration-stone-300 underline-offset-4 hover:decoration-stone-500'
+              }
+            >
+              Studio
+            </NavLink>
+          ) : null}
           <NavLink
             to="/about"
             className={({ isActive }) =>
@@ -93,7 +130,9 @@ export default function App() {
               <UserMenu
                 email={email}
                 onSignOut={signOut}
-                items={[{ label: 'Admin', onSelect: () => navigate('/admin') }]}
+                items={
+                  role === 'admin' ? [{ label: 'Admin', onSelect: () => navigate('/admin') }] : []
+                }
               />
             ) : (
               <NavLink
@@ -116,15 +155,23 @@ export default function App() {
         <Route
           path="/"
           element={
-            <Guard email={email}>
+            <Guard email={email} role={role} surface="library">
               <Library />
+            </Guard>
+          }
+        />
+        <Route
+          path="/classes"
+          element={
+            <Guard email={email} role={role} surface="classes">
+              <Classes />
             </Guard>
           }
         />
         <Route
           path="/studio"
           element={
-            <Guard email={email}>
+            <Guard email={email} role={role} surface="studio">
               <Studio />
             </Guard>
           }
@@ -132,7 +179,7 @@ export default function App() {
         <Route
           path="/studio/:id"
           element={
-            <Guard email={email}>
+            <Guard email={email} role={role} surface="studio">
               <Editor />
             </Guard>
           }
@@ -140,7 +187,7 @@ export default function App() {
         <Route
           path="/read/:id"
           element={
-            <Guard email={email}>
+            <Guard email={email} role={role} surface="library">
               <Reader />
             </Guard>
           }
@@ -149,7 +196,7 @@ export default function App() {
         <Route
           path="/practice/:id"
           element={
-            <Guard email={email}>
+            <Guard email={email} role={role} surface="library">
               <Flashcards />
             </Guard>
           }
@@ -157,7 +204,7 @@ export default function App() {
         <Route
           path="/practice/alphabet"
           element={
-            <Guard email={email}>
+            <Guard email={email} role={role} surface="library">
               <Flashcards />
             </Guard>
           }
@@ -168,7 +215,7 @@ export default function App() {
         <Route
           path="/admin"
           element={
-            <Guard email={email}>
+            <Guard email={email} role={role} surface="admin">
               <Admin />
             </Guard>
           }
@@ -177,7 +224,7 @@ export default function App() {
         <Route
           path="/exam"
           element={
-            <Guard email={email}>
+            <Guard email={email} role={role} surface="library">
               <Exam />
             </Guard>
           }
