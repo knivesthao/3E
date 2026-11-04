@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import app from './index';
+import { CONSECUTIVE_FAIL_LIMIT } from './ai/config';
 import { makeBucket, type TestBucket } from './test-utils';
 
 // In-memory D1 subset for the publish route (projects/scenes/panels seeded
@@ -35,10 +36,9 @@ function makeDb() {
     seedPanel(projectId: string, sceneNumber: number, imageKey: string, maskKey: string) {
       panels.push({ id: crypto.randomUUID(), project_id: projectId, scene_number: sceneNumber, image_key: imageKey, mask_key: maskKey, created_at: new Date().toISOString() });
     },
-    seedUsage(userId: string, n: number) {
-      const day = new Date().toISOString();
+    seedFailures(userId: string, n: number) {
       for (let i = 0; i < n; i++) {
-        usage.push({ user_id: userId, task: 'safety', created_at: day, attempt: 1, ok: 1 });
+        usage.push({ user_id: userId, task: 'safety', created_at: new Date(Date.now() + i).toISOString(), attempt: 1, ok: 0 });
       }
     },
     prepare(sql: string) {
@@ -74,6 +74,15 @@ function makeDb() {
               return null;
             },
             all: async () => {
+              if (q.startsWith('SELECT ok FROM ai_usage WHERE user_id')) {
+                // Streak check: insertion order is chronological in the double.
+                const rows = usage
+                  .filter((u) => u.user_id === params[0])
+                  .reverse()
+                  .slice(0, CONSECUTIVE_FAIL_LIMIT)
+                  .map((u) => ({ ok: u.ok }));
+                return { results: rows };
+              }
               if (q.startsWith('SELECT * FROM scenes WHERE project_id = ? ORDER BY')) {
                 return {
                   results: [...scenes.values()]
@@ -563,7 +572,7 @@ describe('Publish endpoint', () => {
       (await app.request(`/api/projects/${pid}/publish`, json('POST', {}, cookie), ENV(db, false))).status,
     ).toBe(503);
     expect((await app.request(`/api/projects/${pid}/publish`, json('POST', {}), env)).status).toBe(401);
-    db.seedUsage(uid, 50);
+    db.seedFailures(uid, 10);
     expect((await app.request(`/api/projects/${pid}/publish`, json('POST', {}, cookie), env)).status).toBe(429);
   });
 

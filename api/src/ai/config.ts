@@ -20,6 +20,15 @@ export const PRICES: Record<string, { in: number; out: number; flat?: number }> 
 };
 
 export const TEXT_MODEL = 'muse-spark-1.3';
+// Disaster backstop only: set far above any legitimate use (a busy factory
+// user burns ~100 calls on a heavy day) so it never throttles real work.
+// The real stop is the failure streak below — repeated failure, not volume.
+export const DAILY_AI_LIMIT = 1000;
+// Self-healing stop: this many consecutive failed attempts pauses the caller
+// (429) until a success resets the streak. Ten is enough to ride out a
+// deploy blip or a single bad scene, and small enough that a truly broken
+// loop stops after pocket change.
+export const CONSECUTIVE_FAIL_LIMIT = 10;
 export const HARD_MODEL = 'muse-wonder-1.0';
 export const IMAGE_MODEL = 'muse-image-1.0';
 export const SEGMENT_MODEL = 'sam-3.1';
@@ -109,9 +118,6 @@ export const TASK_MODEL: Record<AiTask, string> = {
   keywords: TEXT_MODEL,
   define: TEXT_MODEL,
 };
-
-// Per-user daily cap across AI endpoints (Step 3 + secure-coding rules).
-export const DAILY_AI_LIMIT = 50;
 
 export function textCost(model: string, inputTokens: number, outputTokens: number): number {
   const p = PRICES[model] ?? { in: 0, out: 0 };

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import app from './index';
-import { TASK_TIMEOUT_MS } from './ai/config';
+import { CONSECUTIVE_FAIL_LIMIT, TASK_TIMEOUT_MS } from './ai/config';
 
 // In-memory D1 subset for the AI routes (extends the projects-test pattern
 // with ai_usage + jobs). Model calls are stubbed at fetch, never network.
@@ -16,10 +16,9 @@ function makeDb() {
 
   const db = {
     usage,
-    seedUsage(userId: string, n: number) {
-      const day = new Date().toISOString();
+    seedFailures(userId: string, n: number) {
       for (let i = 0; i < n; i++) {
-        usage.push({ user_id: userId, task: 'idea', created_at: day, attempt: 1, ok: 1 });
+        usage.push({ user_id: userId, task: 'idea', created_at: new Date(Date.now() + i).toISOString(), attempt: 1, ok: 0 });
       }
     },
     seedDefinitions(rows: { word: string; level: string; lang: string; gloss: string; source: string; verified: number }[]) {
@@ -70,6 +69,15 @@ function makeDb() {
               return null;
             },
             all: async () => {
+              if (q.startsWith('SELECT ok FROM ai_usage WHERE user_id')) {
+                // Streak check: insertion order is chronological in the double.
+                const rows = usage
+                  .filter((u) => u.user_id === params[0])
+                  .reverse()
+                  .slice(0, CONSECUTIVE_FAIL_LIMIT)
+                  .map((u) => ({ ok: u.ok }));
+                return { results: rows };
+              }
               if (q.startsWith('SELECT * FROM scenes WHERE project_id = ? ORDER BY')) {
                 return {
                   results: [...scenes.values()]
@@ -266,7 +274,23 @@ describe('AI endpoints', () => {
     const me = (await (await app.request('/api/auth/me', { headers: { cookie } }, env)).json()) as {
       user: { id: string };
     };
-    db.seedUsage(me.user.id, 50);
+    db.seedFailures(me.user.id, 10);
+    const paused = await app.request('/api/ai/idea', json('POST', { idea: 'x' }, cookie), env);
+    expect(paused.status).toBe(429);
+    expect(((await paused.json()) as { error: string }).error).toBe('paused after repeated failures');
+  });
+
+  it('pauses only on a full failure streak; a success resets it', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    stubFetch(modelReply);
+    const env = ENV(db);
+    const me = (await (await app.request('/api/auth/me', { headers: { cookie } }, env)).json()) as {
+      user: { id: string };
+    };
+    db.seedFailures(me.user.id, 9);
+    expect((await app.request('/api/ai/idea', json('POST', { idea: 'x' }, cookie), env)).status).toBe(200);
+    db.seedFailures(me.user.id, 10);
     expect((await app.request('/api/ai/idea', json('POST', { idea: 'x' }, cookie), env)).status).toBe(429);
   });
 

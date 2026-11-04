@@ -4,7 +4,7 @@ import type { Bindings, Variables } from '../types';
 import { AiError } from './meta';
 import { basetenConfig } from './config';
 import type { BasetenConfig } from './config';
-import { FAILED, INVALID, finishJob, modelKey, overLimit, readJson } from './http';
+import { FAILED, INVALID, finishJob, modelKey, limitCheck, readJson } from './http';
 import { generate, parseJson } from './client';
 import { buddyPrompt, castNames, checkPrompt, checkPromptZh, draftPrompt, draftPromptZh, ideaPrompt, meaningsPrompt, meaningsPromptZh, quizPrompt, sceneActionText, simplifyPrompt } from './prompts';
 import { easierLevels } from '../levels';
@@ -34,7 +34,8 @@ ai.post('/idea', async (c) => {
   }
   const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
-  if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+  const limited = await limitCheck(c.env.DB, c.get('userId'));
+  if (limited) return c.json(limited, 429);
   try {
     const { text } = await generate(c.env.DB, {
       apiKey,
@@ -106,7 +107,8 @@ ai.post('/meanings', async (c) => {
   if (missing.length > 0) {
     const apiKey = modelKey(c.env);
     if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
-    if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+    const limited = await limitCheck(c.env.DB, c.get('userId'));
+    if (limited) return c.json(limited, 429);
     const wordsList = missing.map((w, i) => `${i + 1}. ${w}`).join('\n');
     try {
       // Explicit per-request provider escape hatch: provider:'meta' routes
@@ -164,7 +166,8 @@ ai.post('/simplify', async (c) => {
   if (!isLevel(body.level)) return c.json(INVALID, 400);
   const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
-  if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+  const limited = await limitCheck(c.env.DB, c.get('userId'));
+  if (limited) return c.json(limited, 429);
   try {
     const { text } = await generate(c.env.DB, {
       apiKey,
@@ -220,7 +223,8 @@ ai.post('/quiz', async (c) => {
   if (!isLevel(project.level) && !isHskLevel(project.level)) return c.json(INVALID, 400);
   const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
-  if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+  const limited = await limitCheck(c.env.DB, c.get('userId'));
+  if (limited) return c.json(limited, 429);
 
   const db = c.env.DB;
   const { results: rows } = await db
@@ -318,7 +322,8 @@ ai.post('/buddy', async (c) => {
   if (!isLevel(project.level)) return c.json(INVALID, 400);
   const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
-  if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+  const limited = await limitCheck(c.env.DB, c.get('userId'));
+  if (limited) return c.json(limited, 429);
 
   const db = c.env.DB;
   const { results: rows } = await db
@@ -419,7 +424,8 @@ ai.post('/finish', async (c) => {
   if (!isLevel(project.level) && !isHskLevel(project.level)) return c.json(INVALID, 400);
   const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
-  if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+  const limited = await limitCheck(c.env.DB, c.get('userId'));
+  if (limited) return c.json(limited, 429);
 
   const db = c.env.DB;
   const userId = c.get('userId');

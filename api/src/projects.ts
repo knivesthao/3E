@@ -15,7 +15,7 @@ import { generate } from './ai/client';
 import { collectPublishKeys, copyArtToLibrary } from './ai/art';
 import { bustShareCache } from './cache';
 import { basetenConfig } from './ai/config';
-import { finishJob, modelKey, overLimit } from './ai/http';
+import { finishJob, modelKey, limitCheck } from './ai/http';
 import { AiError } from './ai/meta';
 import { safetyPrompt, sceneActionText } from './ai/prompts';
 
@@ -235,7 +235,8 @@ projects.post('/:id/publish', async (c) => {
   if (!project) return c.json(NOT_FOUND, 404);
   const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
-  if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+  const limited = await limitCheck(c.env.DB, c.get('userId'));
+  if (limited) return c.json(limited, 429);
 
   // Optional focus tags (closed vocabulary, max 3, deduped). Empty body or
   // missing tags publishes untagged; republish replaces the tag set.

@@ -3,7 +3,7 @@ import type { R2Bucket } from '@cloudflare/workers-types';
 import type { Bindings, Variables } from '../types';
 import { AiError } from './meta';
 import { generateArt, generateMask } from './client';
-import { FAILED, INVALID, finishJob, modelKey, overLimit, readJson } from './http';
+import { FAILED, INVALID, finishJob, modelKey, limitCheck, readJson } from './http';
 import { modalConfig } from './config';
 import { castPortraitPrompt, isolateText, sceneArtPrompt } from './prompts';
 import { ownProject } from '../projects';
@@ -129,7 +129,8 @@ art.post('/', async (c) => {
   if (!project) return c.json({ error: 'not found' }, 404);
   const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
-  if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+  const limited = await limitCheck(c.env.DB, c.get('userId'));
+  if (limited) return c.json(limited, 429);
   const store: R2Bucket | undefined = c.env.ART;
   if (!store) return c.json({ error: 'art unavailable' }, 503);
 
@@ -237,7 +238,8 @@ art.post('/portrait', async (c) => {
   if (!project) return c.json({ error: 'not found' }, 404);
   const apiKey = modelKey(c.env);
   if (!apiKey) return c.json({ error: 'ai unavailable' }, 503);
-  if (await overLimit(c.env.DB, c.get('userId'))) return c.json({ error: 'daily limit reached' }, 429);
+  const limited = await limitCheck(c.env.DB, c.get('userId'));
+  if (limited) return c.json(limited, 429);
   const store: R2Bucket | undefined = c.env.ART;
   if (!store) return c.json({ error: 'art unavailable' }, 503);
 
