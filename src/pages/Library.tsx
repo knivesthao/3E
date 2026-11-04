@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import Tour from '../components/Tour';
+import Tour, { TOURS_ENABLED } from '../components/Tour';
 import type { TourTrack } from '../components/Tour';
 import { Badge, Button, Field, inputClass } from '../components/ui';
 import {
@@ -112,7 +112,7 @@ export default function Library() {
     }
   }
   useEffect(() => {
-    if (!tourSeen(TOUR_KEY)) setTour('read');
+    if (TOURS_ENABLED && !tourSeen(TOUR_KEY)) setTour('read');
     getExamBest()
       .then((res) => {
         setBest(res.best);

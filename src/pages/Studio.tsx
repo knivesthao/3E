@@ -5,7 +5,7 @@ import { LEVELS, createProject, deleteProject, listProjects } from '../lib/api';
 import type { Project } from '../lib/api';
 import { Alert, Badge, Button, Field, inputClass } from '../components/ui';
 import { useConfirm } from '../components/Dialog';
-import Tour from '../components/Tour';
+import Tour, { TOURS_ENABLED } from '../components/Tour';
 import type { TourTrack } from '../components/Tour';
 
 const TOUR_KEY = 'e3-tour-studio';
@@ -29,7 +29,7 @@ export default function Studio() {
 
   useEffect(() => {
     try {
-      if (!window.localStorage.getItem(TOUR_KEY)) {
+      if (TOURS_ENABLED && !window.localStorage.getItem(TOUR_KEY)) {
         // A legacy global tour mark means the reader toured before page
         // tracking existed: migrate it without re-prompting.
         if (window.localStorage.getItem('e3-tour')) {

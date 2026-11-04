@@ -1,0 +1,221 @@
+{
+  "Red Cat": {
+    "status": "published",
+    "level": "A1",
+    "projectId": "5bae8a85-8c03-4cae-8795-247879ce489c",
+    "bookId": "826e6706-742b-4063-85c8-563eafb6d76f",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.173148,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "The New School": {
+    "status": "published",
+    "level": "B1",
+    "projectId": "40140d4a-8632-41bc-b341-7b07fc1da045",
+    "bookId": "0831a314-eb2f-4c9b-8eea-8b58b2df7924",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.24427025,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "Rain Day": {
+    "status": "published",
+    "level": "A1",
+    "projectId": "b2e31528-ca1c-444f-abd7-97a36bd43228",
+    "bookId": "a86ac618-6b55-4fb5-accf-a085195ae4e8",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.387192,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "Grandma's Soup": {
+    "status": "published",
+    "level": "A2",
+    "projectId": "ca70688b-ba1a-48e5-a776-f9de3351e244",
+    "bookId": "f97ceaa4-a16a-41f6-97cb-37381c4ff9e1",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.5454325,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "The Old Lighthouse": {
+    "status": "published",
+    "level": "B1",
+    "projectId": "293a33ca-e139-41ba-9b2a-d0ad492c5be0",
+    "bookId": "b72159e6-136d-4252-971d-66d284e45995",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.148943,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "A Letter for Sam": {
+    "status": "partial",
+    "level": "B1",
+    "projectId": "b3cad03b-5717-463d-9d3c-858fb5f94738",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "missing": []
+  },
+  "The Empty House": {
+    "status": "partial",
+    "level": "B2",
+    "projectId": "2fce7991-3429-445e-a34d-1ce92f4a4588",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "missing": []
+  },
+  "Salt and Stone": {
+    "level": "C1",
+    "status": "failed",
+    "error": "POST /api/projects -> 500: Internal Server Error"
+  },
+  "The Glass Garden": {
+    "level": "C1",
+    "status": "failed",
+    "error": "POST /api/projects -> 500: Internal Server Error"
+  },
+  "Harbor of Echoes": {
+    "level": "C2",
+    "status": "failed",
+    "error": "POST /api/projects -> 500: Internal Server Error"
+  }
+}

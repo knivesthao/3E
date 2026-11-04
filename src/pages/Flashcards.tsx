@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { aiMeanings, apiUrl, clearMiss, listFlashImages, listLevels, listMisses, putFlashProgress, voiceLang } from '../lib/api';
 import { ALPHABET, DIGRAPHS, letterListenText, splitSyllables, wordsByLevel } from '../lib/phonics';
 import { Button } from '../components/ui';
+import { flashFallback } from '../lib/fallback-art';
 import { PageNav, PageShell } from '../components/PageShell';
 import { Words } from '../components/Words';
 import { ListenPanel } from '../components/ListenPanel';
@@ -22,8 +23,9 @@ interface Card {
   readText: string;
   order: string[];
   // Word decks only: picture cue served from the shared library bucket.
-  // Absent until generated — the card renders text-only, no layout shift.
-  // Letters/sounds/teams never carry images (phonics stays distraction-free).
+  // Absent until generated — the card shows its hash-picked fallback
+  // background instead, same slot so no layout shift. Letters/sounds/teams
+  // never carry images (phonics stays distraction-free).
   image?: string;
 }
 
@@ -262,16 +264,24 @@ export default function Flashcards() {
                 const chars = Math.max(1, pageText.replace(/\s/g, '').length);
                 return (
                   <>
-                    {card.image && (
-                      <img
-                        src={card.image}
-                        alt=""
-                        aria-hidden="true"
-                        loading="lazy"
-                        className="mb-2 max-h-[28dvh] w-auto max-w-full rounded-md object-contain"
-                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                      />
-                    )}
+                    {(() => {
+                      const fallback = flashFallback(card.word);
+                      return (
+                        <img
+                          src={card.image ?? fallback}
+                          alt=""
+                          aria-hidden="true"
+                          loading="lazy"
+                          className="mb-2 max-h-[28dvh] w-auto max-w-full rounded-md object-contain"
+                          onError={(e) => {
+                            // Broken remote art degrades to the word's
+                            // fallback background instead of vanishing.
+                            if (e.currentTarget.src !== fallback) e.currentTarget.src = fallback;
+                            else e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      );
+                    })()}
                     <p
                       className="w-full max-w-full whitespace-nowrap px-2 text-center font-bold leading-none"
                       style={{ fontSize: `clamp(2.5rem, calc(min(88vw, 55dvh) / ${0.62 * chars}), 7rem)` }}

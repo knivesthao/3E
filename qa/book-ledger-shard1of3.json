@@ -1,0 +1,211 @@
+{
+  "Night Market": {
+    "status": "published",
+    "level": "A1",
+    "projectId": "c2bf8e61-573f-4fde-89ec-7348190fd33f",
+    "bookId": "f2c2de78-7a1d-4c25-bc98-805e01e9d0b1",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.4550595,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "Letters from the City": {
+    "status": "partial",
+    "level": "B2",
+    "projectId": "55b86f11-1ee3-42e3-a4e3-539a402ff668",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "missing": []
+  },
+  "The Red Bus": {
+    "status": "published",
+    "level": "A1",
+    "projectId": "c090b7c4-bb23-425e-bd28-a16b3904841a",
+    "bookId": "66a491e9-b1dd-4a70-b5a8-76cc4d12c0fa",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.24620825,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "A Snowy Day": {
+    "status": "published",
+    "level": "A2",
+    "projectId": "4de21cce-edd2-46ba-9494-5a736291e6cc",
+    "bookId": "05bebbdb-136f-4f67-8a5e-8281d002d38c",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.3205865,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "Saturday Market": {
+    "status": "partial",
+    "level": "B1",
+    "projectId": "9e722437-74ee-453c-810f-0d871373bea0",
+    "saved": [
+      1,
+      4,
+      5,
+      6
+    ],
+    "art": [],
+    "missing": [
+      {
+        "scene_number": 2,
+        "reason": "out of level: apples, bananas, piece"
+      },
+      {
+        "scene_number": 3,
+        "reason": "out of level: bananas, children, much"
+      }
+    ]
+  },
+  "The Night Train": {
+    "status": "partial",
+    "level": "B2",
+    "projectId": "6ac5b6aa-fed4-4997-be07-91b922f6d19e",
+    "saved": [
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [],
+    "missing": [
+      {
+        "scene_number": 1,
+        "reason": "Text is below B2 level; vocabulary and grammar are A1-A2. No sentence is over 15 words."
+      },
+      {
+        "scene_number": 2,
+        "reason": "Story is below B2 level. All sentences are under 15 words with A1 vocabulary and no complex idioms."
+      }
+    ]
+  },
+  "Voices on the Radio": {
+    "status": "published",
+    "level": "B2",
+    "projectId": "938ff5c1-e061-4c60-af4c-8b7779d05bfd",
+    "bookId": "652aa18d-3ea0-4041-bb88-2cbd1b0d41a3",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.41579125,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "The Winter Archive": {
+    "level": "C1",
+    "status": "failed",
+    "error": "POST /api/projects -> 500: Internal Server Error"
+  },
+  "An Atlas of Small Hours": {
+    "level": "C2",
+    "status": "failed",
+    "error": "POST /api/projects -> 500: Internal Server Error"
+  },
+  "A Field Guide to Forgetting": {
+    "level": "C2",
+    "status": "failed",
+    "error": "POST /api/projects -> 500: Internal Server Error"
+  }
+}

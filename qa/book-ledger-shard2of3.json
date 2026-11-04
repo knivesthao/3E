@@ -1,0 +1,169 @@
+{
+  "A Trip to the Lake": {
+    "status": "published",
+    "level": "A2",
+    "projectId": "f394e7ae-b9af-4647-9b81-5c80b41eb1ea",
+    "bookId": "26763f1a-d887-4a8e-a6a2-adb5bc8d4c99",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.33983325,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "Sunny Park": {
+    "status": "published",
+    "level": "A1",
+    "projectId": "5518efbd-a261-41f5-a7d0-955a1450d233",
+    "bookId": "37fe65c9-2a56-41a9-b6a0-6f6195ba96f8",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "total": 0.45827425,
+    "providers": [
+      "meta-model-api/draft",
+      "meta-model-api/check",
+      "modal/art",
+      "meta-model-api/isolate",
+      "meta-model-api/safety",
+      "meta-model-api/keywords",
+      "meta-model-api/define"
+    ]
+  },
+  "The Lost Kite": {
+    "status": "partial",
+    "level": "A2",
+    "projectId": "398c6a28-8bb6-4269-b67d-87d827eda2a3",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "missing": []
+  },
+  "The River Boat": {
+    "status": "stalled",
+    "level": "A2",
+    "projectId": "efa7cc5d-d442-4f47-b241-9932c6c05589",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "missing": [],
+    "error": "POST /api/projects/efa7cc5d-d442-4f47-b241-9932c6c05589/publish -> 422: {\"error\":\"unsafe content\"}"
+  },
+  "The Broken Bicycle": {
+    "status": "partial",
+    "level": "B1",
+    "projectId": "ac1ac6dc-3f60-44dc-bd4c-7af25f7f3d4e",
+    "saved": [
+      1,
+      3,
+      4,
+      5,
+      6
+    ],
+    "art": [],
+    "missing": [
+      {
+        "scene_number": 2,
+        "reason": "out of level: opens, toolbox, fix, hmm, difficult, need"
+      }
+    ]
+  },
+  "Climbing the Hill": {
+    "status": "partial",
+    "level": "B2",
+    "projectId": "07084ef3-9e9c-4724-b253-b7916c6e6782",
+    "saved": [
+      1,
+      2,
+      3,
+      4,
+      6
+    ],
+    "art": [],
+    "missing": [
+      {
+        "scene_number": 5,
+        "reason": "Text is below B2 level with A1-A2 vocabulary and very short sentences. No sentences over 15 words."
+      }
+    ]
+  },
+  "The Cartographer": {
+    "level": "C1",
+    "status": "failed",
+    "error": "POST /api/projects -> 500: Internal Server Error"
+  },
+  "Crossing at Dawn": {
+    "level": "C1",
+    "status": "failed",
+    "error": "POST /api/projects -> 500: Internal Server Error"
+  },
+  "The Weight of Light": {
+    "level": "C2",
+    "status": "failed",
+    "error": "POST /api/projects -> 500: Internal Server Error"
+  },
+  "The Last Observatory": {
+    "level": "C2",
+    "status": "failed",
+    "error": "POST /api/projects -> 500: Internal Server Error"
+  }
+}

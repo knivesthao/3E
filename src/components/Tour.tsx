@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { Button } from './ui';
 
+// First-visit tour popups are disabled until the tour content is reworked:
+// the modal blocks the view users came to see. The manual tour buttons stay.
+export const TOURS_ENABLED = false;
+
 export type TourTrack = 'read' | 'create' | 'judge';
 
 const TRACKS: Record<TourTrack, { title: string; body: string }[]> = {
