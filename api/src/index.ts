@@ -12,6 +12,8 @@ import {
 import { sendMagicLink } from './email';
 import { isRole } from './roles';
 import { invites, redeemInviteForSignup } from './invites';
+import { classes } from './classes';
+import { student } from './student';
 import { projects } from './projects';
 import { admin } from './admin';
 import { exam } from './exam';
@@ -221,6 +223,8 @@ app.post('/api/auth/logout', async (c) => {
 });
 
 app.route('/api/projects', projects);
+app.route('/api/classes', classes);
+app.route('/api/me', student);
 app.route('/api/admin', admin);
 app.route('/api/admin/invites', invites);
 app.route('/api/exam', exam);
