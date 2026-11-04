@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { A1, A2, B1, B2, C1, C2, checkLevel, easierLevels, stem, tokenize } from './levels';
+import { A1, A2, B1, B2, C1, C2, checkFocus, checkLevel, easierLevels, FOCUS_MIN_SEEDS, FOCUS_SEEDS, FOCUS_TAGS, stem, tokenize } from './levels';
 
 describe('easierLevels', () => {
   it('chains exact-first down to A1', () => {
@@ -92,5 +92,43 @@ describe('checkLevel', () => {
     const atB2 = checkLevel(text, 'B2');
     expect(atB2.passed).toBe(false);
     expect(atB2.unknown.length).toBeGreaterThan(0);
+  });
+});
+
+describe('checkFocus', () => {
+  it('draws every seed from the A1 list so all levels admit them', () => {
+    const a1 = new Set(A1);
+    for (const tag of FOCUS_TAGS) {
+      expect(FOCUS_SEEDS[tag].length).toBeGreaterThan(10);
+      for (const seed of FOCUS_SEEDS[tag]) expect(a1.has(seed), `${tag}:${seed}`).toBe(true);
+    }
+  });
+
+  it('passes drill-dense scenes and fails thin ones per tag', () => {
+    expect(checkFocus('The boy runs and eats bread, then drinks milk and reads', 'A1', 'verbs').passed).toBe(true);
+    expect(checkFocus('He goes up and down', 'A1', 'verbs').passed).toBe(false);
+    expect(checkFocus('A white cat drinks cold water and milk in the house', 'A1', 'nouns').passed).toBe(true);
+    expect(checkFocus('He goes up and down', 'A1', 'nouns').passed).toBe(false);
+    expect(checkFocus('A big red happy hot new old cat', 'A1', 'adjectives').passed).toBe(true);
+    expect(checkFocus('He goes up and down', 'A1', 'adjectives').passed).toBe(false);
+  });
+
+  it('counts inflected forms through the gate stemmer', () => {
+    const r = checkFocus('Boys run and girls eat and walk and play and look', 'A1', 'verbs');
+    expect(r.found).toBeGreaterThanOrEqual(FOCUS_MIN_SEEDS);
+    expect(r.passed).toBe(true);
+  });
+
+  it('reports found against need for the retry reason', () => {
+    const r = checkFocus('He goes up and down', 'A1', 'nouns');
+    expect(r).toMatchObject({ passed: false, need: FOCUS_MIN_SEEDS });
+    expect(r.found).toBeLessThan(FOCUS_MIN_SEEDS);
+  });
+
+  it('holds at higher levels too', () => {
+    const dense = 'The boy runs and eats bread, then drinks milk and reads';
+    for (const level of ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const) {
+      expect(checkFocus(dense, level, 'verbs').passed, level).toBe(true);
+    }
   });
 });

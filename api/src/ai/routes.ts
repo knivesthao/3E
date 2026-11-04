@@ -11,8 +11,8 @@ import { easierLevels } from '../levels';
 import { art } from './art';
 import { checkHsk, easierHsk, isHskLevel } from '../hsk';
 import type { HskLevel } from '../hsk';
-import { checkLevel } from '../levels';
-import type { Level } from '../levels';
+import { checkFocus, checkLevel, isFocusTag } from '../levels';
+import type { FocusTag, Level } from '../levels';
 import { ownProject } from '../projects';
 import type { ProjectRow } from '../projects';
 import { isRecord, validateSceneData } from '../validate';
@@ -390,6 +390,18 @@ const isCheckReply = (v: unknown): v is { passed: boolean; reason: string } => {
   return typeof v.reason === 'string' || v.reason === undefined;
 };
 
+// Drill focus rides the project (closed vocabulary, validated at create).
+// Old rows predate the column: unparseable tags mean a general book.
+export function projectFocus(tagsJson: unknown): FocusTag[] {
+  if (typeof tagsJson !== 'string') return [];
+  try {
+    const v = JSON.parse(tagsJson) as unknown;
+    return Array.isArray(v) ? v.filter(isFocusTag) : [];
+  } catch {
+    return [];
+  }
+}
+
 async function draftMissing(
   db: D1Database,
   ctx: { apiKey: string; userId: string; projectId: string; opId: string; apiUrl?: string; baseten?: BasetenConfig | null },
@@ -405,6 +417,8 @@ async function draftMissing(
     castJson: project.cast_json,
     scenesJson: JSON.stringify(scenesSoFar),
     newWordsJson: '[]',
+    // HSK books carry no English POS focus.
+    ...(zh ? {} : { focus: projectFocus(project.tags_json) }),
   };
   const { text } = await generate(db, {
     ...ctx,
@@ -504,6 +518,21 @@ ai.post('/finish', async (c) => {
         const reason = !check.passed ? check.reason || 'qa rejected' : `out of level: ${gate.unknown.join(', ')}`;
         failed.push({ scene_number: n, reason });
         continue;
+      }
+      // Drill focus: every tagged book must actually drill. Free,
+      // deterministic token counting — no model call, no new failure mode
+      // beyond a retry, which the 12-try draft budget already absorbs.
+      if (!zh) {
+        const focusFail = projectFocus(project.tags_json)
+          .map((tag) => ({ tag, focus: checkFocus(story, level as Level, tag) }))
+          .find((r) => !r.focus.passed);
+        if (focusFail) {
+          failed.push({
+            scene_number: n,
+            reason: `needs more ${focusFail.tag} words (found ${focusFail.focus.found}, need ${focusFail.focus.need})`,
+          });
+          continue;
+        }
       }
       const stamp = new Date().toISOString();
       await db

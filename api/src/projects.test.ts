@@ -35,9 +35,9 @@ function makeDb() {
     } else if (q.startsWith('DELETE FROM sessions WHERE id_hash')) {
       sessions.delete(p[0] as string);
     } else if (q.startsWith('INSERT INTO projects')) {
-      const [id, creator_id, title, description, level, purpose, status, cast_json, created_at, updated_at] =
+      const [id, creator_id, title, description, level, purpose, status, cast_json, tags_json, created_at, updated_at] =
         p as string[];
-      projects.set(id, { id, creator_id, title, description, level, purpose, status, cast_json, created_at, updated_at });
+      projects.set(id, { id, creator_id, title, description, level, purpose, status, cast_json, tags_json, created_at, updated_at });
     } else if (q.startsWith('UPDATE projects SET updated_at')) {
       const row = projects.get(p[1] as string);
       if (row) row.updated_at = p[0];
@@ -213,6 +213,20 @@ describe('projects CRUD + owner isolation', () => {
     const del = await app.request(`/api/projects/${project.id}`, { method: 'DELETE', headers: { cookie: alice } }, env);
     expect(del.status).toBe(200);
     expect((await app.request(`/api/projects/${project.id}`, { headers: { cookie: alice } }, env)).status).toBe(404);
+  });
+
+  it('stores focus tags at create and rejects bad ones', async () => {
+    const db = makeDb();
+    const env = ENV(db);
+    const alice = await signIn(db, 'alice@example.com');
+    const created = await app.request(
+      '/api/projects', json('POST', { title: 'Verbs', level: 'A1', tags: ['verbs', 'nouns'] }, alice), env);
+    expect(created.status).toBe(201);
+    const { project } = (await created.json()) as { project: { id: string; tags_json: string } };
+    expect(JSON.parse(project.tags_json)).toEqual(['verbs', 'nouns']);
+    expect((await app.request('/api/projects', json('POST', { title: 'Bad', level: 'A1', tags: ['hocus'] }, alice), env)).status).toBe(400);
+    expect((await app.request(
+      '/api/projects', json('POST', { title: 'Many', level: 'A1', tags: ['nouns', 'verbs', 'adjectives', 'nouns'] }, alice), env)).status).toBe(400);
   });
 });
 

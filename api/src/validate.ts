@@ -1,6 +1,8 @@
 // Pure input validation for projects + scenes. No I/O — unit-tested.
 import { isHskLevel } from './hsk';
 import type { HskLevel } from './hsk';
+import { isFocusTag } from './levels';
+import type { FocusTag } from './levels';
 
 export const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
 export type Level = (typeof LEVELS)[number];
@@ -31,6 +33,7 @@ export interface ProjectCreate {
   level: ProjectLevel;
   purpose: Purpose;
   description: string;
+  tags: FocusTag[];
 }
 
 export function validateProjectCreate(
@@ -45,7 +48,16 @@ export function validateProjectCreate(
   if (!isPurpose(purpose)) return { ok: false };
   const description = body.description === undefined ? '' : body.description;
   if (typeof description !== 'string' || description.length > 2000) return { ok: false };
-  return { ok: true, value: { title: body.title.trim(), level: body.level, purpose, description } };
+  // Optional focus tags (closed vocabulary, max 3, deduped) — same shape
+  // as publish. Missing tags means a general book with no drill focus.
+  let tags: FocusTag[] = [];
+  if (body.tags !== undefined) {
+    if (!Array.isArray(body.tags) || body.tags.length > 3 || !body.tags.every(isFocusTag)) {
+      return { ok: false };
+    }
+    tags = [...new Set(body.tags)];
+  }
+  return { ok: true, value: { title: body.title.trim(), level: body.level, purpose, description, tags } };
 }
 
 export interface ProjectPatch {

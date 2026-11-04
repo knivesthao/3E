@@ -40,6 +40,7 @@ export interface ProjectRow {
   purpose: string;
   status: string;
   cast_json: string;
+  tags_json: string;
   created_at: string;
   updated_at: string;
 }
@@ -113,11 +114,12 @@ projects.post('/', async (c) => {
     purpose: parsed.value.purpose,
     status: 'draft',
     cast_json: '{"characters":[],"places":[]}',
+    tags_json: JSON.stringify(parsed.value.tags),
     created_at: now,
     updated_at: now,
   };
   await c.env.DB.prepare(
-    'INSERT INTO projects (id, creator_id, title, description, level, purpose, status, cast_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO projects (id, creator_id, title, description, level, purpose, status, cast_json, tags_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
   )
     .bind(
       project.id,
@@ -128,6 +130,7 @@ projects.post('/', async (c) => {
       project.purpose,
       project.status,
       project.cast_json,
+      project.tags_json,
       project.created_at,
       project.updated_at,
     )

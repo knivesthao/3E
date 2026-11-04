@@ -116,9 +116,9 @@ function makeDb() {
               } else if (q.startsWith('DELETE FROM sessions WHERE id_hash')) {
                 sessions.delete(params[0] as string);
               } else if (q.startsWith('INSERT INTO projects')) {
-                const [id, creator_id, title, description, level, purpose, status, cast_json, created_at, updated_at] =
+                const [id, creator_id, title, description, level, purpose, status, cast_json, tags_json, created_at, updated_at] =
                   params as string[];
-                projects.set(id, { id, creator_id, title, description, level, purpose, status, cast_json, created_at, updated_at });
+                projects.set(id, { id, creator_id, title, description, level, purpose, status, cast_json, tags_json, created_at, updated_at });
               } else if (q.startsWith('INSERT INTO scenes')) {
                 const [id, project_id, scene_number, data_json, updated_at] = params as [string, string, number, string, string];
                 scenes.set(id, { id, project_id, scene_number, data_json, updated_at });
@@ -248,10 +248,39 @@ const json = (method: string, body: unknown, cookie?: string) => ({
   body: JSON.stringify(body),
 });
 
-async function makeProject(db: Db, cookie: string): Promise<string> {
+async function makeProject(db: Db, cookie: string, tags?: string[]): Promise<string> {
   const env = ENV(db);
-  const res = await app.request('/api/projects', json('POST', { title: 'T', level: 'A1' }, cookie), env);
+  const res = await app.request('/api/projects', json('POST', { title: 'T', level: 'A1', ...(tags ? { tags } : {}) }, cookie), env);
   return ((await res.json()) as { project: { id: string } }).project.id;
+}
+
+function denseDraft(missing: number[]) {
+  return {
+    scenes: missing.map((n) => ({
+      scene_number: n,
+      narration: 'A boy runs to the house and eats bread, then drinks milk and reads',
+      bubbles: [{ speaker: 'Boy', text: 'Come look and play' }],
+      new_words: [],
+    })),
+  };
+}
+
+function thinDraft(missing: number[]) {
+  return {
+    scenes: missing.map((n) => ({
+      scene_number: n,
+      narration: 'He goes up and down',
+      bubbles: [{ speaker: 'Boy', text: 'Do it now' }],
+      new_words: [],
+    })),
+  };
+}
+
+function missingFrom(prompt: string): number[] {
+  const target = Number(/Target scene count: (\d+)/.exec(prompt)?.[1] ?? 6);
+  const soFar = JSON.parse(/Scenes so far: (\[[^\n]*\])/.exec(prompt)?.[1] ?? '[]') as { scene_number: number }[];
+  const have = new Set(soFar.map((s) => s.scene_number));
+  return Array.from({ length: target }, (_, i) => i + 1).filter((n) => !have.has(n));
 }
 
 describe('AI endpoints', () => {
@@ -385,6 +414,46 @@ describe('AI endpoints', () => {
     expect(body.saved).toEqual([]);
     expect(body.failed).toHaveLength(6);
     expect(body.failed.every((f) => f.reason.startsWith('out of level'))).toBe(true);
+  });
+
+  it('finish briefs the drill focus and saves dense scenes', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    let brief = '';
+    stubFetch((prompt) => {
+      if (prompt.includes('comics writer')) {
+        brief = prompt;
+        return denseDraft(missingFrom(prompt));
+      }
+      return modelReply(prompt);
+    });
+    const env = ENV(db);
+    const pid = await makeProject(db, cookie, ['verbs']);
+    const res = await app.request('/api/ai/finish', json('POST', { projectId: pid }, cookie), env);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { job: { status: string }; saved: number[]; failed: unknown[] };
+    expect(body.job.status).toBe('complete');
+    expect(body.saved).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(body.failed).toEqual([]);
+    expect(brief).toContain('verbs-training');
+  });
+
+  it('finish rejects thin scenes on tagged books with a focus reason', async () => {
+    const db = makeDb();
+    const cookie = await signIn(db);
+    stubFetch((prompt) => {
+      if (prompt.includes('comics writer')) return thinDraft(missingFrom(prompt));
+      return modelReply(prompt);
+    });
+    const env = ENV(db);
+    const pid = await makeProject(db, cookie, ['nouns']);
+    const res = await app.request('/api/ai/finish', json('POST', { projectId: pid }, cookie), env);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { job: { status: string }; saved: number[]; failed: { scene_number: number; reason: string }[] };
+    expect(body.job.status).toBe('complete');
+    expect(body.saved).toEqual([]);
+    expect(body.failed).toHaveLength(6);
+    expect(body.failed.every((f) => f.reason.startsWith('needs more nouns words'))).toBe(true);
   });
 
   it('retries once on invalid JSON then succeeds', async () => {

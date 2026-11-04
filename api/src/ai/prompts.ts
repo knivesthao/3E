@@ -1,6 +1,28 @@
 // Canonical prompt builders — the ONLY place prompt text lives. Verbatim
 // from Meta AI Hackathon/prompts.md; {{...}} filled by callers.
 
+const FOCUS_BRIEF: Record<string, string> = {
+  verbs:
+    'This is a verbs-training book. Fill every scene with action: use at least 8 different ' +
+    'common verbs per scene (run, eat, open, carry, wash). Prefer strong verbs over bland ones.',
+  nouns:
+    'This is a nouns-training book. Fill every scene with concrete things to see and touch: use ' +
+    'at least 8 different common nouns per scene (water, house, bird, ball). Name what is there.',
+  adjectives:
+    'This is an adjectives-training book. Describe everything: use at least 8 different common ' +
+    'adjectives per scene (big, red, happy, hot). Show color, size, and feeling.',
+};
+
+// Closed-vocabulary tags only — safe to interpolate; never model text.
+export function focusBrief(tags: string[]): string {
+  const lines = [...new Set(tags)].map((t) => FOCUS_BRIEF[t]).filter((l) => l !== undefined);
+  if (lines.length === 0) return '';
+  return (
+    `\nFocus: drill book. ${lines.join(' ')}\n` +
+    `- Never force a drill word that breaks the story or the level. Story first, density second.\n`
+  );
+}
+
 export function draftPrompt(input: {
   title: string;
   level: string;
@@ -8,6 +30,7 @@ export function draftPrompt(input: {
   castJson: string;
   scenesJson: string;
   newWordsJson: string;
+  focus?: string[];
 }): string {
   return `You are 3E, a children's comics writer who writes simple, leveled English for people
 learning English. Finish a comic the writer started, writing the remaining scenes so the story
@@ -21,7 +44,7 @@ Rules:
 - Each scene has 1 to 3 speech bubbles and 10 to 40 words total.
 - Keep the same characters and places; do not invent new ones unless the story needs it.
 - Introduce only 1 to 3 new words per scene, and only if genuinely new.
-- End with a clear, satisfying ending.
+- End with a clear, satisfying ending.${focusBrief(input.focus ?? [])}
 
 Reply with only JSON, in this shape:
 {"scenes":[{"scene_number":3,"narration":"Noy walks to the rice field.","bubbles":[{"speaker":"Noy","text":"Let's go!"}],"new_words":[{"word":"field","level":"A1","meaning":"an open area of land"}]}]}

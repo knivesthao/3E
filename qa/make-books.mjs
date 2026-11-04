@@ -2199,9 +2199,13 @@ for (const spec of QUEUE) {
     }
   }
   if (!project) {
+    // Focus tags ride project creation now: the draft brief and the focus
+    // gate both read them, so a tagged book is written to drill, not just
+    // labeled. (Resume keeps the original project's tags.)
+    const tags = spec.tags && spec.tags.length > 0 ? spec.tags : TAGS;
     const created = await call('/api/projects', {
       method: 'POST',
-      body: JSON.stringify({ title: spec.title, level: spec.level }),
+      body: JSON.stringify({ title: spec.title, level: spec.level, tags }),
     });
     project = created.project;
     console.log(`project ${project.id}`);

@@ -1775,6 +1775,55 @@ export function isFocusTag(t: unknown): t is FocusTag {
   return typeof t === 'string' && (FOCUS_TAGS as readonly string[]).includes(t);
 }
 
+// Focus drill seeds: common words per tag, all drawn from the A1 list so
+// they sit inside every level's allowed vocabulary (verified by test).
+// Inflected scene forms match via the same stemmer the gate uses.
+export const FOCUS_SEEDS: Record<FocusTag, string[]> = {
+  verbs: [
+    'go', 'come', 'see', 'look', 'like', 'want', 'eat', 'drink', 'run',
+    'walk', 'play', 'say', 'said', 'make', 'take', 'give', 'get', 'put',
+    'do', 'have', 'buy', 'sleep', 'cry', 'read', 'open', 'need', 'went',
+  ],
+  nouns: [
+    'day', 'night', 'sun', 'rain', 'water', 'food', 'house', 'home',
+    'school', 'book', 'cat', 'dog', 'bird', 'fish', 'boy', 'girl', 'man',
+    'woman', 'child', 'friend', 'family', 'mother', 'father', 'baby',
+    'name', 'morning', 'time', 'people', 'son', 'ball', 'milk', 'bread',
+    'soup', 'apple', 'banana',
+  ],
+  adjectives: [
+    'big', 'small', 'good', 'bad', 'happy', 'sad', 'hot', 'cold', 'new',
+    'old', 'red', 'blue', 'green', 'yellow', 'black', 'white', 'hungry', 'high',
+  ],
+};
+
+// Minimum distinct focus seeds per scene. The draft brief aims higher;
+// the gate only rejects scenes that ignore the brief almost entirely,
+// so a strict brief plus retries converges instead of stalling.
+export const FOCUS_MIN_SEEDS = 4;
+
+export interface FocusResult {
+  passed: boolean;
+  found: number;
+  need: number;
+}
+
+// Distinct drill seeds present in the text (raw or stemmed), restricted
+// to the level's allowed vocabulary like the gate.
+export function checkFocus(text: string, level: Level, tag: FocusTag): FocusResult {
+  const allowed = allowedSet(level, []);
+  const forms = new Set<string>();
+  for (const t of tokenize(text)) {
+    forms.add(t);
+    forms.add(stem(t));
+  }
+  let found = 0;
+  for (const seed of FOCUS_SEEDS[tag]) {
+    if (allowed.has(seed) && forms.has(seed)) found++;
+  }
+  return { passed: found >= FOCUS_MIN_SEEDS, found, need: FOCUS_MIN_SEEDS };
+}
+
 // Tunables: minimum known-word coverage, max scene words per level.
 export const LEVEL_COVERAGE = 0.9;
 export const SCENE_MAX_WORDS: Record<Level, number> = { A1: 40, A2: 60, B1: 80, B2: 100, C1: 120, C2: 140 };
