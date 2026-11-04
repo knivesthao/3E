@@ -2274,9 +2274,16 @@ for (const spec of QUEUE) {
   }
   const scenes = saved;
 
-  // Per-book focus tags win; the CLI --tags flag is the fallback for runs
-  // where specs don't carry their own.
-  const tags = spec.tags && spec.tags.length > 0 ? spec.tags : TAGS;
+  // Publish carries the project's stored tags, not the spec's: books
+  // drafted before the focus work have no tags, so they publish untagged
+  // instead of wearing stickers they didn't earn. (Create already resolves
+  // spec tags with the CLI --tags fallback, so fresh projects match.)
+  const proj = await call(`/api/projects/${project.id}`);
+  let tags = [];
+  try {
+    const t = JSON.parse(proj.project?.tags_json ?? '[]');
+    if (Array.isArray(t)) tags = t;
+  } catch { /* unparseable tags: publish untagged */ }
   const pub = await call(`/api/projects/${project.id}/publish`, {
     method: 'POST',
     body: tags.length > 0 ? JSON.stringify({ tags }) : undefined,
