@@ -11,6 +11,7 @@
     "db:migrate:remote": "wrangler --config api/wrangler.toml d1 migrations apply DB --remote && wrangler --config api/wrangler.toml d1 migrations apply LIBRARY_DB --remote",
     "baseten:link": "./baseten/link-dev.sh",
     "baseten:check": "test -f api/.dev.vars && grep -q '^BASETEN_API_URL=https\\?://' api/.dev.vars && grep -q '^BASETEN_API_KEY=...' api/.dev.vars && echo 'baseten dev wiring: present' || (echo 'baseten dev wiring: missing (run ./baseten/link-dev.sh <model-id>)' >&2; exit 1)",
+    "qa:factory-status": "node qa/factory-status.mjs",
     "qa:seed": "node qa/seed.mjs",
     "qa:definitions": "node qa/seed-definitions.mjs",
     "modal:link": "./modal/link.sh",
