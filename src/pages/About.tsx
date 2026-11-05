@@ -27,7 +27,7 @@ export default function About() {
       </div>
       {tab === 'about' && (
       <div role="tabpanel">
-      <p className="text-sm text-stone-600">Leveled webcomics for English learners, from one scene idea to a whole book — in minutes, for about six cents a book.</p>
+      <p className="text-sm text-stone-600">3E is Easy English for Everyone: leveled webcomics for English learners, from one scene idea to a whole book — in minutes, for about six cents a book.</p>
       <section aria-label="What 3E does" className="mt-3">
         <h2 className="font-display text-xl font-bold">What 3E does</h2>
         <ul className="mt-1 flex list-disc flex-col gap-1 pl-5">

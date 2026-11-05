@@ -18,10 +18,13 @@ export const art = new Hono<{ Bindings: Bindings; Variables: Variables }>({ stri
 const panelKey = (projectId: string, sceneNumber: number): string => `${projectId}-${sceneNumber}.png`;
 const maskKey = (projectId: string, sceneNumber: number): string => `${projectId}-${sceneNumber}-mask.png`;
 
-// Flat keys only (uuid + scene/cast suffix, or flashcard image keys):
-// no slashes, no traversal. Flash levels are uppercase (A1..C2).
+// Flat keys only (uuid or slug project id + scene/cast suffix, or
+// flashcard image keys): no slashes, no traversal. Slugs matter because
+// seeded demo projects use readable ids (demo-proj-red-cat) and their
+// panels must serve exactly like uuid-project art. Flash levels are
+// uppercase (A1..C2).
 const KEY_RE =
-  /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-(\d{1,3}(-mask)?|cast-(characters|places)-\d{1,2})|flash-[A-Za-z0-9-]+)\.png$/;
+  /^([A-Za-z0-9][A-Za-z0-9-]*-(\d{1,3}(-mask)?|cast-(characters|places)-\d{1,2})|flash-[A-Za-z0-9-]+)\.png$/;
 
 // Flashcard image key: flash-<LEVEL>-<word>.png. Single parser for the
 // index endpoint; KEY_RE above stays the serving gate.
